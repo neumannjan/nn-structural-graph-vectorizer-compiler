@@ -7,6 +7,7 @@ class MyDataset:
         self.name = name
         self.template = template
         self.dataset = dataset
+        self.settings = Settings()
 
     def build(self) -> BuiltDataset:
-        return self.template.build(Settings()).build_dataset(self.dataset)
+        return self.template.build(self.settings).build_dataset(self.dataset)
