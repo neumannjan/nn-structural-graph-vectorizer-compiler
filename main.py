@@ -1,7 +1,6 @@
 from collections import deque
-from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable, Literal, Sequence, TypedDict
 
 import jpype
 import matplotlib as mpl
@@ -13,59 +12,41 @@ from neuralogic.core.builder.builder import NeuralSample
 d = MyMutagenesis()
 
 
-@dataclass(frozen=True)
-class Neuron:
-    index: int
+class Neuron(TypedDict):
     name: str
-    type: str
+    inner_type: str
     layer: int
 
-    @classmethod
-    def build(cls, java_neuron) -> "Neuron":
-        return Neuron(
-            index=java_neuron.getIndex(),
+
+def get_neuron(java_neuron) -> tuple[int, Neuron]:
+    return (
+        java_neuron.getIndex(),
+        Neuron(
             name=java_neuron.getName(),
-            type=java_neuron.getClass().getSimpleName(),
+            inner_type=java_neuron.getClass().getSimpleName(),
             layer=java_neuron.getLayer(),
-        )
-
-    def serialize(self) -> dict[str, Any]:
-        data = asdict(self)
-        del data["index"]
-        return data
-
-    def __repr__(self) -> str:
-        return f"<{self.index}>"
+        ),
+    )
 
 
-@dataclass(frozen=True)
-class Edge:
-    source: Neuron
-    target: Neuron
-
-    def __repr__(self) -> str:
-        return f"({self.source} -> {self.target})"
-
-
-def iterate_neurons(java_neuron) -> Iterable[Neuron]:
+def iterate_neurons(java_neuron) -> Iterable[tuple[int, Neuron]]:
     queue = deque([java_neuron])
     while len(queue) > 0:
         n = queue.popleft()
-        yield Neuron.build(n)
+        yield get_neuron(n)
 
         queue.extend(n.getInputs())
 
 
-def iterate_edges(java_neuron) -> Iterable[Edge]:
+def iterate_edges(java_neuron) -> Iterable[tuple[int, int]]:
     queue = deque([java_neuron])
     while len(queue) > 0:
         n_right = queue.popleft()
-        n_right_out = Neuron.build(n_right)
 
         inputs = n_right.getInputs()
 
         for n_left in inputs:
-            yield Edge(Neuron.build(n_left), n_right_out)
+            yield (n_left.getIndex(), n_right.getIndex())
 
         queue.extend(inputs)
 
@@ -93,32 +74,18 @@ def get_as_colors(values: list, cmap, n: int | None = None) -> tuple[list, list,
     return out, out_keys, colors
 
 
-@dataclass
 class Graph:
-    nodes: set[Neuron]
-    edges: set[Edge]
+    def __init__(self, neural_sample: NeuralSample) -> None:
+        start_neuron = neural_sample.java_sample.query.neuron
 
-    @classmethod
-    def build(cls, raw_sample: NeuralSample) -> "Graph":
-        start_neuron = raw_sample.java_sample.query.neuron
-        nodes = set(iterate_neurons(start_neuron))
-        edges = set(iterate_edges(start_neuron))
-        return Graph(nodes, edges)
-
-    def to_networkx(self) -> nx.DiGraph:
         g = nx.DiGraph()
-        g.add_nodes_from(((n.index, n.serialize()) for n in self.nodes))
-        g.add_edges_from(((e.source.index, e.target.index) for e in self.edges))
+        g.add_nodes_from(iterate_neurons(start_neuron))
+        g.add_edges_from(iterate_edges(start_neuron))
 
         self._fix_topological_generations(g)
+        self._reindex(g)
 
-        # for layer, nodes in enumerate(nx.algorithms.dag.topological_generations(g)):
-        #     # `multipartite_layout` expects the layer as a node attribute, so add the
-        #     # numeric layer value as a node attribute
-        #     for node in nodes:
-        #         g.nodes[node]["layer"] = layer
-
-        return g
+        self.g = g
 
     def _fix_topological_generations(self, g: nx.DiGraph):
         layers = set((d["layer"] for _, d in g.nodes(data=True)))
@@ -130,39 +97,121 @@ class Graph:
         for _, d in g.nodes(data=True):
             d["layer"] = layers_map[d["layer"]]
 
-    def draw(self, labels=False):
-        g = self.to_networkx()
+    def _reindex(self, g: nx.DiGraph):
+        label_mapping = {j: i for i, j in enumerate(nx.algorithms.dag.topological_sort(g))}
 
-        # Compute the multipartite_layout using the "layer" node attribute
-        pos = nx.drawing.layout.multipartite_layout(g, subset_key="layer")
+        for n, d in g.nodes(data=True):
+            d['orig_index'] = n
 
-        fig, ax = plt.subplots()
+        g = nx.relabel.relabel_nodes(g, label_mapping)
 
-        types = [d["type"] for _, d in g.nodes(data=True)]
-        node_cmap = plt.cm.tab10
-        node_color_vals, types_uniq, node_colors = get_as_colors(types, cmap=node_cmap, n=10)
 
-        edge_out_layers = [g.nodes[t]["layer"] for s, t in g.edges]
-        edge_color_vals, _ = map_to_ints(edge_out_layers)
 
-        nx.drawing.nx_pylab.draw_networkx(
-            g,
-            pos=pos,
-            ax=ax,
-            node_color=node_color_vals,
-            edge_color=edge_color_vals,
-            edge_cmap=plt.cm.tab10,
-            with_labels=labels,
-            labels={i: d['layer'] for i, d in g.nodes(data=True)}
-        )
-        ax.set_title("DAG layout in topological order")
-        fig.tight_layout()
-        legend_elements = [
-            mpl.lines.Line2D([0, 1], [0, 0], marker="o", color="w", label=t, markerfacecolor=c, markersize=15)
-            for t, c in zip(types_uniq, node_colors)
-        ]
-        plt.legend(handles=legend_elements, loc="upper right")
-        return fig
+def draw_graph(
+    g: nx.DiGraph,
+    layer_key="layer",
+    color_key="inner_type",
+    label_key: str | None = "layer",
+    edge_color: Literal["source", "target"] | None = "target",
+):
+    pos = nx.drawing.layout.multipartite_layout(g, subset_key=layer_key)
+
+    fig, ax = plt.subplots()
+
+    color_keys = [d[color_key] for _, d in g.nodes(data=True)]
+    node_cmap = plt.cm.tab10
+    node_color_vals, types_uniq, node_colors = get_as_colors(color_keys, cmap=node_cmap, n=10)
+
+    if edge_color == "source":
+        edge_color_keys = [g.nodes[s]["layer"] for s, _ in g.edges]
+    elif edge_color == "target":
+        edge_color_keys = [g.nodes[t]["layer"] for _, t in g.edges]
+    elif edge_color is not None:
+        raise NotImplementedError()
+
+    if edge_color is None:
+        edge_color_vals = None
+    else:
+        edge_color_vals, _ = map_to_ints(edge_color_keys)
+
+    nx.drawing.nx_pylab.draw_networkx(
+        g,
+        pos=pos,
+        ax=ax,
+        node_color=node_color_vals,
+        edge_color=edge_color_vals,
+        edge_cmap=plt.cm.tab10,
+        with_labels=label_key is not None,
+        labels={i: d[label_key] for i, d in g.nodes(data=True)} if label_key != "index" else None,
+    )
+    ax.set_title("DAG layout in topological order")
+    fig.tight_layout()
+    legend_elements = [
+        mpl.lines.Line2D([0, 1], [0, 0], marker="o", color="w", label=t, markerfacecolor=c, markersize=15)
+        for t, c in zip(types_uniq, node_colors)
+    ]
+    plt.legend(handles=legend_elements, loc="upper right")
+    return fig
+
+
+class NeuronSetGraph:
+    def __init__(self, graph: Graph) -> None:
+        orig_g = graph.g
+        g = nx.DiGraph()
+        g.add_nodes_from(((i, d) for i, d in orig_g.nodes(data=True)))
+
+        self._double_topological_ordering(g)
+        self._compute_input_subsets(orig_g, g)
+        # self._dissolve_subset_aggregation_chains(g)
+
+        self.g = g
+
+    def _double_topological_ordering(self, g: nx.DiGraph):
+        for _, d in g.nodes(data=True):
+            d["layer"] *= 2
+
+    def _compute_input_subsets(self, orig_g: nx.DiGraph, g: nx.DiGraph):
+        for n in orig_g.nodes:
+            subset_key = frozenset(orig_g.predecessors(n))
+
+            g.nodes[n]["shortname"] = f"{n}\n{str(tuple(subset_key))}"
+
+            if len(subset_key) == 0:
+                continue
+            else:
+                g.add_node(
+                    subset_key, inner_type="subset", shortname=str(tuple(subset_key)), layer=g.nodes[n]["layer"] - 1
+                )
+                g.add_edge(subset_key, n)
+
+                for n_p in subset_key:
+                    g.add_edge(n_p, subset_key)
+
+    def _dissolve_subset_aggregation_chains(self, g: nx.DiGraph):
+        for n, d in list(g.nodes(data=True)):
+            if d["inner_type"] == "AggregationNeuron":
+                n_ps = list(g.predecessors(n))
+                assert len(n_ps) == 1
+                n_subset = next(iter(n_ps))
+                assert g.nodes[n_subset]["inner_type"] == "subset"
+                n_ps = g.predecessors(n_subset)
+                g.remove_node(n_subset)
+                for n_p in n_ps:
+                    g.add_edge(n_p, n)
+
+
+def do_sample(neural_sample: NeuralSample, stage: Literal[0, 1] = 1):
+    graph = Graph(neural_sample)
+
+    if stage == 0:
+        draw_graph(graph.g)
+        return
+
+    graph = NeuronSetGraph(graph)
+
+    if stage == 1:
+        draw_graph(graph.g, label_key="shortname", edge_color="source")
+        return
 
 
 if __name__ == "__main__":
@@ -174,10 +223,8 @@ if __name__ == "__main__":
         out_dir = Path(f"./imgs/{dataset.name}")
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        i = 107
-        graph = Graph.build(built_dataset.samples[i])
-        g = graph.to_networkx()
-        graph.draw(labels=True)
+        i = 108
+        do_sample(built_dataset.samples[0], stage=0)
         plt.show()
     except jpype.JException as e:
         print(e.message())
@@ -186,5 +233,5 @@ if __name__ == "__main__":
     # plt.savefig(out_dir / f"{i}.jpg")
 
 #     for i, sample in tqdm(enumerate(built_dataset.samples), total=len(built_dataset.samples)):
-#         Graph.build(sample).draw()
+#         Graph(sample).draw()
 #         plt.savefig(out_dir / f"{i}.jpg")
