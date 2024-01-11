@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 from lib.datasets import MyMutagenesis
 from neuralogic.core.builder.builder import NeuralSample
+from tqdm.auto import tqdm
 
 d = MyMutagenesis()
 
@@ -203,8 +204,8 @@ class NeuronSetGraph:
             subset_key = tuple(orig_g.predecessors(n))
 
             g.nodes[n]["shortname"] = f"{n}\n{str(tuple(subset_key))}"
-            # g.nodes[n]["weight_label"] = f"{d['weight_indices']} {d['offset_index']}"
-            g.nodes[n]["weight_label"] = f"{d['weight_values']} {d['offset_value']}"
+            g.nodes[n]["weight_label"] = f"{d['weight_indices']} {d['offset_index']}"
+            # g.nodes[n]["weight_label"] = f"{d['weight_values']} {d['offset_value']}"
 
             # if len(subset_key) == 0:
             #     continue
@@ -246,15 +247,14 @@ if __name__ == "__main__":
 
         i = 108
         # built_dataset.samples[i].draw()
-
-        do_sample(built_dataset.samples[i], reindex=False, stage=1)
+        do_sample(built_dataset.samples[i], reindex=True, stage=1)
         plt.show()
+
+        # for i, sample in tqdm(enumerate(built_dataset.samples), total=len(built_dataset.samples)):
+        #     do_sample(sample)
+        #     plt.savefig(out_dir / f"{i}.jpg")
+
     except jpype.JException as e:
         print(e.message())
         print(e.stacktrace())
         raise e
-    # plt.savefig(out_dir / f"{i}.jpg")
-
-#     for i, sample in tqdm(enumerate(built_dataset.samples), total=len(built_dataset.samples)):
-#         Graph(sample).draw()
-#         plt.savefig(out_dir / f"{i}.jpg")
