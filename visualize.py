@@ -103,7 +103,7 @@ def get_as_colors(values: list, cmap, n: int | None = None) -> tuple[list, list,
 
 
 class Graph:
-    def __init__(self, neural_sample: NeuralSample) -> None:
+    def __init__(self, neural_sample: NeuralSample, reindex=True) -> None:
         start_neuron = neural_sample.java_sample.query.neuron
 
         g = nx.DiGraph()
@@ -111,7 +111,8 @@ class Graph:
         g.add_edges_from(iterate_edges(start_neuron))
 
         self._fix_topological_generations(g)
-        g = self._reindex(g)
+        if reindex:
+            g = self._reindex(g)
 
         self.g = g
 
@@ -217,8 +218,8 @@ class NeuronSetGraph:
             #     g.add_edge(n_p, subset_key)
 
 
-def do_sample(neural_sample: NeuralSample, stage: Literal[0, 1] = 1):
-    graph = Graph(neural_sample)
+def do_sample(neural_sample: NeuralSample, reindex=True, stage: Literal[0, 1] = 1):
+    graph = Graph(neural_sample, reindex=reindex)
 
     if stage == 0:
         draw_graph(graph.g)
@@ -238,7 +239,7 @@ if __name__ == "__main__":
         dataset.settings.compute_neuron_layer_indices = True
         # dataset.settings.iso_value_compression = False
         # dataset.settings.chain_pruning = False
-        built_dataset = dataset.build()
+        built_dataset = dataset.build(sample_run=True)
 
         out_dir = Path(f"./imgs/{dataset.name}")
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -246,7 +247,7 @@ if __name__ == "__main__":
         i = 108
         # built_dataset.samples[i].draw()
 
-        do_sample(built_dataset.samples[i], stage=1)
+        do_sample(built_dataset.samples[i], reindex=False, stage=1)
         plt.show()
     except jpype.JException as e:
         print(e.message())

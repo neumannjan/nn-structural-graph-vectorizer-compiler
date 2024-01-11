@@ -9,5 +9,9 @@ class MyDataset:
         self.dataset = dataset
         self.settings = Settings()
 
-    def build(self) -> BuiltDataset:
-        return self.template.build(self.settings).build_dataset(self.dataset)
+    def build(self, sample_run=False) -> BuiltDataset:
+        neuralogic = self.template.build(self.settings)
+        built_dataset = neuralogic.build_dataset(self.dataset)
+        if sample_run:
+            neuralogic(built_dataset, train=False)
+        return built_dataset
