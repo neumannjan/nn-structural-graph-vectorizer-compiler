@@ -16,15 +16,43 @@ class Neuron(TypedDict):
     name: str
     inner_type: str
     layer: int
+    weight_indices: list[int]
+    offset_index: int
+    weight_values: list[str]
+    offset_value: str
+
+
+WEIGHTED_NEURON_CLASS = None
 
 
 def get_neuron(java_neuron) -> tuple[int, Neuron]:
+    global WEIGHTED_NEURON_CLASS
+    if WEIGHTED_NEURON_CLASS is None:
+        WEIGHTED_NEURON_CLASS = jpype.JClass(
+            "cz.cvut.fel.ida.neural.networks.structure.components.neurons.WeightedNeuron"
+        )
+
+    if isinstance(java_neuron, WEIGHTED_NEURON_CLASS):
+        weight_indices = [w.index for w in java_neuron.getWeights()]
+        offset_index = java_neuron.getOffset().index
+        weight_values = [w.value.toString() for w in java_neuron.getWeights()]
+        offset_value = java_neuron.getOffset().value.toString()
+    else:
+        weight_indices = []
+        offset_index = -1
+        weight_values = []
+        offset_value = '0'
+
     return (
         java_neuron.getIndex(),
         Neuron(
             name=java_neuron.getName(),
             inner_type=java_neuron.getClass().getSimpleName(),
             layer=java_neuron.getLayer(),
+            weight_indices=weight_indices,
+            offset_index=offset_index,
+            weight_values=weight_values,
+            offset_value=offset_value,
         ),
     )
 
@@ -83,7 +111,7 @@ class Graph:
         g.add_edges_from(iterate_edges(start_neuron))
 
         self._fix_topological_generations(g)
-        self._reindex(g)
+        g = self._reindex(g)
 
         self.g = g
 
@@ -101,10 +129,9 @@ class Graph:
         label_mapping = {j: i for i, j in enumerate(nx.algorithms.dag.topological_sort(g))}
 
         for n, d in g.nodes(data=True):
-            d['orig_index'] = n
+            d["orig_index"] = n
 
-        g = nx.relabel.relabel_nodes(g, label_mapping)
-
+        return nx.relabel.relabel_nodes(g, label_mapping)
 
 
 def draw_graph(
@@ -160,9 +187,9 @@ class NeuronSetGraph:
         g = nx.DiGraph()
         g.add_nodes_from(((i, d) for i, d in orig_g.nodes(data=True)))
 
-        self._double_topological_ordering(g)
+        # self._double_topological_ordering(g)
+        g.add_edges_from(orig_g.edges)
         self._compute_input_subsets(orig_g, g)
-        # self._dissolve_subset_aggregation_chains(g)
 
         self.g = g
 
@@ -171,33 +198,23 @@ class NeuronSetGraph:
             d["layer"] *= 2
 
     def _compute_input_subsets(self, orig_g: nx.DiGraph, g: nx.DiGraph):
-        for n in orig_g.nodes:
-            subset_key = frozenset(orig_g.predecessors(n))
+        for n, d in orig_g.nodes(data=True):
+            subset_key = tuple(orig_g.predecessors(n))
 
             g.nodes[n]["shortname"] = f"{n}\n{str(tuple(subset_key))}"
+            # g.nodes[n]["weight_label"] = f"{d['weight_indices']} {d['offset_index']}"
+            g.nodes[n]["weight_label"] = f"{d['weight_values']} {d['offset_value']}"
 
-            if len(subset_key) == 0:
-                continue
-            else:
-                g.add_node(
-                    subset_key, inner_type="subset", shortname=str(tuple(subset_key)), layer=g.nodes[n]["layer"] - 1
-                )
-                g.add_edge(subset_key, n)
+            # if len(subset_key) == 0:
+            #     continue
+            # else:
+            #     g.add_node(
+            #         subset_key, inner_type="subset", shortname=str(tuple(subset_key)), layer=g.nodes[n]["layer"] - 1
+            #     )
+            #     g.add_edge(subset_key, n)
 
-                for n_p in subset_key:
-                    g.add_edge(n_p, subset_key)
-
-    def _dissolve_subset_aggregation_chains(self, g: nx.DiGraph):
-        for n, d in list(g.nodes(data=True)):
-            if d["inner_type"] == "AggregationNeuron":
-                n_ps = list(g.predecessors(n))
-                assert len(n_ps) == 1
-                n_subset = next(iter(n_ps))
-                assert g.nodes[n_subset]["inner_type"] == "subset"
-                n_ps = g.predecessors(n_subset)
-                g.remove_node(n_subset)
-                for n_p in n_ps:
-                    g.add_edge(n_p, n)
+            # for n_p in subset_key:
+            #     g.add_edge(n_p, subset_key)
 
 
 def do_sample(neural_sample: NeuralSample, stage: Literal[0, 1] = 1):
@@ -211,6 +228,7 @@ def do_sample(neural_sample: NeuralSample, stage: Literal[0, 1] = 1):
 
     if stage == 1:
         draw_graph(graph.g, label_key="shortname", edge_color="source")
+        # draw_graph(graph.g, label_key="weight_label", edge_color="source")
         return
 
 
@@ -218,13 +236,17 @@ if __name__ == "__main__":
     try:
         dataset = MyMutagenesis()
         dataset.settings.compute_neuron_layer_indices = True
+        # dataset.settings.iso_value_compression = False
+        # dataset.settings.chain_pruning = False
         built_dataset = dataset.build()
 
         out_dir = Path(f"./imgs/{dataset.name}")
         out_dir.mkdir(parents=True, exist_ok=True)
 
         i = 108
-        do_sample(built_dataset.samples[0], stage=0)
+        # built_dataset.samples[i].draw()
+
+        do_sample(built_dataset.samples[i], stage=1)
         plt.show()
     except jpype.JException as e:
         print(e.message())
