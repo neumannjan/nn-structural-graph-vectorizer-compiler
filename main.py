@@ -116,10 +116,17 @@ def get_neurons_per_layer(samples: Sequence[NeuralSample]) -> dict[int, list]:
 
 
 class GatherModule(torch.nn.Module):
-    def __init__(self, input_layer_ordinal_pairs: list[tuple[int, int]]) -> None:
+    def __init__(self, input_layer_ordinal_pairs: list[tuple[int, int]], allow_merge_on_all_inputs_same: bool) -> None:
         super().__init__()
 
+        if allow_merge_on_all_inputs_same:
+            all_inputs_the_same = all((input_layer_ordinal_pairs[0] == p for p in input_layer_ordinal_pairs[1:]))
+
+            if all_inputs_the_same:
+                input_layer_ordinal_pairs = [input_layer_ordinal_pairs[0]]
+
         self.input_layer_ordinal_pairs = input_layer_ordinal_pairs
+
         self.layers = sorted(set((l for l, _ in input_layer_ordinal_pairs)), reverse=True)
         layers_map = {l: i for i, l in enumerate(self.layers)}
 
@@ -319,7 +326,8 @@ class WeightedRuleLayer(torch.nn.Module):
         neuron = layer_neurons[0]
 
         self.gather = GatherModule(
-            [neuron_ordinals[int(inp.getIndex())] for n in layer_neurons for inp in n.getInputs()]
+            [neuron_ordinals[int(inp.getIndex())] for n in layer_neurons for inp in n.getInputs()],
+            allow_merge_on_all_inputs_same=True,  # TODO: if True, may need expand() operation after
         )
 
         self.linear = Linear(layer_neurons, diagonal_expand=True, assume_all_weights_same=assume_rule_weights_same)
@@ -329,6 +337,8 @@ class WeightedRuleLayer(torch.nn.Module):
         if check_same_inputs_dim_assumption:
             for n in layer_neurons:
                 assert self.inputs_dim == n.getInputs().size()
+
+        self.assume_rule_weights_same = assume_rule_weights_same
 
         if assume_rule_weights_same:  # check
             layer_index = neuron.getLayer()
@@ -342,9 +352,13 @@ class WeightedRuleLayer(torch.nn.Module):
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
         input_values = self.gather(layer_values)
-        input_values = torch.reshape(input_values, [-1, self.inputs_dim, *input_values.shape[1:]])
 
-        y = self.linear(input_values)
+        if self.assume_rule_weights_same:
+            input_values = torch.reshape(input_values, [-1, self.inputs_dim, *input_values.shape[1:]])
+            y = self.linear(input_values)
+        else:
+            y = self.linear(input_values)
+            y = torch.reshape(y, [-1, self.inputs_dim, *y.shape[1:]])
 
         # TODO: parameterize
         y = torch.sum(y, 1)
@@ -362,30 +376,16 @@ class WeightedAtomLayer(torch.nn.Module):
 
         self.neuron_ids = [n.getIndex() for n in layer_neurons]
 
-        # TODO: ASSUMPTION: all inputs are from the same layer
-        # (easy fix: replace with GatherModule)
-        input_layer_ordinal_pairs = [
-            neuron_ordinals[int(inp.getIndex())] for n in layer_neurons for inp in n.getInputs()
-        ]
-
-        all_inputs_the_same = all((input_layer_ordinal_pairs[0] == p for p in input_layer_ordinal_pairs[1:]))
-
-        if all_inputs_the_same:
-            input_layer_ordinal_pairs = [input_layer_ordinal_pairs[0]]
-
-        input_layers = set((l for l, _ in input_layer_ordinal_pairs))
-
-        assert len(input_layers) == 1
-        self.input_layer = next(iter(input_layers))
-        self.input_ordinals = torch.tensor([o for _, o in input_layer_ordinal_pairs])
+        self.gather = GatherModule(
+            [neuron_ordinals[int(inp.getIndex())] for n in layer_neurons for inp in n.getInputs()],
+            allow_merge_on_all_inputs_same=True,
+        )
 
         self.linear = Linear(layer_neurons, diagonal_expand=False, assume_all_weights_same=False)
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
-        # TODO: replace with GatherModule?
-        input_values = torch.index_select(layer_values[self.input_layer], 0, self.input_ordinals)
+        input_values = self.gather(layer_values)
         # TODO reshape ?
-
         y = self.linear(input_values)
         y = torch.tanh(y)
         return y
@@ -402,7 +402,8 @@ class AggregationLayer(torch.nn.Module):
         self.neuron_ids = [n.getIndex() for n in layer_neurons]
 
         self.gather = GatherModule(
-            [neuron_ordinals[int(inp.getIndex())] for n in layer_neurons for inp in n.getInputs()]
+            [neuron_ordinals[int(inp.getIndex())] for n in layer_neurons for inp in n.getInputs()],
+            allow_merge_on_all_inputs_same=True,  # TODO: if True, may need expand() operation after
         )
 
         self.inputs_dims = [n.getInputs().size() for n in layer_neurons]
@@ -489,7 +490,7 @@ if __name__ == "__main__":
 
         # TODO all samples at once instead
 
-        # i = 108
+        i = 108
         # i = random.choice(list(range(len(built_dataset.samples))))
         # samples = [built_dataset.samples[i]]
         # print("SAMPLE", i)
@@ -499,9 +500,6 @@ if __name__ == "__main__":
         samples[0].draw(filename="run.png", show=False)
 
         ###### ALGORITHM ######
-
-        if not assume_facts_same:
-            check_same_facts_assumption = False
 
         print("Layers discovery...")
         layers = discover_all_layers(samples, layers_verification=check_same_layers_assumption)
