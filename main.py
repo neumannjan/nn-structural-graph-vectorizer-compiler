@@ -235,6 +235,7 @@ class LayerPipe(torch.nn.Module):
         self.layer_index = layer_index
 
     def forward(self, layer_values: dict[int, torch.Tensor] | None = None):
+        # TODO: autodetect in preprocessing which layers can be thrown away when for saving memory
         if layer_values is None:
             layer_values = {}
 
@@ -242,34 +243,24 @@ class LayerPipe(torch.nn.Module):
         return layer_values
 
 
-class WeightedRuleLayer(torch.nn.Module):
+class Linear(torch.nn.Module):
     def __init__(
-        self, layer_neurons: list, neuron_ordinals: dict[int, tuple[int, int]],
-        check_same_weights_assumption=True,
-        check_same_inputs_dim_assumption=True,
+        self,
+        layer_neurons: list,
+        diagonal_expand: bool,
+        assume_all_weights_same: bool,
     ) -> None:
         super().__init__()
+        self.expand_diagonal = diagonal_expand
 
-        self.neuron_ids = [n.getIndex() for n in layer_neurons]
+        if assume_all_weights_same:
+            layer_neurons = layer_neurons[:1]
 
-        self.gather = GatherModule(
-            [neuron_ordinals[int(inp.getIndex())] for n in layer_neurons for inp in n.getInputs()]
-        )
-
-        neuron = layer_neurons[0]
-
-        self.inputs_dim = neuron.getInputs().size()
-
-        if check_same_inputs_dim_assumption:
-            for n in layer_neurons:
-                assert self.inputs_dim == n.getInputs().size()
-
-        self.layer_index = neuron.getLayer()
         self.weights_map = torch.nn.ParameterDict()
         self.all_weights = []
 
         self.weight_indices = []
-        for weight in tqdm(neuron.getWeights(), desc="Weights"):
+        for weight in tqdm([w for n in layer_neurons for w in n.getWeights()], desc="Weights"):
             self.weight_indices += [weight.index]
 
             if str(weight.index) in self.weights_map:
@@ -284,22 +275,79 @@ class WeightedRuleLayer(torch.nn.Module):
 
             self.all_weights += [w_tensor]
 
-        if check_same_weights_assumption:
-            for neuron in tqdm(layer_neurons[1:], desc="Verifying neurons"):
-                assert neuron.getLayer() == self.layer_index
+        if self.expand_diagonal:
+            # ensure all weights are square matrices, vectors, or scalars
+            for v in self.all_weights:
+                assert v.dim() <= 2
+                if torch.squeeze(v).dim() == 2:
+                    assert v.shape[0] == v.shape[1]
+        else:
+            # ensure all weights are matrices
+            for v in self.all_weights:
+                assert v.dim() == 2
 
-                for our_widx, weight in zip(self.weight_indices, neuron.getWeights()):
+    def forward(self, input_values: torch.Tensor):
+        w = self.all_weights
+        if self.expand_diagonal:
+            dim = max((torch.atleast_1d(torch.squeeze(v)).shape[0] for v in w))
+            w = [expand_diag(v, dim) for v in w]
+        else:
+            # TODO: remove?
+            w_shape_hull = [
+                max((v.shape[0] for v in w)),
+                max((v.shape[1] for v in w)),
+            ]
+            w = [v.expand(w_shape_hull) for v in w]
+
+        w = torch.stack(w)
+        y = w @ input_values
+        return y
+
+
+class WeightedRuleLayer(torch.nn.Module):
+    def __init__(
+        self,
+        layer_neurons: list,
+        neuron_ordinals: dict[int, tuple[int, int]],
+        check_same_weights_assumption=True,
+        check_same_inputs_dim_assumption=True,
+    ) -> None:
+        super().__init__()
+
+        self.neuron_ids = [n.getIndex() for n in layer_neurons]
+
+        neuron = layer_neurons[0]
+
+        self.gather = GatherModule(
+            [neuron_ordinals[int(inp.getIndex())] for n in layer_neurons for inp in n.getInputs()]
+        )
+
+        self.linear = Linear(layer_neurons,
+                             diagonal_expand=True,
+                             assume_all_weights_same=True)
+
+        self.inputs_dim = neuron.getInputs().size()
+
+        if check_same_inputs_dim_assumption:
+            for n in layer_neurons:
+                assert self.inputs_dim == n.getInputs().size()
+
+        if check_same_weights_assumption:
+            layer_index = neuron.getLayer()
+
+            for n in tqdm(layer_neurons[1:], desc="Verifying neurons"):
+                assert n.getLayer() == layer_index
+
+                for our_widx, weight in zip(self.linear.weight_indices, n.getWeights()):
                     assert our_widx == weight.index
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
         input_values = self.gather(layer_values)
         input_values = torch.reshape(input_values, [-1, self.inputs_dim, *input_values.shape[1:]])
 
-        w = self.all_weights
-        dim = max((torch.atleast_1d(v).shape[0] for v in w))
-        w = [expand_diag(v, dim) for v in w]
-        w = torch.stack(w)
-        y = w @ input_values
+        y = self.linear(input_values)
+
+        # TODO: parameterize
         y = torch.sum(y, 1)
         y = torch.tanh(y)
         return y
@@ -324,51 +372,33 @@ class WeightedAtomLayer(torch.nn.Module):
         self.input_layer = next(iter(input_layers))
         self.input_ordinals = torch.tensor([o for _, o in input_layer_ordinal_pairs])
 
+        self.linear = Linear(layer_neurons,
+                             diagonal_expand=False,
+                             assume_all_weights_same=False)
+
         if check_same_inputs_assumption:
             first_inputs = tuple((int(inp.getIndex()) for inp in neuron.getInputs()))
             for n in layer_neurons[1:]:
                 this_inputs = tuple((int(inp.getIndex()) for inp in n.getInputs()))
                 assert first_inputs == this_inputs
 
-        # WEIGHTS
-        self.weights_map = torch.nn.ParameterDict()
-        self.all_weights = []
-
-        self.weight_indices = []
-        for neuron, weight in tqdm([(n, w) for n in layer_neurons for w in n.getWeights()], desc="Weights"):
-            self.weight_indices += [weight.index]
-
-            if str(weight.index) in self.weights_map:
-                w_tensor = self.weights_map[str(weight.index)]
-            else:
-                w_tensor = value_to_tensor(weight.value)
-
-                if weight.isLearnable:
-                    w_tensor = torch.nn.Parameter(w_tensor)
-
-                self.weights_map[str(weight.index)] = w_tensor
-
-            self.all_weights += [w_tensor]
-
     def forward(self, layer_values: dict[int, torch.Tensor]):
+        # TODO: replace with GatherModule?
         input_values = torch.index_select(layer_values[self.input_layer], 0, self.input_ordinals)
         # TODO reshape ?
-        w = self.all_weights
-        w_shape_hull = [
-            max((v.shape[0] for v in w)),
-            max((v.shape[1] for v in w)),
-        ]
-        w = [v.expand(w_shape_hull) for v in w]
-        w = torch.stack(w)
-        y = w @ input_values
+
+        y = self.linear(input_values)
         y = torch.tanh(y)
         return y
 
 
 class AggregationLayer(torch.nn.Module):
-    def __init__(self, layer_neurons: list, neuron_ordinals: dict[int, tuple[int, int]],
-                 check_same_inputs_dim_assumption=True,
-                 ) -> None:
+    def __init__(
+        self,
+        layer_neurons: list,
+        neuron_ordinals: dict[int, tuple[int, int]],
+        check_same_inputs_dim_assumption=True,
+    ) -> None:
         super().__init__()
 
         self.neuron_ids = [n.getIndex() for n in layer_neurons]
@@ -383,7 +413,6 @@ class AggregationLayer(torch.nn.Module):
         if check_same_inputs_dim_assumption:
             for n in layer_neurons:
                 assert self.inputs_dim == n.getInputs().size()
-
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
         input_values = self.gather(layer_values)
@@ -456,13 +485,13 @@ if __name__ == "__main__":
 
         # TODO all samples at once instead
         # samples = [built_dataset.samples[107]]
-        # i = 108
-        i = random.choice(list(range(len(built_dataset.samples))))
+        i = 108
+        # i = random.choice(list(range(len(built_dataset.samples))))
         samples = [built_dataset.samples[i]]
         print("SAMPLE", i)
         # samples = built_dataset.samples
 
-        samples[0].draw(filename='run.png', show=False)
+        samples[0].draw(filename="run.png", show=False)
 
         ###### ALGORITHM ######
 
@@ -519,8 +548,8 @@ if __name__ == "__main__":
         expected = value_to_numpy(samples[0].java_sample.query.neuron.getRawState().getValue())
         actual = model(None)
 
-        print(expected)
-        print(actual)
+        print("Expected:", expected)
+        print("Actual:", actual)
     except jpype.JException as e:
         print(e.message())
         print(e.stacktrace())
