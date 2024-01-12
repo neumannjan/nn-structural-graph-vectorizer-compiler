@@ -309,7 +309,7 @@ class WeightedRuleLayer(torch.nn.Module):
         self,
         layer_neurons: list,
         neuron_ordinals: dict[int, tuple[int, int]],
-        check_same_weights_assumption=True,
+        assume_rule_weights_same=True,
         check_same_inputs_dim_assumption=True,
     ) -> None:
         super().__init__()
@@ -322,9 +322,7 @@ class WeightedRuleLayer(torch.nn.Module):
             [neuron_ordinals[int(inp.getIndex())] for n in layer_neurons for inp in n.getInputs()]
         )
 
-        self.linear = Linear(layer_neurons,
-                             diagonal_expand=True,
-                             assume_all_weights_same=True)
+        self.linear = Linear(layer_neurons, diagonal_expand=True, assume_all_weights_same=assume_rule_weights_same)
 
         self.inputs_dim = neuron.getInputs().size()
 
@@ -332,12 +330,13 @@ class WeightedRuleLayer(torch.nn.Module):
             for n in layer_neurons:
                 assert self.inputs_dim == n.getInputs().size()
 
-        if check_same_weights_assumption:
+        if assume_rule_weights_same:  # check
             layer_index = neuron.getLayer()
 
             for n in tqdm(layer_neurons[1:], desc="Verifying neurons"):
                 assert n.getLayer() == layer_index
 
+                assert len(self.linear.weight_indices) == len(n.getWeights())
                 for our_widx, weight in zip(self.linear.weight_indices, n.getWeights()):
                     assert our_widx == weight.index
 
@@ -355,32 +354,32 @@ class WeightedRuleLayer(torch.nn.Module):
 
 class WeightedAtomLayer(torch.nn.Module):
     def __init__(
-        self, layer_neurons: list, neuron_ordinals: dict[int, tuple[int, int]], check_same_inputs_assumption=True
+        self,
+        layer_neurons: list,
+        neuron_ordinals: dict[int, tuple[int, int]],
     ) -> None:
         super().__init__()
 
         self.neuron_ids = [n.getIndex() for n in layer_neurons]
 
-        neuron = layer_neurons[0]
-
         # TODO: ASSUMPTION: all inputs are from the same layer
         # (easy fix: replace with GatherModule)
-        input_layer_ordinal_pairs = [neuron_ordinals[int(n.getIndex())] for n in neuron.getInputs()]
+        input_layer_ordinal_pairs = [
+            neuron_ordinals[int(inp.getIndex())] for n in layer_neurons for inp in n.getInputs()
+        ]
+
+        all_inputs_the_same = all((input_layer_ordinal_pairs[0] == p for p in input_layer_ordinal_pairs[1:]))
+
+        if all_inputs_the_same:
+            input_layer_ordinal_pairs = [input_layer_ordinal_pairs[0]]
+
         input_layers = set((l for l, _ in input_layer_ordinal_pairs))
 
         assert len(input_layers) == 1
         self.input_layer = next(iter(input_layers))
         self.input_ordinals = torch.tensor([o for _, o in input_layer_ordinal_pairs])
 
-        self.linear = Linear(layer_neurons,
-                             diagonal_expand=False,
-                             assume_all_weights_same=False)
-
-        if check_same_inputs_assumption:
-            first_inputs = tuple((int(inp.getIndex()) for inp in neuron.getInputs()))
-            for n in layer_neurons[1:]:
-                this_inputs = tuple((int(inp.getIndex()) for inp in n.getInputs()))
-                assert first_inputs == this_inputs
+        self.linear = Linear(layer_neurons, diagonal_expand=False, assume_all_weights_same=False)
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
         # TODO: replace with GatherModule?
@@ -397,7 +396,6 @@ class AggregationLayer(torch.nn.Module):
         self,
         layer_neurons: list,
         neuron_ordinals: dict[int, tuple[int, int]],
-        check_same_inputs_dim_assumption=True,
     ) -> None:
         super().__init__()
 
@@ -407,55 +405,62 @@ class AggregationLayer(torch.nn.Module):
             [neuron_ordinals[int(inp.getIndex())] for n in layer_neurons for inp in n.getInputs()]
         )
 
-        neuron = layer_neurons[0]
-        self.inputs_dim = neuron.getInputs().size()
-
-        if check_same_inputs_dim_assumption:
-            for n in layer_neurons:
-                assert self.inputs_dim == n.getInputs().size()
+        self.inputs_dims = [n.getInputs().size() for n in layer_neurons]
+        self.inputs_dims_match = all((self.inputs_dims[0] == d for d in self.inputs_dims[1:]))
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
         input_values = self.gather(layer_values)
-        input_values = torch.reshape(input_values, [-1, self.inputs_dim, *input_values.shape[1:]])
-        y = torch.mean(input_values, 1)
+
+        if self.inputs_dims_match:
+            input_values = torch.reshape(input_values, [-1, self.inputs_dims[0], *input_values.shape[1:]])
+            # TODO: parameterize
+            y = input_values.mean(dim=1)
+        else:
+            input_values = list(torch.split(input_values, self.inputs_dims, dim=0))
+            input_values = torch.nn.utils.rnn.pad_sequence(input_values, batch_first=True)
+
+            # TODO: parameterize
+            # (mean)
+            y = torch.sum(input_values, dim=1) / atleast_3d_rev(torch.tensor(self.inputs_dims))
+
         return y
 
 
 class FactLayer(torch.nn.Module):
-    def __init__(self, layer_neurons: list, check_same_facts_assumption=True) -> None:
+    def __init__(self, layer_neurons: list, assume_facts_same=True) -> None:
         super().__init__()
 
         self.neuron_ids = [n.getIndex() for n in layer_neurons]
 
-        neuron = layer_neurons[0]
+        if assume_facts_same:
+            neuron = layer_neurons[0]
 
-        # TODO: ASSUMPTION: is not learnable
-        assert not neuron.hasLearnableValue
-        # TODO: ASSUMPTION: weight is 1
+            value_np = value_to_numpy(neuron.getRawState().getValue())
+            self.value = atleast_3d_rev(torch.tensor(value_np))
 
-        value_np = value_to_numpy(neuron.getRawState().getValue())
-
-        if check_same_facts_assumption:
+            # check
             for n in layer_neurons[1:]:
-                # TODO: ASSUMPTION: is not learnable
-                assert not n.hasLearnableValue
-                # TODO: ASSUMPTION: weight is 1
-
                 assert (value_to_numpy(n.getRawState().getValue()) == value_np).all()
+        else:
+            self.value = atleast_3d_rev(
+                torch.stack([value_to_tensor(n.getRawState().getValue()) for n in layer_neurons])
+            )
 
-        self.value = atleast_3d_rev(torch.tensor(value_np))
+        # check
+        for n in layer_neurons:
+            # TODO: ASSUMPTION: is not learnable
+            assert not n.hasLearnableValue
+            # TODO: ASSUMPTION: weight is 1
 
     def forward(self, *kargs, **kwargs):
         return self.value
 
 
-class ScalarOutput(torch.nn.Module):
-    def __init__(self, layer_index: int) -> None:
-        super().__init__()
-        self.layer_index = layer_index
+def get_layer_neuron_ordinals(layer_def: LayerDefinition, neurons: list, assume_facts_same: bool) -> dict[int, int]:
+    if assume_facts_same and layer_def.type == "FactNeuron":
+        return {n.getIndex(): 0 for n in neurons}
 
-    def forward(self, layer_values: dict[int, torch.Tensor]):
-        return torch.squeeze(layer_values[self.layer_index]).item()
+    return {n.getIndex(): i for i, n in enumerate(neurons)}
 
 
 if __name__ == "__main__":
@@ -469,31 +474,34 @@ if __name__ == "__main__":
 
         ###### CONFIG ######
 
+        # TODO: ASSUMPTION: all facts have the same value
+        assume_facts_same = True
+        # TODO: ASSUMPTION: all neurons in a given WeightedRuleLayer have the same weights
+        assume_rule_weights_same = True
+
         # TODO: ASSUMPTION: all neurons have the same layer layout
         check_same_layers_assumption = False
-        # TODO: ASSUMPTION: all facts have the same value
-        check_same_facts_assumption = True
-        # TODO: ASSUMPTION: all neurons in a given WeightedRuleLayer have the same weights
-        check_same_weights_assumption = True
         # TODO: ASSUMPTION: all neurons in a given WeightedRuleLayer have the same number of inputs
         check_same_inputs_dim_assumption = True
-        # TODO: ASSUMPTION: all neurons in a given WeightedAtomLayer have the same inputs
-        check_same_inputs_assumption = True
         run_tests = True
 
         ###### DATASET CONFIG ######
 
         # TODO all samples at once instead
-        # samples = [built_dataset.samples[107]]
-        i = 108
+
+        # i = 108
         # i = random.choice(list(range(len(built_dataset.samples))))
-        samples = [built_dataset.samples[i]]
-        print("SAMPLE", i)
-        # samples = built_dataset.samples
+        # samples = [built_dataset.samples[i]]
+        # print("SAMPLE", i)
+
+        samples = built_dataset.samples
 
         samples[0].draw(filename="run.png", show=False)
 
         ###### ALGORITHM ######
+
+        if not assume_facts_same:
+            check_same_facts_assumption = False
 
         print("Layers discovery...")
         layers = discover_all_layers(samples, layers_verification=check_same_layers_assumption)
@@ -501,7 +509,7 @@ if __name__ == "__main__":
         network = get_neurons_per_layer(samples)
 
         ordinals_per_layer: dict[int, dict[int, int]] = {
-            l: {int(n.getIndex()): o for o, n in enumerate(neurons)} for l, neurons in network.items()
+            l.index: get_layer_neuron_ordinals(l, network[l.index], assume_facts_same) for l in layers
         }
         ordinals: dict[int, tuple[int, int]] = {
             i: (l, o) for l, i_o_dict in ordinals_per_layer.items() for i, o in i_o_dict.items()
@@ -513,18 +521,17 @@ if __name__ == "__main__":
             print()
             print(f"Layer {l.index}:")
             if l.type == "FactNeuron":
-                module = FactLayer(network[l.index], check_same_facts_assumption=check_same_facts_assumption)
+                module = FactLayer(network[l.index], assume_facts_same=assume_facts_same)
             elif l.type == "WeightedAtomNeuron":
                 module = WeightedAtomLayer(
                     network[l.index],
                     ordinals,
-                    check_same_inputs_assumption=check_same_inputs_assumption,
                 )
             elif l.type == "WeightedRuleNeuron":
                 module = WeightedRuleLayer(
                     network[l.index],
                     ordinals,
-                    check_same_weights_assumption=check_same_weights_assumption,
+                    assume_rule_weights_same=assume_rule_weights_same,
                     check_same_inputs_dim_assumption=check_same_inputs_dim_assumption,
                 )
                 if run_tests:
@@ -533,7 +540,6 @@ if __name__ == "__main__":
                 module = AggregationLayer(
                     network[l.index],
                     ordinals,
-                    check_same_inputs_dim_assumption=check_same_inputs_dim_assumption,
                 )
                 if run_tests:
                     test_gather_module(module.gather, network)
@@ -542,14 +548,27 @@ if __name__ == "__main__":
 
             model.append(LayerPipe(module, layer_index=l.index))
 
-        model.append(ScalarOutput(layers[-1].index))
         print(model)
 
-        expected = value_to_numpy(samples[0].java_sample.query.neuron.getRawState().getValue())
-        actual = model(None)
+        results: dict[int, torch.Tensor] = model(None)
+
+        for layer in layers:
+            expected = torch.squeeze(
+                torch.stack([value_to_tensor(n.getRawState().getValue()) for n in network[layer.index]])
+            )
+            actual = torch.squeeze(results[layer.index])
+            if (torch.abs(expected - actual) > 1e-10).any():
+                raise RuntimeError(
+                    f"Values do not match at layer {layer.index} ({layer.type}). "
+                    f"Max difference is {torch.max(torch.abs(expected - actual))}. "
+                    f"Expected: {expected}\n"
+                    f"Actual: {actual}"
+                )
 
         print("Expected:", expected)
         print("Actual:", actual)
+        print("All values match!")
+
     except jpype.JException as e:
         print(e.message())
         print(e.stacktrace())
