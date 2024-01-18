@@ -24,7 +24,7 @@ class WeightedRuleLayer(torch.nn.Module):
             allow_merge_on_all_inputs_same=True,  # TODO: if True, may need expand() operation after
         )
 
-        self.linear = Linear(layer_neurons, diagonal_expand=True, assume_all_weights_same=assume_rule_weights_same)
+        self.linear = Linear(layer_neurons, assume_all_weights_same=assume_rule_weights_same)
 
         self.inputs_dim = neuron.getInputs().size()
 

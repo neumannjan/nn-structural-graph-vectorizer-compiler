@@ -19,7 +19,7 @@ class WeightedAtomLayer(torch.nn.Module):
             allow_merge_on_all_inputs_same=True,
         )
 
-        self.linear = Linear(layer_neurons, diagonal_expand=False, assume_all_weights_same=False)
+        self.linear = Linear(layer_neurons, assume_all_weights_same=False)
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
         input_values = self.gather(layer_values)
