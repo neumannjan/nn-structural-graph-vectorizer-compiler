@@ -71,10 +71,9 @@ class MultiLayerGather(torch.nn.Module):
             layer: sorted(set((o for l, o in input_layer_ordinal_pairs if l == layer))) for layer in self.layers
         }
 
-        self.layer_gathers = torch.nn.ModuleDict({
-            str(l): build_optimal_single_layer_gather_module(l, per_layer_ordinals[l])
-            for l in self.layers
-        })
+        self.layer_gathers = torch.nn.ModuleDict(
+            {str(l): build_optimal_single_layer_gather_module(l, per_layer_ordinals[l]) for l in self.layers}
+        )
 
         ### setup final gather ###
 
@@ -89,7 +88,7 @@ class MultiLayerGather(torch.nn.Module):
             layer_prefixes[layers_map[l]] + per_layer_ordinals2_map[l][o] for l, o in input_layer_ordinal_pairs
         ]
 
-        self.concatenated_ordinals = torch.tensor(concatenated_ordinals)
+        self.final_gather = build_optimal_single_layer_gather_module(-1, concatenated_ordinals)
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
         layer_inputs_needed = [self.layer_gathers[str(layer)](layer_values) for layer in self.layers]
@@ -101,7 +100,7 @@ class MultiLayerGather(torch.nn.Module):
         layer_inputs_needed = [v.expand(*layer_shape_hull) for v in layer_inputs_needed]
         layer_inputs_needed = torch.concatenate(layer_inputs_needed)
 
-        out = torch.index_select(layer_inputs_needed, 0, self.concatenated_ordinals)
+        out = self.final_gather({-1: layer_inputs_needed})
         return out
 
 
