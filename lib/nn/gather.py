@@ -24,6 +24,26 @@ class TakeValue(torch.nn.Module):
         return f"layer={self.layer}, ordinal={self.ordinal}"
 
 
+class TakeLayerSlice(torch.nn.Module):
+    """
+    Gather for inputs coming from a single layer, used when slicing is equivalent to gathering.
+
+    Simply takes a slice from the layer and returns it as-is. Used when the ordinals are equal to `i+range(j-i)`.
+    """
+
+    def __init__(self, input_layer: int, start: int, end: int) -> None:
+        super().__init__()
+        self.layer = input_layer
+        self.start = start
+        self.end = end
+
+    def forward(self, layer_values: dict[int, torch.Tensor]):
+        return layer_values[self.layer][self.start: self.end]
+
+    def extra_repr(self) -> str:
+        return f"layer={self.layer}, start={self.start}, end={self.end}"
+
+
 class SingleLayerGather(torch.nn.Module):
     """Gather for inputs coming from a single layer."""
 
@@ -46,6 +66,11 @@ def build_optimal_single_layer_gather_module(input_layer: int, ordinals: list[in
 
     if all_inputs_the_same:
         return TakeValue(input_layer, ordinals[0])
+
+    all_ordinals_differ_by_1 = all((b - a == 1 for a, b in zip(ordinals[:-1], ordinals[1:])))
+
+    if all_ordinals_differ_by_1:
+        return TakeLayerSlice(input_layer, ordinals[0], ordinals[-1] + 1)
 
     return SingleLayerGather(input_layer, ordinals)
 

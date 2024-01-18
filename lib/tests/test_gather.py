@@ -2,7 +2,7 @@ import itertools
 
 import pytest
 import torch
-from lib.nn.gather import build_optimal_gather_module
+from lib.nn.gather import TakeLayerSlice, build_optimal_gather_module
 from lib.nn.topological.layers import LayerOrdinal, TopologicalNetwork, compute_neuron_ordinals
 from lib.tests.utils.network_mock import generate_example_network
 from lib.utils import atleast_3d_rev
@@ -63,3 +63,20 @@ def test_gather_module(
         print("Layer", l.index)
         print(gather)
         _do_the_test(gather, input_layer_ordinal_pairs, network, all_same=(assume_facts_same and l == 1))
+
+
+def test_slice_gather():
+    slice_start = 10
+    slice_end = 100
+    ordinals = list(range(slice_start, slice_end))
+    total = 400
+    input_layer_ordinal_pairs = [LayerOrdinal(0, i) for i in ordinals]
+    inputs = {0: torch.tensor(list(range(total)))}
+
+    gather_module = build_optimal_gather_module(input_layer_ordinal_pairs)
+    actual = gather_module(inputs)
+
+    assert isinstance(gather_module, TakeLayerSlice)
+    expected = torch.tensor(ordinals)
+    assert (actual == expected).all()
+
