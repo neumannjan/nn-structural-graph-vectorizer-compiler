@@ -37,3 +37,10 @@ class AggregationLayer(torch.nn.Module):
             y = torch.sum(input_values, dim=1) / atleast_3d_rev(torch.tensor(self.inputs_dims))
 
         return y
+
+    @property
+    def padding_needed(self) -> bool:
+        return not self.inputs_dims_match
+
+    def extra_repr(self) -> str:
+        return f"padding_needed={self.padding_needed},"
