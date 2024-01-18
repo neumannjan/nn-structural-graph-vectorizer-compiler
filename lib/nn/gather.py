@@ -20,6 +20,9 @@ class TakeValue(torch.nn.Module):
         out = layer_values[self.layer][self.ordinal]
         return out.reshape([1, *out.shape])
 
+    def extra_repr(self) -> str:
+        return f"layer={self.layer}, ordinal={self.ordinal}"
+
 
 class SingleLayerGather(torch.nn.Module):
     """Gather for inputs coming from a single layer."""
@@ -32,6 +35,9 @@ class SingleLayerGather(torch.nn.Module):
     def forward(self, layer_values: dict[int, torch.Tensor]):
         input = layer_values[self.layer]
         return torch.index_select(input, 0, self.ordinals)
+
+    def extra_repr(self) -> str:
+        return f"layer={self.layer}, ordinals=(list of size {self.ordinals.shape[0]})"
 
 
 def build_optimal_single_layer_gather_module(input_layer: int, ordinals: list[int]):
