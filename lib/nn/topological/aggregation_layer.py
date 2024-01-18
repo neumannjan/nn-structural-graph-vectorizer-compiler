@@ -1,5 +1,5 @@
 import torch
-from lib.nn.gather import GatherModule
+from lib.nn.gather import build_optimal_gather_module
 from lib.nn.topological.layers import Ordinals
 from lib.utils import atleast_3d_rev
 
@@ -14,9 +14,8 @@ class AggregationLayer(torch.nn.Module):
 
         self.neuron_ids = [n.getIndex() for n in layer_neurons]
 
-        self.gather = GatherModule(
+        self.gather = build_optimal_gather_module(
             [neuron_ordinals[int(inp.getIndex())] for n in layer_neurons for inp in n.getInputs()],
-            allow_merge_on_all_inputs_same=True,  # TODO: if True, may need expand() operation after
         )
 
         self.inputs_dims = [n.getInputs().size() for n in layer_neurons]

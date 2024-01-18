@@ -1,5 +1,5 @@
 import torch
-from lib.nn.gather import GatherModule
+from lib.nn.gather import build_optimal_gather_module
 from lib.nn.linear import Linear
 from lib.nn.topological.layers import Ordinals
 
@@ -14,9 +14,8 @@ class WeightedAtomLayer(torch.nn.Module):
 
         self.neuron_ids = [n.getIndex() for n in layer_neurons]
 
-        self.gather = GatherModule(
+        self.gather = build_optimal_gather_module(
             [neuron_ordinals[int(inp.getIndex())] for n in layer_neurons for inp in n.getInputs()],
-            allow_merge_on_all_inputs_same=True,
         )
 
         self.linear = Linear(layer_neurons, assume_all_weights_same=False)

@@ -4,51 +4,89 @@ import torch
 from lib.nn.topological.layers import LayerOrdinal
 
 
-class GatherModule(torch.nn.Module):
-    def __init__(self, input_layer_ordinal_pairs: list[LayerOrdinal], allow_merge_on_all_inputs_same: bool) -> None:
+class TakeValue(torch.nn.Module):
+    """
+    Gather for single-layer, single-input. Is also used for single-layer when all inputs are known to be identical.
+
+    Simply returns the single value.
+    """
+
+    def __init__(self, input_layer: int, ordinal: int) -> None:
         super().__init__()
+        self.layer = input_layer
+        self.ordinal = ordinal
 
-        if allow_merge_on_all_inputs_same:
-            all_inputs_the_same = all((input_layer_ordinal_pairs[0] == p for p in input_layer_ordinal_pairs[1:]))
+    def forward(self, layer_values: dict[int, torch.Tensor]):
+        out = layer_values[self.layer][self.ordinal]
+        return out.reshape([1, *out.shape])
 
-            if all_inputs_the_same:
-                input_layer_ordinal_pairs = [input_layer_ordinal_pairs[0]]
 
+class SingleLayerGather(torch.nn.Module):
+    """Gather for inputs coming from a single layer."""
+
+    def __init__(self, input_layer: int, ordinals: list[int]) -> None:
+        super().__init__()
+        self.layer = input_layer
+        self.ordinals = torch.tensor(ordinals)
+
+    def forward(self, layer_values: dict[int, torch.Tensor]):
+        input = layer_values[self.layer]
+        return torch.index_select(input, 0, self.ordinals)
+
+
+def build_optimal_single_layer_gather_module(input_layer: int, ordinals: list[int]):
+    """Build the optimal gather network module when inputs are guaranteed to come from a single layer."""
+    all_inputs_the_same = all((ordinals[0] == o for o in ordinals[1:]))
+
+    if all_inputs_the_same:
+        return TakeValue(input_layer, ordinals[0])
+
+    return SingleLayerGather(input_layer, ordinals)
+
+
+class MultiLayerGather(torch.nn.Module):
+    """
+    Gather for inputs coming from multiple layers.
+
+    First performs individual gathers for each input layer. Then concatenates the result to a single tensor and performs
+    the final gather.
+    """
+
+    def __init__(self, input_layer_ordinal_pairs: list[LayerOrdinal]) -> None:
+        super().__init__()
         self.input_layer_ordinal_pairs = input_layer_ordinal_pairs
 
         self.layers = sorted(set((l for l, _ in input_layer_ordinal_pairs)), reverse=True)
         layers_map = {l: i for i, l in enumerate(self.layers)}
 
-        if len(self.layers) == 1:
-            per_layer_ordinals: dict[int, list[int]] = {self.layers[0]: [o for _, o in input_layer_ordinal_pairs]}
-        else:
-            per_layer_ordinals: dict[int, list[int]] = {
-                layer: sorted(set((o for l, o in input_layer_ordinal_pairs if l == layer))) for layer in self.layers
-            }
+        ### setup single-layer gathers ###
 
-            layer_sizes = [len(per_layer_ordinals[layer]) for layer in self.layers]
-            layer_prefixes = np.concatenate([[0], np.cumsum(layer_sizes)[:-1]])
+        per_layer_ordinals: dict[int, list[int]] = {
+            layer: sorted(set((o for l, o in input_layer_ordinal_pairs if l == layer))) for layer in self.layers
+        }
 
-            per_layer_ordinals2_map: dict[int, dict[int, int]] = {
-                l: {o: i for i, o in enumerate(per_layer_ordinals[l])} for l in self.layers
-            }
+        self.layer_gathers = torch.nn.ModuleDict({
+            str(l): build_optimal_single_layer_gather_module(l, per_layer_ordinals[l])
+            for l in self.layers
+        })
 
-            concatenated_ordinals = [
-                layer_prefixes[layers_map[l]] + per_layer_ordinals2_map[l][o] for l, o in input_layer_ordinal_pairs
-            ]
+        ### setup final gather ###
 
-            self.concatenated_ordinals = torch.tensor(concatenated_ordinals)
-        self.per_layer_ordinals = {l: torch.tensor(ordinals) for l, ordinals in per_layer_ordinals.items()}
+        layer_sizes = [len(per_layer_ordinals[layer]) for layer in self.layers]
+        layer_prefixes = np.concatenate([[0], np.cumsum(layer_sizes)[:-1]])
+
+        per_layer_ordinals2_map: dict[int, dict[int, int]] = {
+            l: {o: i for i, o in enumerate(per_layer_ordinals[l])} for l in self.layers
+        }
+
+        concatenated_ordinals = [
+            layer_prefixes[layers_map[l]] + per_layer_ordinals2_map[l][o] for l, o in input_layer_ordinal_pairs
+        ]
+
+        self.concatenated_ordinals = torch.tensor(concatenated_ordinals)
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
-        # if there is only one layer, skip the additional gather
-        if len(self.layers) == 1:
-            layer = self.layers[0]
-            return torch.index_select(layer_values[layer], 0, self.per_layer_ordinals[layer])
-
-        layer_inputs_needed = [
-            torch.index_select(layer_values[layer], 0, self.per_layer_ordinals[layer]) for layer in self.layers
-        ]
+        layer_inputs_needed = [self.layer_gathers[str(layer)](layer_values) for layer in self.layers]
         layer_shape_hull = [
             -1,
             max((v.shape[1] for v in layer_inputs_needed)),
@@ -61,3 +99,11 @@ class GatherModule(torch.nn.Module):
         return out
 
 
+def build_optimal_gather_module(input_layer_ordinal_pairs: list[LayerOrdinal]):
+    layer0, _ = input_layer_ordinal_pairs[0]
+    is_single_layer = all((layer0 == l for l, _ in input_layer_ordinal_pairs[1:]))
+
+    if is_single_layer:
+        return build_optimal_single_layer_gather_module(layer0, [o for _, o in input_layer_ordinal_pairs])
+
+    return MultiLayerGather(input_layer_ordinal_pairs)
