@@ -54,7 +54,8 @@ class SingleLayerGather(torch.nn.Module):
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
         input = layer_values[self.layer]
-        return torch.index_select(input, 0, self.ordinals)
+        with torch.profiler.record_function('GATHER_SINGLE_INDEX_SELECT'):
+            return torch.index_select(input, 0, self.ordinals)
 
     def extra_repr(self) -> str:
         return f"layer={self.layer}, ordinals=(list of size {self.ordinals.shape[0]})"
@@ -116,16 +117,20 @@ class MultiLayerGather(torch.nn.Module):
         self.final_gather = build_optimal_single_layer_gather_module(-1, concatenated_ordinals)
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
-        layer_inputs_needed = [self.layer_gathers[str(layer)](layer_values) for layer in self.layers]
-        layer_shape_hull = [
-            -1,
-            max((v.shape[1] for v in layer_inputs_needed)),
-            max((v.shape[2] for v in layer_inputs_needed)),
-        ]
-        layer_inputs_needed = [v.expand(*layer_shape_hull) for v in layer_inputs_needed]
-        layer_inputs_needed = torch.concatenate(layer_inputs_needed)
+        with torch.profiler.record_function('GATHER_MULTI_RUN_INDIVIDUAL_LAYERS'):
+            layer_inputs_needed = [self.layer_gathers[str(layer)](layer_values) for layer in self.layers]
 
-        out = self.final_gather({-1: layer_inputs_needed})
+        with torch.profiler.record_function('GATHER_MULTI_EXPAND_CONCAT'):
+            layer_shape_hull = [
+                -1,
+                max((v.shape[1] for v in layer_inputs_needed)),
+                max((v.shape[2] for v in layer_inputs_needed)),
+            ]
+            layer_inputs_needed = [v.expand(*layer_shape_hull) for v in layer_inputs_needed]
+            layer_inputs_needed = torch.concatenate(layer_inputs_needed)
+
+        with torch.profiler.record_function('GATHER_MULTI_RUN_FINAL'):
+            out = self.final_gather({-1: layer_inputs_needed})
         return out
 
 

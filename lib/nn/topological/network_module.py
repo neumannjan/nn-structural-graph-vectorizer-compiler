@@ -12,6 +12,7 @@ from lib.nn.topological.layers import (
 from lib.nn.topological.settings import Settings
 from lib.nn.topological.weighted_atom_layer import WeightedAtomLayer
 from lib.nn.topological.weighted_rule_layer import WeightedRuleLayer
+from lib.other_utils import camel_to_snake
 
 d = MyMutagenesis()
 
@@ -27,7 +28,8 @@ class LayerPipe(torch.nn.Module):
         if layer_values is None:
             layer_values = {}
 
-        layer_values[self.layer_index] = self.layer(layer_values)
+        with torch.profiler.record_function(camel_to_snake(self.layer.__class__.__name__, upper=True)):
+            layer_values[self.layer_index] = self.layer(layer_values)
         return layer_values
 
     def extra_repr(self) -> str:
