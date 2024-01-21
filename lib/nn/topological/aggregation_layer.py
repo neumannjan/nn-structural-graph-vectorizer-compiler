@@ -58,13 +58,17 @@ class AggregationLayer(torch.nn.Module):
             self.scatter_func = get_scatter_func(aggregation)
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
-        input_values = self.gather(layer_values)
+        with torch.profiler.record_function('AGG_GATHER'):
+            input_values = self.gather(layer_values)
 
         if self.inputs_dims_match:
-            input_values = torch.reshape(input_values, [-1, self.inputs_dims[0], *input_values.shape[1:]])
-            y = self.aggregation_func(input_values, dim=1)
+            with torch.profiler.record_function('AGG_RESHAPE'):
+                input_values = torch.reshape(input_values, [-1, self.inputs_dims[0], *input_values.shape[1:]])
+            with torch.profiler.record_function('AGG_AGGREGATION'):
+                y = self.aggregation_func(input_values, dim=1)
         else:
-            y = self.scatter_func(input_values, self.index, dim=0)
+            with torch.profiler.record_function('AGG_SCATTER_REDUCE'):
+                y = self.scatter_func(input_values, self.index, dim=0)
 
         return y
 

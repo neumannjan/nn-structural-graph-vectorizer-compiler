@@ -46,12 +46,16 @@ class Linear(torch.nn.Module):
         self.expand_diagonal: bool = w_max_dim == 2 and self.w_shape_hull[0] == self.w_shape_hull[1]
 
     def forward(self, input_values: torch.Tensor):
-        if self.expand_diagonal:
-            ws = {idx: expand_diag(w, self.w_shape_hull[0]) for idx, w in self.weights.items()}
-        else:
-            ws = {idx: w.expand(self.w_shape_hull) for idx, w in self.weights.items()}
+        with torch.profiler.record_function('LINEAR_EXPAND'):
+            if self.expand_diagonal:
+                ws = {idx: expand_diag(w, self.w_shape_hull[0]) for idx, w in self.weights.items()}
+            else:
+                ws = {idx: w.expand(self.w_shape_hull) for idx, w in self.weights.items()}
 
-        w = [ws[idx] for idx in self.weight_indices_str]
-        w = torch.stack(w)
-        y = w @ input_values
+        with torch.profiler.record_function('LINEAR_STACK'):
+            w = [ws[idx] for idx in self.weight_indices_str]
+            w = torch.stack(w)
+
+        with torch.profiler.record_function('LINEAR_MULT'):
+            y = w @ input_values
         return y

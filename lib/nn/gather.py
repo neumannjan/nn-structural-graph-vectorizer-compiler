@@ -64,7 +64,8 @@ class SingleLayerGather(torch.nn.Module):
         self.ordinals = torch.nn.Parameter(torch.tensor(ordinals, dtype=torch.int32), requires_grad=False)
 
     def forward(self, layer_input: torch.Tensor):
-        return torch.index_select(layer_input, 0, self.ordinals)
+        with torch.profiler.record_function('GATHER_SINGLE_INDEX_SELECT'):
+            return torch.index_select(layer_input, 0, self.ordinals)
 
     def extra_repr(self) -> str:
         return f"ordinals=(list of size {self.ordinals.shape[0]})"
@@ -135,11 +136,15 @@ class MultiLayerGather(torch.nn.Module):
         self.final_gather = build_optimal_single_layer_gather_module_unwrapped(concatenated_ordinals)
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
-        layer_inputs_needed = [self.layer_gathers[str(layer)](layer_values[layer]) for layer in self.layers]
-        layer_shape_hull = torch.broadcast_shapes(*(t.shape[1:] for t in layer_inputs_needed))
-        layer_inputs_needed = torch.concatenate([t.expand(-1, *layer_shape_hull) for t in layer_inputs_needed])
+        with torch.profiler.record_function('GATHER_MULTI_RUN_INDIVIDUAL_LAYERS'):
+            layer_inputs_needed = [self.layer_gathers[str(layer)](layer_values[layer]) for layer in self.layers]
+        with torch.profiler.record_function('GATHER_MULTI_BROADCAST_SHAPES'):
+            layer_shape_hull = torch.broadcast_shapes(*(t.shape[1:] for t in layer_inputs_needed))
+        with torch.profiler.record_function('GATHER_MULTI_EXPAND_CONCAT'):
+            layer_inputs_needed = torch.concatenate([t.expand(-1, *layer_shape_hull) for t in layer_inputs_needed])
 
-        out = self.final_gather(layer_inputs_needed)
+        with torch.profiler.record_function('GATHER_MULTI_RUN_FINAL'):
+            out = self.final_gather(layer_inputs_needed)
         return out
 
 

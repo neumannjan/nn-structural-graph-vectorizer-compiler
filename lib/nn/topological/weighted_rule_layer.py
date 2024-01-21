@@ -44,16 +44,23 @@ class WeightedRuleLayer(torch.nn.Module):
                     assert our_widx == weight.index
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
-        input_values = self.gather(layer_values)
+        with torch.profiler.record_function('WEIGHTED_RULE_GATHER'):
+            input_values = self.gather(layer_values)
 
         if self.assume_rule_weights_same:
-            input_values = torch.reshape(input_values, [-1, self.inputs_dim, *input_values.shape[1:]])
-            y = self.linear(input_values)
+            with torch.profiler.record_function('WEIGHTED_RULE_RESHAPE'):
+                input_values = torch.reshape(input_values, [-1, self.inputs_dim, *input_values.shape[1:]])
+            with torch.profiler.record_function('WEIGHTED_RULE_LINEAR'):
+                y = self.linear(input_values)
         else:
-            y = self.linear(input_values)
-            y = torch.reshape(y, [-1, self.inputs_dim, *y.shape[1:]])
+            with torch.profiler.record_function('WEIGHTED_RULE_LINEAR'):
+                y = self.linear(input_values)
+            with torch.profiler.record_function('WEIGHTED_RULE_RESHAPE'):
+                y = torch.reshape(y, [-1, self.inputs_dim, *y.shape[1:]])
 
         # TODO: parameterize
-        y = torch.sum(y, 1)
-        y = torch.tanh(y)
+        with torch.profiler.record_function('WEIGHTED_RULE_SUM'):
+            y = torch.sum(y, 1)
+        with torch.profiler.record_function('WEIGHTED_RULE_TANH'):
+            y = torch.tanh(y)
         return y
