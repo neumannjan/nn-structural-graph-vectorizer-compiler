@@ -29,6 +29,9 @@ class LayerPipe(torch.nn.Module):
         layer_values[self.layer_index] = self.layer(layer_values)
         return layer_values
 
+    def extra_repr(self) -> str:
+        return f"layer_index={self.layer_index},"
+
 
 class NetworkModule(torch.nn.Module):
     def __init__(
