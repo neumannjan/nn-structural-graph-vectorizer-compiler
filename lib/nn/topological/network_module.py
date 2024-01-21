@@ -9,6 +9,7 @@ from lib.nn.topological.layers import (
     Ordinals,
     TopologicalNetwork,
 )
+from lib.nn.topological.settings import Settings
 from lib.nn.topological.weighted_atom_layer import WeightedAtomLayer
 from lib.nn.topological.weighted_rule_layer import WeightedRuleLayer
 
@@ -39,9 +40,7 @@ class NetworkModule(torch.nn.Module):
         layers: Sequence[LayerDefinition],
         network: TopologicalNetwork,
         ordinals: Ordinals,
-        assume_facts_same: bool,
-        assume_rule_weights_same: bool,
-        check_same_inputs_dim_assumption: bool,
+        settings: Settings,
     ) -> None:
         super().__init__()
         model = torch.nn.Sequential()
@@ -50,7 +49,7 @@ class NetworkModule(torch.nn.Module):
             print()
             print(f"Layer {l.index}:")
             if l.type == "FactNeuron":
-                module = FactLayer(network[l.index], assume_facts_same=assume_facts_same)
+                module = FactLayer(network[l.index], assume_facts_same=settings.assume_facts_same)
             elif l.type == "WeightedAtomNeuron":
                 module = WeightedAtomLayer(
                     network[l.index],
@@ -60,8 +59,8 @@ class NetworkModule(torch.nn.Module):
                 module = WeightedRuleLayer(
                     network[l.index],
                     ordinals,
-                    assume_rule_weights_same=assume_rule_weights_same,
-                    check_same_inputs_dim_assumption=check_same_inputs_dim_assumption,
+                    assume_rule_weights_same=settings.assume_rule_weights_same,
+                    check_same_inputs_dim_assumption=settings.check_same_inputs_dim_assumption,
                 )
             elif l.type == "AggregationNeuron":
                 module = AggregationLayer(

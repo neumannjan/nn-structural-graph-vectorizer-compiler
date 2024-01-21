@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import NamedTuple, Sequence
 
 from lib.interfaces import JavaNeuron
+from lib.nn.topological.settings import Settings
 from neuralogic.core.builder.builder import NeuralSample
 from tqdm.auto import tqdm
 
@@ -64,10 +65,10 @@ def discover_layers(sample: NeuralSample) -> list[LayerDefinition]:
     return out
 
 
-def discover_all_layers(samples: Sequence[NeuralSample], layers_verification=True) -> tuple[LayerDefinition, ...]:
+def discover_all_layers(samples: Sequence[NeuralSample], settings: Settings) -> tuple[LayerDefinition, ...]:
     layers = tuple(discover_layers(samples[0]))
 
-    if layers_verification:
+    if settings.check_same_layers_assumption:
         for sample in tqdm(samples[1:], desc="Verifying layers"):
             assert tuple(discover_layers(sample)) == layers
 
@@ -112,19 +113,19 @@ OrdinalsPerLayer = dict[int, Ordinals]
 
 
 def compute_neuron_ordinals_for_layer(
-    layer_def: LayerDefinition, neurons: list, assume_facts_same: bool
+    layer_def: LayerDefinition, neurons: list, settings: Settings
 ) -> dict[int, LayerOrdinal]:
-    if assume_facts_same and layer_def.type == "FactNeuron":
+    if settings.assume_facts_same and layer_def.type == "FactNeuron":
         return {n.getIndex(): LayerOrdinal(layer_def.index, 0) for n in neurons}
 
     return {n.getIndex(): LayerOrdinal(layer_def.index, i) for i, n in enumerate(neurons)}
 
 
 def compute_neuron_ordinals(
-    layers: Sequence[LayerDefinition], network: TopologicalNetwork, assume_facts_same: bool
+    layers: Sequence[LayerDefinition], network: TopologicalNetwork, settings: Settings
 ) -> tuple[OrdinalsPerLayer, Ordinals]:
     ordinals_per_layer: OrdinalsPerLayer = {
-        l.index: compute_neuron_ordinals_for_layer(l, network[l.index], assume_facts_same) for l in layers
+        l.index: compute_neuron_ordinals_for_layer(l, network[l.index], settings) for l in layers
     }
     ordinals: Ordinals = {i: o for _, i_o_dict in ordinals_per_layer.items() for i, o in i_o_dict.items()}
 

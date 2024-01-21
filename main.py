@@ -1,3 +1,4 @@
+
 import jpype
 import torch
 from lib.datasets import MyMutagenesis
@@ -7,6 +8,7 @@ from lib.nn.topological.layers import (
     get_neurons_per_layer,
 )
 from lib.nn.topological.network_module import NetworkModule
+from lib.nn.topological.settings import Settings
 from lib.utils import value_to_tensor
 
 if __name__ == "__main__":
@@ -20,15 +22,10 @@ if __name__ == "__main__":
 
         ###### CONFIG ######
 
-        # TODO: ASSUMPTION: all facts have the same value
-        assume_facts_same = True
-        # TODO: ASSUMPTION: all neurons in a given WeightedRuleLayer have the same weights
-        assume_rule_weights_same = True
-
-        # TODO: ASSUMPTION: all neurons have the same layer layout
-        check_same_layers_assumption = False
-        # TODO: ASSUMPTION: all neurons in a given WeightedRuleLayer have the same number of inputs
-        check_same_inputs_dim_assumption = True
+        settings = Settings(
+            # TODO assumptions
+            check_same_layers_assumption=False,
+        )
 
         ###### DATASET CONFIG ######
 
@@ -41,24 +38,22 @@ if __name__ == "__main__":
 
         samples = built_dataset.samples
 
-        samples[0].draw(filename="run.png", show=False)
+        # samples[0].draw(filename="run.png", show=False)
 
         ###### ALGORITHM ######
 
         print("Layers discovery...")
-        layers = discover_all_layers(samples, layers_verification=check_same_layers_assumption)
+        layers = discover_all_layers(samples, settings)
 
         network = get_neurons_per_layer(samples)
 
-        ordinals_per_layer, ordinals = compute_neuron_ordinals(layers, network, assume_facts_same=assume_facts_same)
+        ordinals_per_layer, ordinals = compute_neuron_ordinals(layers, network, settings)
 
         model = NetworkModule(
             layers,
             network,
             ordinals,
-            assume_facts_same=assume_facts_same,
-            assume_rule_weights_same=assume_rule_weights_same,
-            check_same_inputs_dim_assumption=check_same_inputs_dim_assumption,
+            settings,
         )
 
         print(model)
