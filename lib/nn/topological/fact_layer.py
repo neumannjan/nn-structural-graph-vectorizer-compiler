@@ -12,15 +12,15 @@ class FactLayer(torch.nn.Module):
             neuron = layer_neurons[0]
 
             value_np = value_to_numpy(neuron.getRawState().getValue())
-            self.value = atleast_3d_rev(torch.tensor(value_np))
+            self.value = torch.nn.Parameter(atleast_3d_rev(torch.tensor(value_np)), requires_grad=False)
 
             # check
             for n in layer_neurons[1:]:
                 assert (value_to_numpy(n.getRawState().getValue()) == value_np).all()
         else:
-            self.value = atleast_3d_rev(
+            self.value = torch.nn.Parameter(atleast_3d_rev(
                 torch.stack([value_to_tensor(n.getRawState().getValue()) for n in layer_neurons])
-            )
+            ), requires_grad=False)
 
         # check
         for n in layer_neurons:

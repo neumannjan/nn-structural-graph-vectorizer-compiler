@@ -240,7 +240,7 @@ if __name__ == "__main__":
         dataset.settings.compute_neuron_layer_indices = True
         # dataset.settings.iso_value_compression = False
         # dataset.settings.chain_pruning = False
-        built_dataset = dataset.build(sample_run=True)
+        _, built_dataset = dataset.build(sample_run=True)
 
         out_dir = Path(f"./imgs/{dataset.name}")
         out_dir.mkdir(parents=True, exist_ok=True)

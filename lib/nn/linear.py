@@ -25,10 +25,7 @@ class Linear(torch.nn.Module):
             if str(weight.index) in self.weights_map:
                 w_tensor = self.weights_map[str(weight.index)]
             else:
-                w_tensor = value_to_tensor(weight.value)
-
-                if weight.isLearnable:
-                    w_tensor = torch.nn.Parameter(w_tensor)
+                w_tensor = torch.nn.Parameter(value_to_tensor(weight.value), requires_grad=weight.isLearnable())
 
                 self.weights_map[str(weight.index)] = w_tensor
 

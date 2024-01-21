@@ -18,7 +18,7 @@ if __name__ == "__main__":
         # dataset.settings.iso_value_compression = False
         # dataset.settings.chain_pruning = False
         print("Building dataset...")
-        built_dataset = dataset.build(sample_run=True)
+        _, built_dataset = dataset.build(sample_run=True)
 
         ###### CONFIG ######
 

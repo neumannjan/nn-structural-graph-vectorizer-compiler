@@ -33,7 +33,9 @@ def discover_layers(sample: NeuralSample) -> list[LayerDefinition]:
         layer = neuron.getLayer()
         layer_type = get_neuron_type(neuron)
         if layer in layer_types:
-            assert layer_types[layer] == layer_type
+            assert (
+                layer_types[layer] == layer_type
+            ), f"Layer {layer} found of types {layer_types[layer]} and {layer_type}"
         else:
             layer_types[layer] = layer_type
 
@@ -41,6 +43,13 @@ def discover_layers(sample: NeuralSample) -> list[LayerDefinition]:
 
         if len(layer_inputs) == 0:
             break
+
+        for inp in layer_inputs:
+            if inp.getLayer() == layer:
+                raise RuntimeError(
+                    f"Neuron in layer {layer} has an input in layer {inp.getLayer()}. This should not happen. "
+                    f"Did you do the sample run?"
+                )
 
         # find closest input layer
         if layer in neighbor_layers:

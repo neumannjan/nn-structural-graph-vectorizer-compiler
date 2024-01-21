@@ -19,6 +19,9 @@ class AggregationLayer(torch.nn.Module):
         )
 
         self.inputs_dims = [n.getInputs().size() for n in layer_neurons]
+        self.inputs_dims_tensor = torch.nn.Parameter(
+            atleast_3d_rev(torch.tensor(self.inputs_dims, dtype=torch.int)), requires_grad=False
+        )
         self.inputs_dims_match = all((self.inputs_dims[0] == d for d in self.inputs_dims[1:]))
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
@@ -34,7 +37,7 @@ class AggregationLayer(torch.nn.Module):
 
             # TODO: parameterize
             # (mean)
-            y = torch.sum(input_values, dim=1) / atleast_3d_rev(torch.tensor(self.inputs_dims))
+            y = torch.sum(input_values, dim=1) / self.inputs_dims_tensor
 
         return y
 
