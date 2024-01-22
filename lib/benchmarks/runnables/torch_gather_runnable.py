@@ -1,3 +1,5 @@
+from typing import Sequence
+
 from neuralogic.core.builder.builder import NeuralSample
 
 from lib.benchmarks.runnables.runnable import Runnable
@@ -11,7 +13,7 @@ class TorchGatherRunnable(Runnable):
     def __init__(self, device: str) -> None:
         self._device = device
 
-    def initialize(self, dataset: BuiltDatasetInstance, samples: list[NeuralSample] | None = None):
+    def initialize(self, dataset: BuiltDatasetInstance, samples: Sequence[NeuralSample] | None = None):
         settings = Settings(
             # TODO assumptions
             check_same_layers_assumption=False,
@@ -28,6 +30,7 @@ class TorchGatherRunnable(Runnable):
         _, ordinals = compute_neuron_ordinals(layers, network, settings)
 
         self.model = NetworkModule(layers, network, ordinals, settings)
+        print(self.model)
         self.model.to(self._device)
 
     def forward_pass(self):

@@ -1,8 +1,7 @@
 import itertools
 import random
-from typing import Any
 
-from lib.interfaces import JavaNeuron
+from lib.interfaces import JavaClass, JavaNeuron, JavaRawState, JavaWeight
 from lib.nn.topological.layers import LayerDefinition, TopologicalNetwork
 
 
@@ -28,13 +27,13 @@ class MockJavaNeuron(JavaNeuron):
     def getLayer(self) -> int:
         return self._layer
 
-    def getRawState(self) -> Any:
+    def getRawState(self) -> JavaRawState:
         raise NotImplementedError()
 
-    def getClass(self) -> Any:
+    def getClass(self) -> JavaClass:
         raise NotImplementedError()
 
-    def getWeights(self) -> Any:
+    def getWeights(self) -> list[JavaWeight]:
         raise NotImplementedError()
 
 
