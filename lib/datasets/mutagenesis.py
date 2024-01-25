@@ -1,40 +1,68 @@
+from pathlib import Path
+
 from neuralogic.core import R, Template, V
-from neuralogic.utils.data import Mutagenesis
+from neuralogic.dataset.file import FileDataset
 
 from .dataset import MyDataset
 
 
+def simple_template():
+    template = Template()
+
+    template.add_rules(
+        [(R.atom_embed(V.A)[3,] <= R.get(atom)(V.A)) for atom in ["c", "o", "br", "i", "f", "h", "n", "cl"]]
+    )
+
+    template.add_rules(
+        [(R.bond_embed(V.B)[3,] <= R.get(bond)(V.B)) for bond in ["b_1", "b_2", "b_3", "b_4", "b_5", "b_7"]]
+    )
+
+    template += R.layer_1(V.X) <= (
+        R.atom_embed(V.X)[3, 3],
+        R.atom_embed(V.Y)[3, 3],
+        R.bond(V.X, V.Y, V.B),
+        R.bond_embed(V.B),
+    )
+    template += R.layer_2(V.X) <= (
+        R.layer_1(V.X)[3, 3],
+        R.layer_1(V.Y)[3, 3],
+        R.bond(V.X, V.Y, V.B),
+        R.bond_embed(V.B),
+    )
+    template += R.layer_3(V.X) <= (
+        R.layer_2(V.X)[3, 3],
+        R.layer_2(V.Y)[3, 3],
+        R.bond(V.X, V.Y, V.B),
+        R.bond_embed(V.B),
+    )
+    template += R.predict[1, 3] <= R.layer_3(V.X)
+
+    return template
+
+
 class MyMutagenesis(MyDataset):
     def __init__(self) -> None:
-        _, dataset = Mutagenesis()
-        super().__init__('mutagenesis', Template(), dataset)
+        directory = Path(".") / "dataset" / "mutagenesis"
 
-        self.template.add_rules(
-            [(R.atom_embed(V.A)[3,] <= R.get(atom)(V.A)) for atom in ["c", "o", "br", "i", "f", "h", "n", "cl"]]
+        dataset = FileDataset(
+            examples_file=str(directory / "examples.txt"),
+            queries_file=str(directory / "queries.txt"),
         )
 
-        self.template.add_rules(
-            [(R.bond_embed(V.B)[3,] <= R.get(bond)(V.B)) for bond in ["b_1", "b_2", "b_3", "b_4", "b_5", "b_7"]]
-        )
+        template = simple_template()
 
-        self.template += R.layer_1(V.X) <= (
-            R.atom_embed(V.X)[3, 3],
-            R.atom_embed(V.Y)[3, 3],
-            R.bond(V.X, V.Y, V.B),
-            R.bond_embed(V.B),
-        )
-        self.template += R.layer_2(V.X) <= (
-            R.layer_1(V.X)[3, 3],
-            R.layer_1(V.Y)[3, 3],
-            R.bond(V.X, V.Y, V.B),
-            R.bond_embed(V.B),
-        )
-        self.template += R.layer_3(V.X) <= (
-            R.layer_2(V.X)[3, 3],
-            R.layer_2(V.Y)[3, 3],
-            R.bond(V.X, V.Y, V.B),
-            R.bond_embed(V.B),
-        )
-        self.template += R.predict[1, 3] <= R.layer_3(V.X)
+        super().__init__("mutagenesis", template, dataset)
 
 
+class MyMutagenesisMultip(MyDataset):
+    def __init__(self) -> None:
+        directory = Path(".") / "dataset" / "mutagenesis_multip"
+
+        dataset = FileDataset(
+            examples_file=str(directory / "examples.txt"),
+            queries_file=str(directory / "queries.txt"),
+        )
+
+        template = simple_template()
+
+        super().__init__("mutagenesis", template, dataset)
