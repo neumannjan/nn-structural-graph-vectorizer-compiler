@@ -18,10 +18,13 @@ def get_neuron_type(java_neuron: JavaNeuron) -> str:
     return str(java_neuron.getClass().getSimpleName())
 
 
-def discover_layers(sample: NeuralSample) -> list[LayerDefinition]:
+def discover_layers(sample: NeuralSample | JavaNeuron) -> list[LayerDefinition]:
     out: list[LayerDefinition] = []
 
-    neuron = sample.java_sample.query.neuron
+    if isinstance(sample, NeuralSample):
+        neuron = sample.java_sample.query.neuron
+    else:
+        neuron = sample
     initial_layer: int = neuron.getLayer()
     neighbor_layers: dict[int, int] = {}
     layer_types: dict[int, str] = {}
@@ -74,7 +77,7 @@ def discover_layers(sample: NeuralSample) -> list[LayerDefinition]:
     return out
 
 
-def discover_all_layers(samples: Sequence[NeuralSample], settings: Settings) -> tuple[LayerDefinition, ...]:
+def discover_all_layers(samples: Sequence[NeuralSample | JavaNeuron], settings: Settings) -> tuple[LayerDefinition, ...]:
     layers = tuple(discover_layers(samples[0]))
 
     if settings.check_same_layers_assumption:
@@ -87,8 +90,10 @@ def discover_all_layers(samples: Sequence[NeuralSample], settings: Settings) -> 
 TopologicalNetwork = dict[int, list[JavaNeuron]]
 
 
-def get_neurons_per_layer(samples: Sequence[NeuralSample]) -> TopologicalNetwork:
-    queue = deque((sample.java_sample.query.neuron for sample in samples))
+def get_neurons_per_layer(samples: Sequence[NeuralSample | JavaNeuron]) -> TopologicalNetwork:
+    queue = deque(
+        (sample.java_sample.query.neuron if isinstance(sample, NeuralSample) else sample for sample in samples)
+    )
 
     visited = set()
 

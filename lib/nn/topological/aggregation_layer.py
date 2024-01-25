@@ -32,7 +32,7 @@ class AggregationLayer(torch.nn.Module):
             [neuron_ordinals[int(inp.getIndex())] for n in layer_neurons for inp in n.getInputs()],
         )
 
-        self.inputs_dims = [n.getInputs().size() for n in layer_neurons]
+        self.inputs_dims = [len(n.getInputs()) for n in layer_neurons]
         self.inputs_dims_tensor = torch.nn.Parameter(
             atleast_3d_rev(torch.tensor(self.inputs_dims, dtype=torch.int)), requires_grad=False
         )
