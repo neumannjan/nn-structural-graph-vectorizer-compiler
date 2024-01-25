@@ -1,7 +1,20 @@
+from typing import Literal
+
 import torch
 from lib.nn.gather import build_optimal_gather_module
 from lib.nn.topological.layers import Ordinals
 from lib.utils import atleast_3d_rev
+
+AggregationType = Literal['mean', 'sum']
+
+
+def get_aggregation_func(agg: AggregationType):
+    if agg == 'mean':
+        return torch.Tensor.mean
+    elif agg == 'sum':
+        return torch.Tensor.sum
+    else:
+        raise ValueError()
 
 
 class AggregationLayer(torch.nn.Module):
@@ -9,6 +22,7 @@ class AggregationLayer(torch.nn.Module):
         self,
         layer_neurons: list,
         neuron_ordinals: Ordinals,
+        aggregation: AggregationType = 'mean',
     ) -> None:
         super().__init__()
 
@@ -22,28 +36,32 @@ class AggregationLayer(torch.nn.Module):
         self.inputs_dims_tensor = torch.nn.Parameter(
             atleast_3d_rev(torch.tensor(self.inputs_dims, dtype=torch.int)), requires_grad=False
         )
-        self.inputs_dims_match = all((self.inputs_dims[0] == d for d in self.inputs_dims[1:]))
+        self.inputs_dims_match = torch.all(self.inputs_dims_tensor == self.inputs_dims[0])
+        self.aggregation = aggregation
+        self.aggregation_func = get_aggregation_func(aggregation)
+
+        if aggregation == 'sum':
+            def padded_aggregation_func(tensor: torch.Tensor):
+                return torch.sum(tensor, dim=1)
+        elif aggregation == 'mean':
+            def padded_aggregation_func(tensor: torch.Tensor):
+                return torch.sum(tensor, dim=1) / self.inputs_dims_tensor
+
+        self.padded_aggregation_func = padded_aggregation_func
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
         input_values = self.gather(layer_values)
 
         if self.inputs_dims_match:
             input_values = torch.reshape(input_values, [-1, self.inputs_dims[0], *input_values.shape[1:]])
-            # TODO: parameterize
-            y = input_values.mean(dim=1)
+            y = self.aggregation_func(input_values, dim=1)
         else:
             input_values = list(torch.split(input_values, self.inputs_dims, dim=0))
             input_values = torch.nn.utils.rnn.pad_sequence(input_values, batch_first=True)
 
-            # TODO: parameterize
-            # (mean)
-            y = torch.sum(input_values, dim=1) / self.inputs_dims_tensor
+            y = self.padded_aggregation_func(input_values)
 
         return y
 
-    @property
-    def padding_needed(self) -> bool:
-        return not self.inputs_dims_match
-
     def extra_repr(self) -> str:
-        return f"padding_needed={self.padding_needed},"
+        return f"aggregation={self.aggregation}, inputs_dims_match={self.inputs_dims_match},"
