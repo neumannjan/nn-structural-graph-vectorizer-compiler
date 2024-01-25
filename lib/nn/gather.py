@@ -50,7 +50,7 @@ class SingleLayerGather(torch.nn.Module):
     def __init__(self, input_layer: int, ordinals: list[int]) -> None:
         super().__init__()
         self.layer = input_layer
-        self.ordinals = torch.nn.Parameter(torch.tensor(ordinals, dtype=torch.int), requires_grad=False)
+        self.ordinals = torch.nn.Parameter(torch.tensor(ordinals, dtype=torch.int32), requires_grad=False)
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
         input = layer_values[self.layer]
