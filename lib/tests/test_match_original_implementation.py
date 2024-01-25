@@ -1,4 +1,3 @@
-
 import jpype
 import torch
 from lib.datasets import MyMutagenesis
@@ -11,7 +10,8 @@ from lib.nn.topological.network_module import NetworkModule
 from lib.nn.topological.settings import Settings
 from lib.utils import value_to_tensor
 
-if __name__ == "__main__":
+
+def test_mutagenesis():
     try:
         dataset = MyMutagenesis()
         dataset.settings.compute_neuron_layer_indices = True
@@ -31,16 +31,7 @@ if __name__ == "__main__":
 
         ###### DATASET CONFIG ######
 
-        # TODO all samples at once instead
-
-        i = 108
-        # i = random.choice(list(range(len(built_dataset.samples))))
-        # samples = [built_dataset.samples[i]]
-        # print("SAMPLE", i)
-
         samples = built_dataset.samples
-
-        # samples[0].draw(filename="run.png", show=False)
 
         ###### ALGORITHM ######
 
@@ -49,7 +40,7 @@ if __name__ == "__main__":
 
         network = get_neurons_per_layer(samples)
 
-        ordinals_per_layer, ordinals = compute_neuron_ordinals(layers, network, settings)
+        _, ordinals = compute_neuron_ordinals(layers, network, settings)
 
         model = NetworkModule(
             layers,
@@ -67,13 +58,12 @@ if __name__ == "__main__":
                 torch.stack([value_to_tensor(n.getRawState().getValue()) for n in network[layer.index]])
             )
             actual = torch.squeeze(results[layer.index])
-            if (torch.abs(expected - actual) > 1e-5).any():
-                raise RuntimeError(
-                    f"Values do not match at layer {layer.index} ({layer.type}). "
-                    f"Max difference is {torch.max(torch.abs(expected - actual))}. "
-                    f"Expected: {expected}\n"
-                    f"Actual: {actual}"
-                )
+            assert (torch.abs(expected - actual) < 1e-5).all(), (
+                f"Values do not match at layer {layer.index} ({layer.type}). "
+                f"Max difference is {torch.max(torch.abs(expected - actual))}. "
+                f"Expected: {expected}\n"
+                f"Actual: {actual}"
+            )
 
         print("Expected:", expected)
         print("Actual:", actual)
