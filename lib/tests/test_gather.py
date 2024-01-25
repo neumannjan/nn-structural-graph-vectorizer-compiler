@@ -4,6 +4,7 @@ import pytest
 import torch
 from lib.nn.gather import TakeLayerSlice, build_optimal_gather_module
 from lib.nn.topological.layers import LayerOrdinal, TopologicalNetwork, compute_neuron_ordinals
+from lib.nn.topological.settings import Settings
 from lib.tests.utils.network_mock import generate_example_network
 from lib.utils import atleast_3d_rev
 
@@ -53,8 +54,10 @@ def test_gather_module(
     assume_facts_same: bool,
     execution_number: int,
 ):
+    settings = Settings(assume_facts_same=assume_facts_same)
+
     layers, network = generate_example_network(inputs_from_previous_layer_only=inputs_from_previous_layer_only)
-    _, ordinals = compute_neuron_ordinals(layers, network, assume_facts_same=assume_facts_same)
+    _, ordinals = compute_neuron_ordinals(layers, network, settings=settings)
     for l in layers[1:]:
         input_layer_ordinal_pairs = [ordinals[inp.getIndex()] for n in network[l.index] for inp in n.getInputs()]
 
