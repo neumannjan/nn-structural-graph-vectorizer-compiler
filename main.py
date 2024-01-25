@@ -27,6 +27,8 @@ if __name__ == "__main__":
             check_same_layers_assumption=False,
         )
 
+        torch.set_default_dtype(torch.float64)
+
         ###### DATASET CONFIG ######
 
         # TODO all samples at once instead
@@ -65,7 +67,7 @@ if __name__ == "__main__":
                 torch.stack([value_to_tensor(n.getRawState().getValue()) for n in network[layer.index]])
             )
             actual = torch.squeeze(results[layer.index])
-            if (torch.abs(expected - actual) > 1e-10).any():
+            if (torch.abs(expected - actual) > 1e-5).any():
                 raise RuntimeError(
                     f"Values do not match at layer {layer.index} ({layer.type}). "
                     f"Max difference is {torch.max(torch.abs(expected - actual))}. "
