@@ -14,7 +14,7 @@ class NeuraLogicCPURunnable(Runnable):
         self.samples = samples
 
     def forward_pass(self):
-        self.neuralogic(self.samples)
+        return self.neuralogic(self.samples)
 
     @property
     def device(self):

@@ -7,9 +7,15 @@ from lib.benchmarks.runnables.runnable import Runnable
 from lib.benchmarks.runnables.torch_gather_runnable import TorchGatherRunnable
 from lib.benchmarks.runner import MultiRunner
 from lib.datasets.mutagenesis import MyMutagenesis, MyMutagenesisMultip
+from lib.nn.topological.settings import Settings
 from tqdm.auto import tqdm
 
 Device = Literal['mps', 'cuda', 'cpu', 'neuralogic']
+
+
+SETTINGS = Settings(
+    check_same_layers_assumption=False,
+)
 
 
 if __name__ == "__main__":
@@ -19,9 +25,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     runnables: dict[Device, Runnable] = {
-        "mps": TorchGatherRunnable(device="mps"),
-        "cpu": TorchGatherRunnable(device="cpu"),
-        "cuda": TorchGatherRunnable(device="cuda"),
+        "mps": TorchGatherRunnable(device="mps", settings=SETTINGS),
+        "cpu": TorchGatherRunnable(device="cpu", settings=SETTINGS),
+        "cuda": TorchGatherRunnable(device="cuda", settings=SETTINGS),
         "neuralogic": NeuraLogicCPURunnable(),
     }
 
