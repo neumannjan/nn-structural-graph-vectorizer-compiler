@@ -78,3 +78,7 @@ def test_mutagenesis(device: str):
         print(e.message())
         print(e.stacktrace())
         raise e
+
+
+if __name__ == "__main__":
+    test_mutagenesis(device='cpu')
