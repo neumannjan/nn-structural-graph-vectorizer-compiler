@@ -6,6 +6,7 @@ from lib.nn.gather import TakeLayerSlice, build_optimal_gather_module
 from lib.nn.topological.layers import LayerOrdinal, TopologicalNetwork, compute_neuron_ordinals
 from lib.nn.topological.settings import Settings
 from lib.tests.utils.network_mock import generate_example_network
+from lib.tests.utils.test_params import SETTINGS_PARAMS
 from lib.utils import atleast_3d_rev
 
 
@@ -68,7 +69,11 @@ def test_gather_module(
         _do_the_test(gather, input_layer_ordinal_pairs, network, all_same=(assume_facts_same and l == 1))
 
 
-def test_slice_gather():
+@pytest.mark.parametrize(
+    ["settings"],
+    [[settings] for settings in SETTINGS_PARAMS],
+)
+def test_slice_gather(settings: Settings):
     slice_start = 10
     slice_end = 100
     ordinals = list(range(slice_start, slice_end))

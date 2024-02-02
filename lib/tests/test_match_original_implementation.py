@@ -1,30 +1,17 @@
+import itertools
+
 import jpype
 import pytest
 import torch
 from lib.benchmarks.runnables.torch_gather_runnable import TorchGatherRunnable
 from lib.datasets.mutagenesis import MyMutagenesis
 from lib.nn.topological.settings import Settings
+from lib.tests.utils.test_params import DEVICE_PARAMS, SETTINGS_PARAMS
 from lib.utils import value_to_tensor
-from torch.backends.mps import is_available as is_mps_available
-from torch.cuda import is_available as is_cuda_available
-
-TEST_PARAMS = [
-    ["cpu"],
-]
-
-if is_cuda_available():
-    TEST_PARAMS += [
-        ["cuda"],
-    ]
-
-if is_mps_available():
-    TEST_PARAMS += [
-        ["mps"],
-    ]
 
 
-@pytest.mark.parametrize(["device"], TEST_PARAMS)
-def test_mutagenesis(device: str):
+@pytest.mark.parametrize(["device", "settings"], list(itertools.product(DEVICE_PARAMS, SETTINGS_PARAMS)))
+def test_mutagenesis(device: str, settings: Settings):
     try:
         dataset = MyMutagenesis()
         dataset.settings.compute_neuron_layer_indices = True
@@ -34,11 +21,6 @@ def test_mutagenesis(device: str):
         built_dataset_inst = dataset.build(sample_run=True)
 
         ###### CONFIG ######
-
-        settings = Settings(
-            # TODO assumptions
-            check_same_layers_assumption=False,
-        )
 
         if device == "mps":
             # MPS doesn't support float64
@@ -78,7 +60,3 @@ def test_mutagenesis(device: str):
         print(e.message())
         print(e.stacktrace())
         raise e
-
-
-if __name__ == "__main__":
-    test_mutagenesis(device='cpu')
