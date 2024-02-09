@@ -18,7 +18,7 @@ class TakeValue(torch.nn.Module):
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
         out = layer_values[self.layer][self.ordinal]
-        return out.reshape([1, *out.shape])
+        return out.unsqueeze(0)
 
     def extra_repr(self) -> str:
         return f"layer={self.layer}, ordinal={self.ordinal}"
@@ -117,13 +117,8 @@ class MultiLayerGather(torch.nn.Module):
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
         layer_inputs_needed = [self.layer_gathers[str(layer)](layer_values) for layer in self.layers]
-        layer_shape_hull = [
-            -1,
-            max((v.shape[1] for v in layer_inputs_needed)),
-            max((v.shape[2] for v in layer_inputs_needed)),
-        ]
-        layer_inputs_needed = [v.expand(*layer_shape_hull) for v in layer_inputs_needed]
-        layer_inputs_needed = torch.concatenate(layer_inputs_needed)
+        layer_shape_hull = torch.broadcast_shapes(*(t.shape[1:] for t in layer_inputs_needed))
+        layer_inputs_needed = torch.concatenate([t.expand(-1, *layer_shape_hull) for t in layer_inputs_needed])
 
         out = self.final_gather({-1: layer_inputs_needed})
         return out

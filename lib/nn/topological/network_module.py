@@ -59,8 +59,7 @@ class NetworkModule(torch.nn.Module):
                 module = WeightedRuleLayer(
                     network[l.index],
                     ordinals,
-                    assume_rule_weights_same=settings.assume_rule_weights_same,
-                    check_same_inputs_dim_assumption=settings.check_same_inputs_dim_assumption,
+                    check_same_weights_assumption=settings.check_same_weights_assumption,
                 )
             elif l.type == "AggregationNeuron":
                 module = AggregationLayer(

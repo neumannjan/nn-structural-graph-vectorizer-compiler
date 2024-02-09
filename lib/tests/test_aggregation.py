@@ -22,7 +22,18 @@ LAYERS = [
 ]
 
 SAMPLE1 = MockJavaNeuron(
-    _n(), 16, [MockJavaNeuron(_n(), 13, [MockJavaNeuron(_n(), 12, []) for _ in range(4)]) for _ in range(3)]
+    _n(),
+    16,
+    [  #
+        MockJavaNeuron(
+            _n(),
+            13,
+            [  #
+                MockJavaNeuron(_n(), 12, []) for _ in range(4)
+            ],
+        )
+        for _ in range(3)
+    ],
 )
 
 SAMPLE2 = MockJavaNeuron(

@@ -246,9 +246,9 @@ if __name__ == "__main__":
         out_dir.mkdir(parents=True, exist_ok=True)
 
         i = 108
-        # built_dataset.samples[i].draw()
-        do_sample(built_dataset.samples[i], reindex=True, stage=1)
-        plt.show()
+        built_dataset.samples[i].draw()
+        # do_sample(built_dataset.samples[i], reindex=True, stage=1)
+        # plt.show()
 
         # for i, sample in tqdm(enumerate(built_dataset.samples), total=len(built_dataset.samples)):
         #     do_sample(sample)
