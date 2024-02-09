@@ -66,16 +66,12 @@ def do_test_dataset(dataset: MyDataset, device: str, settings: Settings):
         raise e
 
 
-@pytest.mark.parametrize(
-    ["device", "settings"], list(itertools.product(DEVICE_PARAMS, SETTINGS_PARAMS))
-)
+@pytest.mark.parametrize(["device", "settings"], list(itertools.product(DEVICE_PARAMS, SETTINGS_PARAMS)))
 def test_mutagenesis(device: str, settings: Settings):
     do_test_dataset(MyMutagenesis(), device, settings)
 
 
-@pytest.mark.parametrize(
-    ["device", "settings"], list(itertools.product(DEVICE_PARAMS, SETTINGS_PARAMS))
-)
+@pytest.mark.parametrize(["device", "settings"], list(itertools.product(DEVICE_PARAMS, SETTINGS_PARAMS)))
 @pytest.mark.long
 def test_mutagenesis_multip(device: str, settings: Settings):
     do_test_dataset(MyMutagenesisMultip(), device, settings)

@@ -2,6 +2,7 @@ import numpy as np
 import torch
 
 from lib.nn.topological.layers import LayerOrdinal
+from lib.nn.utils.pipes import LayerInputPipe
 
 
 class TakeValue(torch.nn.Module):
@@ -11,17 +12,15 @@ class TakeValue(torch.nn.Module):
     Simply returns the single value.
     """
 
-    def __init__(self, input_layer: int, ordinal: int) -> None:
+    def __init__(self, ordinal: int) -> None:
         super().__init__()
-        self.layer = input_layer
         self.ordinal = ordinal
 
-    def forward(self, layer_values: dict[int, torch.Tensor]):
-        out = layer_values[self.layer][self.ordinal]
-        return out.reshape([1, *out.shape])
+    def forward(self, layer_input: torch.Tensor):
+        return layer_input[self.ordinal].unsqueeze(0)
 
     def extra_repr(self) -> str:
-        return f"layer={self.layer}, ordinal={self.ordinal}"
+        return f"ordinal={self.ordinal}"
 
 
 class TakeLayerSlice(torch.nn.Module):
@@ -31,48 +30,68 @@ class TakeLayerSlice(torch.nn.Module):
     Simply takes a slice from the layer and returns it as-is. Used when the ordinals are equal to `i+range(j-i)`.
     """
 
-    def __init__(self, input_layer: int, start: int, end: int) -> None:
+    def __init__(self, start: int, end: int) -> None:
         super().__init__()
-        self.layer = input_layer
         self.start = start
         self.end = end
 
-    def forward(self, layer_values: dict[int, torch.Tensor]):
-        return layer_values[self.layer][self.start: self.end]
+    def forward(self, layer_input: torch.Tensor):
+        return layer_input[self.start : self.end]
 
     def extra_repr(self) -> str:
-        return f"layer={self.layer}, start={self.start}, end={self.end}"
+        return f"start={self.start}, end={self.end}"
+
+
+class TakeEachNth(torch.nn.Module):
+    def __init__(self, step: int, start: int, end: int) -> None:
+        super().__init__()
+        self.step = step
+        self.start = start
+        self.end = end
+
+    def forward(self, layer_input: torch.Tensor):
+        return layer_input[self.start:self.end:self.step]
+
+    def extra_repr(self) -> str:
+        return f"step={self.step}, start={self.start}, end={self.end}"
 
 
 class SingleLayerGather(torch.nn.Module):
     """Gather for inputs coming from a single layer."""
 
-    def __init__(self, input_layer: int, ordinals: list[int]) -> None:
+    def __init__(self, ordinals: list[int]) -> None:
         super().__init__()
-        self.layer = input_layer
         self.ordinals = torch.nn.Parameter(torch.tensor(ordinals, dtype=torch.int32), requires_grad=False)
 
-    def forward(self, layer_values: dict[int, torch.Tensor]):
-        input = layer_values[self.layer]
-        return torch.index_select(input, 0, self.ordinals)
+    def forward(self, layer_input: torch.Tensor):
+        return torch.index_select(layer_input, 0, self.ordinals)
 
     def extra_repr(self) -> str:
-        return f"layer={self.layer}, ordinals=(list of size {self.ordinals.shape[0]})"
+        return f"ordinals=(list of size {self.ordinals.shape[0]})"
+
+
+def build_optimal_single_layer_gather_module_unwrapped(ordinals: list[int]):
+    all_inputs_the_same = all((ordinals[0] == o for o in ordinals[1:]))
+
+    if all_inputs_the_same:
+        return TakeValue(ordinals[0])
+
+    step = ordinals[1] - ordinals[0]
+    all_ordinals_differ_by_step = all((b - a == step for a, b in zip(ordinals[:-1], ordinals[1:])))
+
+    if all_ordinals_differ_by_step:
+        if step == 1:
+            return TakeLayerSlice(ordinals[0], ordinals[-1] + 1)
+
+        return TakeEachNth(step=step, start=ordinals[0], end=ordinals[-1] + 1)
+
+    return SingleLayerGather(ordinals)
 
 
 def build_optimal_single_layer_gather_module(input_layer: int, ordinals: list[int]):
     """Build the optimal gather network module when inputs are guaranteed to come from a single layer."""
-    all_inputs_the_same = all((ordinals[0] == o for o in ordinals[1:]))
-
-    if all_inputs_the_same:
-        return TakeValue(input_layer, ordinals[0])
-
-    all_ordinals_differ_by_1 = all((b - a == 1 for a, b in zip(ordinals[:-1], ordinals[1:])))
-
-    if all_ordinals_differ_by_1:
-        return TakeLayerSlice(input_layer, ordinals[0], ordinals[-1] + 1)
-
-    return SingleLayerGather(input_layer, ordinals)
+    gather = build_optimal_single_layer_gather_module_unwrapped(ordinals)
+    return LayerInputPipe(input_layer, gather)
 
 
 class MultiLayerGather(torch.nn.Module):
@@ -97,7 +116,7 @@ class MultiLayerGather(torch.nn.Module):
         }
 
         self.layer_gathers = torch.nn.ModuleDict(
-            {str(l): build_optimal_single_layer_gather_module(l, per_layer_ordinals[l]) for l in self.layers}
+            {str(l): build_optimal_single_layer_gather_module_unwrapped(per_layer_ordinals[l]) for l in self.layers}
         )
 
         ### setup final gather ###
@@ -113,19 +132,14 @@ class MultiLayerGather(torch.nn.Module):
             layer_prefixes[layers_map[l]] + per_layer_ordinals2_map[l][o] for l, o in input_layer_ordinal_pairs
         ]
 
-        self.final_gather = build_optimal_single_layer_gather_module(-1, concatenated_ordinals)
+        self.final_gather = build_optimal_single_layer_gather_module_unwrapped(concatenated_ordinals)
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
-        layer_inputs_needed = [self.layer_gathers[str(layer)](layer_values) for layer in self.layers]
-        layer_shape_hull = [
-            -1,
-            max((v.shape[1] for v in layer_inputs_needed)),
-            max((v.shape[2] for v in layer_inputs_needed)),
-        ]
-        layer_inputs_needed = [v.expand(*layer_shape_hull) for v in layer_inputs_needed]
-        layer_inputs_needed = torch.concatenate(layer_inputs_needed)
+        layer_inputs_needed = [self.layer_gathers[str(layer)](layer_values[layer]) for layer in self.layers]
+        layer_shape_hull = torch.broadcast_shapes(*(t.shape[1:] for t in layer_inputs_needed))
+        layer_inputs_needed = torch.concatenate([t.expand(-1, *layer_shape_hull) for t in layer_inputs_needed])
 
-        out = self.final_gather({-1: layer_inputs_needed})
+        out = self.final_gather(layer_inputs_needed)
         return out
 
 
