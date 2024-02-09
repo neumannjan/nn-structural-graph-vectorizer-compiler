@@ -2,12 +2,11 @@ import itertools
 
 import pytest
 import torch
-from _pytest.nodes import SEP
-from lib.nn.gather import TakeLayerSlice, TakeValue, build_optimal_gather_module
+from lib.nn.gather import TakeEachNth, TakeLayerSlice, TakeValue, build_optimal_gather_module
 from lib.nn.topological.layers import LayerOrdinal, TopologicalNetwork, compute_neuron_ordinals
 from lib.nn.topological.settings import Settings
+from lib.nn.utils.pipes import LayerPipe
 from lib.tests.utils.network_mock import generate_example_network
-from lib.tests.utils.test_params import SETTINGS_PARAMS
 from lib.utils import atleast_3d_rev
 
 
@@ -70,11 +69,14 @@ def test_gather_module(
         _do_the_test(gather, input_layer_ordinal_pairs, network, all_same=(assume_facts_same and l == 1))
 
 
-@pytest.mark.parametrize(
-    ["settings"],
-    [[settings] for settings in SETTINGS_PARAMS],
-)
-def test_slice_gather(settings: Settings):
+def _get_underlying_gather_module(gather_module: torch.nn.Module):
+    while isinstance(gather_module, LayerPipe):
+        gather_module = gather_module.delegate
+
+    return gather_module
+
+
+def test_slice_gather():
     slice_start = 10
     slice_end = 100
     ordinals = list(range(slice_start, slice_end))
@@ -86,7 +88,7 @@ def test_slice_gather(settings: Settings):
     gather_module = build_optimal_gather_module(input_layer_ordinal_pairs)
     actual = gather_module(inputs)
 
-    assert isinstance(gather_module, TakeLayerSlice)
+    assert isinstance(_get_underlying_gather_module(gather_module), TakeLayerSlice)
     assert (actual == expected).all()
     assert actual.shape == expected.shape
 
@@ -113,6 +115,61 @@ def test_take(unsqueeze_times: int, idx: int, expected: torch.Tensor):
     gather_module = build_optimal_gather_module(input_layer_ordinal_pairs)
     actual = gather_module(inputs)
 
-    assert isinstance(gather_module, TakeValue)
+    assert isinstance(_get_underlying_gather_module(gather_module), TakeValue)
     assert (actual == expected).all()
     assert actual.shape == expected.shape
+
+
+TAKE_EACH_NTH_PARAMS = [
+    [0, 4, 4, [0, 4, 8, 12], 0.0],
+    [1, 4, 4, [1, 5, 9, 13], 1.0],
+    [2, 4, 4, [2, 6, 10, 14], 2.0],
+    [3, 4, 4, [3, 7, 11, 15], 3.0],
+]
+
+
+@pytest.mark.parametrize(
+    ["take_idx", "range_len", "range_repeats", "ordinals_to_take", "expected"], TAKE_EACH_NTH_PARAMS
+)
+def test_take_each_nth(
+    take_idx: int, range_len: int, range_repeats: int, ordinals_to_take: list[int], expected: float
+):
+    input = torch.arange(0, range_len, dtype=torch.float).repeat(range_repeats)
+
+    input_layer_ordinal_pairs = [LayerOrdinal(0, o) for o in ordinals_to_take]
+
+    inputs = {0: input}
+
+    gather_module = build_optimal_gather_module(input_layer_ordinal_pairs)
+    actual = gather_module(inputs)
+
+    print("Expected:", expected)
+    print("Actual:", actual, "shape:", actual.shape, flush=True)
+
+    assert isinstance(_get_underlying_gather_module(gather_module), TakeEachNth)
+    assert (actual == expected).all()
+
+
+TAKE_EACH_NTH_NONDIV_PARAMS = [
+    [[2, 6, 10], [2.0, 2.0, 2.0]],
+    [[2, 6], [2.0, 2.0]],
+]
+
+
+@pytest.mark.parametrize(["ordinals_to_take", "expected"], TAKE_EACH_NTH_NONDIV_PARAMS)
+def test_take_each_nth_when_total_length_not_divisible_by_width(ordinals_to_take: list[int], expected: list[float]):
+    input = torch.tensor([0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1], dtype=torch.float)
+
+    input_layer_ordinal_pairs = [LayerOrdinal(0, o) for o in ordinals_to_take]
+
+    inputs = {0: input}
+
+    gather_module = build_optimal_gather_module(input_layer_ordinal_pairs)
+    actual = gather_module(inputs)
+    expected_t = torch.tensor(expected, dtype=torch.float)
+
+    print("Expected:", expected_t, "shape:", expected_t.shape)
+    print("Actual:", actual, "shape:", actual.shape, flush=True)
+
+    assert isinstance(_get_underlying_gather_module(gather_module), TakeEachNth)
+    assert (actual == expected_t).all()

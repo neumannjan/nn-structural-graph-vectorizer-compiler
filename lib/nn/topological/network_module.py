@@ -12,26 +12,9 @@ from lib.nn.topological.layers import (
 from lib.nn.topological.settings import Settings
 from lib.nn.topological.weighted_atom_layer import WeightedAtomLayer
 from lib.nn.topological.weighted_rule_layer import WeightedRuleLayer
+from lib.nn.utils.pipes import LayerOutputPipe
 
 d = MyMutagenesis()
-
-
-class LayerPipe(torch.nn.Module):
-    def __init__(self, layer: torch.nn.Module, layer_index: int) -> None:
-        super().__init__()
-        self.layer = layer
-        self.layer_index = layer_index
-
-    def forward(self, layer_values: dict[int, torch.Tensor] | None = None):
-        # TODO: autodetect in preprocessing which layers can be thrown away when for saving memory
-        if layer_values is None:
-            layer_values = {}
-
-        layer_values[self.layer_index] = self.layer(layer_values)
-        return layer_values
-
-    def extra_repr(self) -> str:
-        return f"layer_index={self.layer_index},"
 
 
 class NetworkModule(torch.nn.Module):
@@ -69,7 +52,7 @@ class NetworkModule(torch.nn.Module):
             else:
                 raise NotImplementedError(l.type)
 
-            model.append(LayerPipe(module, layer_index=l.index))
+            model.append(LayerOutputPipe(layer=l.index, delegate=module))
 
         self.model = model
 
