@@ -1,6 +1,7 @@
 from typing import Sequence
 
 import torch
+
 from lib.datasets import MyMutagenesis
 from lib.nn.topological.aggregation_layer import AggregationLayer
 from lib.nn.topological.fact_layer import FactLayer
@@ -42,6 +43,7 @@ class NetworkModule(torch.nn.Module):
                 module = WeightedRuleLayer(
                     network[l.index],
                     ordinals,
+                    check_same_weights_assumption=settings.check_same_weights_assumption,
                 )
             elif l.type == "AggregationNeuron":
                 module = AggregationLayer(
