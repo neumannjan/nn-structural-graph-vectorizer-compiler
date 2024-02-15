@@ -73,14 +73,20 @@ class WeightedRuleLayer(torch.nn.Module):
         ys = []
 
         for i in range(self.len_weights):
-            inp = self.gathers[i](layer_values)  # TODO: replace with a single transposition
-            w: Weight = self.weights[i]
-            y_this = w.apply_to(inp)
-            ys.append(y_this)
+            with torch.profiler.record_function(f'WEIGHTED_RULE_SINGLE_{i}'):
+                with torch.profiler.record_function('WEIGHTED_RULE_GATHER'):
+                    inp = self.gathers[i](layer_values)  # TODO: replace with a single transposition
+                w: Weight = self.weights[i]
+                with torch.profiler.record_function('WEIGHTED_RULE_LINEAR'):
+                    y_this = w.apply_to(inp)
+                ys.append(y_this)
 
-        y = torch.stack(torch.broadcast_tensors(*ys))
+        with torch.profiler.record_function('WEIGHTED_RULE_BROADCAST_STACK'):
+            y = torch.stack(torch.broadcast_tensors(*ys))
 
         # TODO: parameterize
-        y = torch.sum(y, 0)
-        y = torch.tanh(y)
+        with torch.profiler.record_function('WEIGHTED_RULE_SUM'):
+            y = torch.sum(y, 0)
+        with torch.profiler.record_function('WEIGHTED_RULE_TANH'):
+            y = torch.tanh(y)
         return y

@@ -70,8 +70,12 @@ class WeightedAtomLayer(torch.nn.Module):
         self.gather_weights = build_optimal_single_layer_gather_module_unwrapped(ordinals=weight_idxs)
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
-        input_values = self.gather(layer_values)
-        w = self.gather_weights(self.weight())
-        y = w @ input_values
-        y = torch.tanh(y)
+        with torch.profiler.record_function('WEIGHTED_ATOM_GATHER'):
+            input_values = self.gather(layer_values)
+        with torch.profiler.record_function('WEIGHTED_ATOM_GATHER_WEIGHTS'):
+            w = self.gather_weights(self.weight())
+        with torch.profiler.record_function('WEIGHTED_ATOM_LINEAR'):
+            y = w @ input_values
+        with torch.profiler.record_function('WEIGHTED_ATOM_TANH'):
+            y = torch.tanh(y)
         return y
