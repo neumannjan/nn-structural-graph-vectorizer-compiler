@@ -33,7 +33,7 @@ def atleast_3d_rev(tensor: torch.Tensor) -> torch.Tensor:
     elif dim == 1:
         return tensor.reshape([-1, 1, 1])
     elif dim == 2:
-        return tensor.reshape([*tensor.shape, 1])
+        return tensor.unsqueeze(-1)
     else:
         return tensor
 
