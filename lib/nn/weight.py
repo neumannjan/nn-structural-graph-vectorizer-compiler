@@ -65,10 +65,10 @@ class WeightsConcatenation(torch.nn.Module):
     def __init__(self, weights: Sequence[torch.nn.Parameter]) -> None:
         super().__init__()
 
-        self.weights = weights
+        self.weights = torch.nn.ParameterList(weights)
 
     def forward(self) -> torch.Tensor:
-        return torch.concatenate(self.weights)
+        return torch.concatenate(tuple(self.weights))
 
 
 def concatenate_weights(*weights: torch.nn.Parameter | None) -> torch.nn.Module:

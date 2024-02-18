@@ -102,8 +102,6 @@ def test_weighted_rule_layer(settings: Settings):
     layer = WeightedRuleLayer(
         layer_neurons=sample.getInputs(),
         neuron_ordinals=ordinals,
-        assume_rule_weights_same=settings.assume_rule_weights_same,
-        check_same_inputs_dim_assumption=settings.check_same_inputs_dim_assumption,
     )
 
     print(layer)

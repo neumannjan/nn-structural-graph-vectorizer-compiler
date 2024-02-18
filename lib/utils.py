@@ -47,20 +47,3 @@ def atleast_2d_rev(tensor: torch.Tensor) -> torch.Tensor:
         return tensor.reshape([-1, 1])
     else:
         return tensor
-
-
-def expand_diag(tensor: torch.Tensor, n: int) -> torch.Tensor:
-    tensor = torch.squeeze(tensor)
-    dim = tensor.dim()
-    if dim > 2:
-        raise ValueError()
-
-    if dim == 2:
-        return tensor
-
-    if dim == 0:
-        tensor = torch.atleast_1d(tensor).expand([n])
-
-    return torch.diag(tensor)
-
-
