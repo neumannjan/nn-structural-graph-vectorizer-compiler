@@ -7,7 +7,8 @@ class ReshapeWithPeriod(torch.nn.Module):
         self.period = period
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x.reshape([-1, self.period, *x.shape[1:]])
+        with torch.profiler.record_function('RESHAPE'):
+            return x.reshape([-1, self.period, *x.shape[1:]])
 
 
 class ViewWithPeriod(torch.nn.Module):
@@ -16,7 +17,8 @@ class ViewWithPeriod(torch.nn.Module):
         self.period = period
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x.view([-1, self.period, *x.shape[1:]])
+        with torch.profiler.record_function('VIEW'):
+            return x.view([-1, self.period, *x.shape[1:]])
 
 
 class Repeat(torch.nn.Module):
@@ -26,8 +28,9 @@ class Repeat(torch.nn.Module):
         self.total_length = total_length
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x.repeat(self.repeats, *([1] * (x.dim() - 1)))
-        x = x[: self.total_length]
+        with torch.profiler.record_function('REPEAT'):
+            x = x.repeat(self.repeats, *([1] * (x.dim() - 1)))
+            x = x[: self.total_length]
         return x
 
 
@@ -37,7 +40,8 @@ class Unsqueeze(torch.nn.Module):
         self.dim = dim
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x.unsqueeze(self.dim)
+        with torch.profiler.record_function('UNSQUEEZE'):
+            return x.unsqueeze(self.dim)
 
 
 class Expand0(torch.nn.Module):
@@ -46,5 +50,6 @@ class Expand0(torch.nn.Module):
         self.i = i
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x.expand(self.i, *x.shape[1:])
+        with torch.profiler.record_function('EXPAND'):
+            x = x.expand(self.i, *x.shape[1:])
         return x

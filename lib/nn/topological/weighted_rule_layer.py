@@ -24,7 +24,10 @@ class WeightedRuleLayer(torch.nn.Module):
         self.linear = Linear(layer_neurons, neuron_ordinals, period=inputs_dim)
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
-        y = self.linear(layer_values)
-        y = torch.sum(y, 1)
-        y = torch.tanh(y)
+        with torch.profiler.record_function('WEIGHTED_RULE_LINEAR'):
+            y = self.linear(layer_values)
+        with torch.profiler.record_function('WEIGHTED_RULE_SUM'):
+            y = torch.sum(y, 1)
+        with torch.profiler.record_function('WEIGHTED_TANH'):
+            y = torch.tanh(y)
         return y

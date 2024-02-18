@@ -74,9 +74,12 @@ class Linear(torch.nn.Module):
         self.gather_weights = build_optimal_single_layer_gather_module_unwrapped(ordinals=weight_idxs, period=period)
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
-        input_values = self.gather(layer_values)
-        w = self.gather_weights(self.weight())
-        y = w @ input_values
+        with torch.profiler.record_function('LINEAR_GATHER'):
+            input_values = self.gather(layer_values)
+        with torch.profiler.record_function('LINEAR_WEIGHTS_GATHER'):
+            w = self.gather_weights(self.weight())
+        with torch.profiler.record_function('LINEAR_LINEAR'):
+            y = w @ input_values
         return y
 
     def extra_repr(self):

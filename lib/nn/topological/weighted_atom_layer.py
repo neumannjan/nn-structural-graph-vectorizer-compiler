@@ -11,6 +11,8 @@ class WeightedAtomLayer(torch.nn.Module):
         self.linear = Linear(layer_neurons, neuron_ordinals, period=None)
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
-        y = self.linear(layer_values)
-        y = torch.tanh(y)
+        with torch.profiler.record_function('WEIGHTED_ATOM_LINEAR'):
+            y = self.linear(layer_values)
+        with torch.profiler.record_function('WEIGHTED_TANH'):
+                y = torch.tanh(y)
         return y
