@@ -1,9 +1,10 @@
 from typing import Literal
 
 import torch
+from torch_scatter import scatter_add, scatter_mean
+
 from lib.nn.gather import build_optimal_gather_module
 from lib.nn.topological.layers import Ordinals
-from torch_scatter import scatter_add, scatter_mean
 
 AggregationType = Literal["mean", "sum"]
 
@@ -37,22 +38,21 @@ class AggregationLayer(torch.nn.Module):
 
         self.neuron_ids = [n.getIndex() for n in layer_neurons]
 
+        inputs_dims = torch.tensor([len(n.getInputs()) for n in layer_neurons], dtype=torch.int32)
+        self.inputs_dims_match = torch.all(inputs_dims == inputs_dims[0])
+
         self.gather = build_optimal_gather_module(
             [neuron_ordinals[int(inp.getIndex())] for n in layer_neurons for inp in n.getInputs()],
+            period=int(inputs_dims[0].item()) if self.inputs_dims_match else None,
         )
 
-        self.inputs_dims = torch.nn.Parameter(
-            torch.tensor([len(n.getInputs()) for n in layer_neurons], dtype=torch.int32), requires_grad=False
-        )
-
-        self.inputs_dims_match = torch.all(self.inputs_dims == self.inputs_dims[0])
         self.aggregation = aggregation
 
         if self.inputs_dims_match:
             self.aggregation_func = get_aggregation_func(aggregation)
         else:
             self.index = torch.nn.Parameter(
-                torch.repeat_interleave(torch.arange(0, self.inputs_dims.shape[0]), repeats=self.inputs_dims),
+                torch.repeat_interleave(torch.arange(0, inputs_dims.shape[0]), repeats=inputs_dims),
                 requires_grad=False,
             )
             self.scatter_func = get_scatter_func(aggregation)
@@ -61,7 +61,7 @@ class AggregationLayer(torch.nn.Module):
         input_values = self.gather(layer_values)
 
         if self.inputs_dims_match:
-            input_values = torch.reshape(input_values, [-1, self.inputs_dims[0], *input_values.shape[1:]])
+            # input_values has already been reshaped such that shape == [-1, self.inputs_dims[0], ...]
             y = self.aggregation_func(input_values, dim=1)
         else:
             y = self.scatter_func(input_values, self.index, dim=0)

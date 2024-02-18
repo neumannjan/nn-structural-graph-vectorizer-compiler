@@ -70,8 +70,13 @@ def test_gather_module(
 
 
 def _get_underlying_gather_module(gather_module: torch.nn.Module):
-    while isinstance(gather_module, LayerPipe):
-        gather_module = gather_module.delegate
+    while True:
+        if isinstance(gather_module, LayerPipe):
+            gather_module = gather_module.delegate
+        elif isinstance(gather_module, torch.nn.Sequential):
+            gather_module = gather_module[0]
+        else:
+            break
 
     return gather_module
 

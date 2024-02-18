@@ -1,8 +1,12 @@
+from typing import Sequence
+
 import numpy as np
 import torch
 
 from lib.nn.topological.layers import LayerOrdinal
 from lib.nn.utils.pipes import LayerInputPipe
+from lib.nn.utils.utils import Expand0, Repeat, Unsqueeze, ViewWithPeriod
+from lib.utils import detect_repeating_sequence_in_list
 
 
 class TakeValue(torch.nn.Module):
@@ -21,6 +25,10 @@ class TakeValue(torch.nn.Module):
 
     def extra_repr(self) -> str:
         return f"ordinal={self.ordinal}"
+
+    @property
+    def total_items(self) -> int:
+        return 1
 
 
 class TakeLayerSlice(torch.nn.Module):
@@ -41,6 +49,10 @@ class TakeLayerSlice(torch.nn.Module):
     def extra_repr(self) -> str:
         return f"start={self.start}, end={self.end}"
 
+    @property
+    def total_items(self) -> int:
+        return self.end - self.start
+
 
 class TakeEachNth(torch.nn.Module):
     def __init__(self, step: int, start: int, end: int) -> None:
@@ -50,16 +62,21 @@ class TakeEachNth(torch.nn.Module):
         self.end = end
 
     def forward(self, layer_input: torch.Tensor):
-        return layer_input[self.start:self.end:self.step]
+        return layer_input[self.start : self.end : self.step]
 
     def extra_repr(self) -> str:
         return f"step={self.step}, start={self.start}, end={self.end}"
 
+    @property
+    def total_items(self) -> int:
+        len = self.end - self.start
+        return -(-len // self.step)
+
 
 class SingleLayerGather(torch.nn.Module):
-    """Gather for inputs coming from a single layer."""
+    """General gather for inputs coming from a single layer."""
 
-    def __init__(self, ordinals: list[int]) -> None:
+    def __init__(self, ordinals: Sequence[int]) -> None:
         super().__init__()
         self.ordinals = torch.nn.Parameter(torch.tensor(ordinals, dtype=torch.int32), requires_grad=False)
 
@@ -69,8 +86,15 @@ class SingleLayerGather(torch.nn.Module):
     def extra_repr(self) -> str:
         return f"ordinals=(list of size {self.ordinals.shape[0]})"
 
+    @property
+    def total_items(self) -> int:
+        return len(self.ordinals)
 
-def build_optimal_single_layer_gather_module_unwrapped(ordinals: list[int]):
+
+def build_optimal_single_layer_gather_module_unwrapped_noperiod(
+    ordinals: Sequence[int],
+    allow_subseq=True,
+):
     all_inputs_the_same = all((ordinals[0] == o for o in ordinals[1:]))
 
     if all_inputs_the_same:
@@ -85,12 +109,56 @@ def build_optimal_single_layer_gather_module_unwrapped(ordinals: list[int]):
 
         return TakeEachNth(step=step, start=ordinals[0], end=ordinals[-1] + 1)
 
+    if allow_subseq:
+        subseq = detect_repeating_sequence_in_list(ordinals, allow_last_incomplete=True)
+        if subseq is not None:
+            return build_optimal_single_layer_gather_module_unwrapped_noperiod(subseq.tolist(), allow_subseq=False)
+
     return SingleLayerGather(ordinals)
 
 
-def build_optimal_single_layer_gather_module(input_layer: int, ordinals: list[int]):
+def build_optimal_single_layer_gather_module_unwrapped(ordinals: Sequence[int], period: int | None = None):
+    gather = build_optimal_single_layer_gather_module_unwrapped_noperiod(ordinals)
+
+    # perfect match in terms of the ordinals
+    if gather.total_items == len(ordinals):
+        if period is None:
+            return gather
+
+        # reshape (view) has also been requested
+        return torch.nn.Sequential(gather, ViewWithPeriod(period))
+
+    # there is a single value, which makes things simpler here (we can use views)
+    if gather.total_items == 1:
+        if period is not None:
+            return torch.nn.Sequential(gather, Unsqueeze(0))
+        else:
+            return gather
+
+    # gather returned something that should be repeated:
+
+    if period is not None:
+        # if it matches period, we don't have to repeat and can use view
+        if gather.total_items == period:
+            return torch.nn.Sequential(gather, ViewWithPeriod(period))
+
+        # we must repeat and view
+        return torch.nn.Sequential(
+            gather,
+            Repeat(repeats=-(-len(ordinals) // gather.total_items), total_length=len(ordinals)),
+            ViewWithPeriod(period),
+        )
+    else:
+        # we must repeat
+        return torch.nn.Sequential(
+            gather,
+            Repeat(repeats=-(-len(ordinals) // gather.total_items), total_length=len(ordinals)),
+        )
+
+
+def build_optimal_single_layer_gather_module(input_layer: int, ordinals: list[int], period: int | None = None):
     """Build the optimal gather network module when inputs are guaranteed to come from a single layer."""
-    gather = build_optimal_single_layer_gather_module_unwrapped(ordinals)
+    gather = build_optimal_single_layer_gather_module_unwrapped(ordinals, period)
     return LayerInputPipe(input_layer, gather)
 
 
@@ -102,7 +170,7 @@ class MultiLayerGather(torch.nn.Module):
     the final gather.
     """
 
-    def __init__(self, input_layer_ordinal_pairs: list[LayerOrdinal]) -> None:
+    def __init__(self, input_layer_ordinal_pairs: list[LayerOrdinal], period: int | None = None) -> None:
         super().__init__()
         self.input_layer_ordinal_pairs = input_layer_ordinal_pairs
 
@@ -132,7 +200,7 @@ class MultiLayerGather(torch.nn.Module):
             layer_prefixes[layers_map[l]] + per_layer_ordinals2_map[l][o] for l, o in input_layer_ordinal_pairs
         ]
 
-        self.final_gather = build_optimal_single_layer_gather_module_unwrapped(concatenated_ordinals)
+        self.final_gather = build_optimal_single_layer_gather_module_unwrapped(concatenated_ordinals, period=period)
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
         layer_inputs_needed = [self.layer_gathers[str(layer)](layer_values[layer]) for layer in self.layers]
@@ -143,11 +211,13 @@ class MultiLayerGather(torch.nn.Module):
         return out
 
 
-def build_optimal_gather_module(input_layer_ordinal_pairs: list[LayerOrdinal]):
+def build_optimal_gather_module(input_layer_ordinal_pairs: list[LayerOrdinal], period: int | None = None):
     layer0, _ = input_layer_ordinal_pairs[0]
     is_single_layer = all((layer0 == l for l, _ in input_layer_ordinal_pairs[1:]))
 
     if is_single_layer:
-        return build_optimal_single_layer_gather_module(layer0, [o for _, o in input_layer_ordinal_pairs])
+        return build_optimal_single_layer_gather_module(
+            layer0, [o for _, o in input_layer_ordinal_pairs], period=period
+        )
 
-    return MultiLayerGather(input_layer_ordinal_pairs)
+    return MultiLayerGather(input_layer_ordinal_pairs, period=period)
