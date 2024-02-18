@@ -4,16 +4,20 @@ import jpype
 import pytest
 import torch
 from lib.benchmarks.runnables.torch_gather_runnable import TorchGatherRunnable
-from lib.datasets.mutagenesis import MyMutagenesis
+from lib.datasets.dataset import MyDataset
+from lib.datasets.mutagenesis import MyMutagenesis, MyMutagenesisMultip
 from lib.nn.topological.settings import Settings
 from lib.tests.utils.test_params import DEVICE_PARAMS, SETTINGS_PARAMS
 from lib.utils import value_to_tensor
 
+DATASET_PARAMS = [
+    MyMutagenesis(),
+    MyMutagenesisMultip(),
+]
 
-@pytest.mark.parametrize(["device", "settings"], list(itertools.product(DEVICE_PARAMS, SETTINGS_PARAMS)))
-def test_mutagenesis(device: str, settings: Settings):
+
+def do_test_dataset(dataset: MyDataset, device: str, settings: Settings):
     try:
-        dataset = MyMutagenesis()
         dataset.settings.compute_neuron_layer_indices = True
         # dataset.settings.iso_value_compression = False
         # dataset.settings.chain_pruning = False
@@ -60,3 +64,22 @@ def test_mutagenesis(device: str, settings: Settings):
         print(e.message())
         print(e.stacktrace())
         raise e
+
+
+@pytest.mark.parametrize(
+    ["device", "settings"], list(itertools.product(DEVICE_PARAMS, SETTINGS_PARAMS))
+)
+def test_mutagenesis(device: str, settings: Settings):
+    do_test_dataset(MyMutagenesis(), device, settings)
+
+
+@pytest.mark.parametrize(
+    ["device", "settings"], list(itertools.product(DEVICE_PARAMS, SETTINGS_PARAMS))
+)
+@pytest.mark.long
+def test_mutagenesis_multip(device: str, settings: Settings):
+    do_test_dataset(MyMutagenesisMultip(), device, settings)
+
+
+if __name__ == "__main__":
+    test_mutagenesis("cpu", SETTINGS_PARAMS[0])
