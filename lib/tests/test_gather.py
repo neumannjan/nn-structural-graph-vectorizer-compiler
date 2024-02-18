@@ -90,6 +90,7 @@ def test_slice_gather():
 
     assert isinstance(_get_underlying_gather_module(gather_module), TakeLayerSlice)
     assert (actual == expected).all()
+    assert actual.shape == expected.shape
 
 
 TAKE_PARAMS = [
@@ -130,7 +131,9 @@ TAKE_EACH_NTH_PARAMS = [
 @pytest.mark.parametrize(
     ["take_idx", "range_len", "range_repeats", "ordinals_to_take", "expected"], TAKE_EACH_NTH_PARAMS
 )
-def test_take_each_nth(take_idx: int, range_len: int, range_repeats: int, ordinals_to_take: list[int], expected: float):
+def test_take_each_nth(
+    take_idx: int, range_len: int, range_repeats: int, ordinals_to_take: list[int], expected: float
+):
     input = torch.arange(0, range_len, dtype=torch.float).repeat(range_repeats)
 
     input_layer_ordinal_pairs = [LayerOrdinal(0, o) for o in ordinals_to_take]
