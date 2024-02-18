@@ -1,20 +1,62 @@
 import itertools
 import random
-from typing import Any
+from typing import Any, Sequence
 
-from lib.interfaces import JavaNeuron
+import numpy as np
+from lib.interfaces import JavaNeuron, JavaValue, JavaWeight
 from lib.nn.topological.layers import LayerDefinition, TopologicalNetwork
 
 
+class MockJavaValue(JavaValue):
+    def __init__(self, arr: np.ndarray) -> None:
+        super().__init__()
+        self._arr = arr
+
+    def getAsArray(self) -> np.ndarray:
+        return self._arr.copy()
+
+    def size(self) -> Sequence[int]:
+        return self._arr.shape
+
+
+class MockJavaWeight(JavaWeight):
+    def __init__(self, index: int, value: np.ndarray, learnable: bool) -> None:
+        super().__init__()
+        self._index = index
+        self._value = MockJavaValue(value)
+        self._learnable = learnable
+
+    @property
+    def value(self) -> JavaValue:
+        return self._value
+
+    @property
+    def index(self) -> int:
+        return self._index
+
+    def isLearnable(self) -> bool:
+        return self._learnable
+
+
 class MockJavaNeuron(JavaNeuron):
-    def __init__(self, index: int, layer: int, inputs: list[JavaNeuron] | None = None) -> None:
+    def __init__(
+        self,
+        index: int,
+        layer: int,
+        inputs: Sequence[JavaNeuron] | None = None,
+        weights: Sequence[JavaWeight] | None = None,
+    ) -> None:
         self._index = index
 
         if inputs is None:
             inputs = []
 
+        if weights is None:
+            weights = []
+
         self._inputs = inputs
         self._layer = layer
+        self._weights = weights
 
     def __repr__(self) -> str:
         return f"({self._layer}:{self._index})"
@@ -34,8 +76,8 @@ class MockJavaNeuron(JavaNeuron):
     def getClass(self) -> Any:
         raise NotImplementedError()
 
-    def getWeights(self) -> Any:
-        raise NotImplementedError()
+    def getWeights(self) -> list[JavaWeight]:
+        return self._weights
 
 
 EXAMPLE_LAYERS = [16, 13, 12, 11, 10, 9, 8, 7]

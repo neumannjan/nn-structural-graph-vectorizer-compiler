@@ -25,11 +25,11 @@ class WeightedRuleLayer(torch.nn.Module):
 
         self.linear = Linear(layer_neurons, assume_all_weights_same=assume_rule_weights_same)
 
-        self.inputs_dim = neuron.getInputs().size()
+        self.inputs_dim = len(neuron.getInputs())
 
         if check_same_inputs_dim_assumption:
             for n in layer_neurons:
-                assert self.inputs_dim == n.getInputs().size()
+                assert self.inputs_dim == len(n.getInputs())
 
         self.assume_rule_weights_same = assume_rule_weights_same
 
