@@ -7,7 +7,12 @@ class ReshapeWithPeriod(torch.nn.Module):
         self.period = period
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x.reshape([-1, self.period, *x.shape[1:]])
+        shape = [-1, self.period]
+        shape.extend(x.shape[1:])
+        return x.reshape(shape)
+
+    def extra_repr(self) -> str:
+        return f"period={self.period}"
 
 
 class ViewWithPeriod(torch.nn.Module):
