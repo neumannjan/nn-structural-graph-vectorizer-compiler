@@ -78,4 +78,6 @@ def test_mutagenesis_multip(device: str, settings: Settings):
 
 
 if __name__ == "__main__":
-    test_mutagenesis("cpu", SETTINGS_PARAMS[0])
+    stts = SETTINGS_PARAMS[0]
+    stts.optimize_linear_gathers = True
+    test_mutagenesis("cpu", stts)

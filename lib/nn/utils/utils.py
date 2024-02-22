@@ -1,20 +1,6 @@
 import torch
 
 
-class ReshapeWithPeriod(torch.nn.Module):
-    def __init__(self, period: int) -> None:
-        super().__init__()
-        self.period = period
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        shape = [-1, self.period]
-        shape.extend(x.shape[1:])
-        return x.reshape(shape)
-
-    def extra_repr(self) -> str:
-        return f"period={self.period}"
-
-
 class ViewWithPeriod(torch.nn.Module):
     def __init__(self, period: int) -> None:
         super().__init__()
@@ -22,6 +8,9 @@ class ViewWithPeriod(torch.nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x.view([-1, self.period, *x.shape[1:]])
+
+    def extra_repr(self) -> str:
+        return f"period={self.period}"
 
 
 class Repeat(torch.nn.Module):
@@ -35,21 +24,5 @@ class Repeat(torch.nn.Module):
         x = x[: self.total_length]
         return x
 
-
-class Unsqueeze(torch.nn.Module):
-    def __init__(self, dim: int) -> None:
-        super().__init__()
-        self.dim = dim
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x.unsqueeze(self.dim)
-
-
-class Expand0(torch.nn.Module):
-    def __init__(self, i: int) -> None:
-        super().__init__()
-        self.i = i
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x.expand(self.i, *x.shape[1:])
-        return x
+    def extra_repr(self) -> str:
+        return f"repeats={self.repeats}, total_length={self.total_length}"

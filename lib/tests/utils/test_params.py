@@ -9,8 +9,9 @@ SETTINGS_PARAMS = [
     Settings(
         check_same_layers_assumption=check_same_layers_assumption,
     )
-    for (check_same_layers_assumption,) in itertools.product(  # -
+    for (check_same_layers_assumption, optimize_linear_gathers) in itertools.product(  # -
         [False],  # check_same_layers_assumption
+        [True, False],  # optimize_linear_gathers
     )
 ]
 

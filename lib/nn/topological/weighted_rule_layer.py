@@ -10,6 +10,7 @@ class WeightedRuleLayer(torch.nn.Module):
         layer_neurons: list,
         neuron_ordinals: Ordinals,
         check_same_inputs_dim_assumption=True,
+        optimize_linear_gathers=True,
     ) -> None:
         super().__init__()
 
@@ -21,7 +22,9 @@ class WeightedRuleLayer(torch.nn.Module):
             for n in layer_neurons:
                 assert inputs_dim == len(n.getInputs())
 
-        self.linear = Linear(layer_neurons, neuron_ordinals, period=inputs_dim)
+        self.linear = Linear(
+            layer_neurons, neuron_ordinals, period=inputs_dim, optimize_gathers=optimize_linear_gathers
+        )
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
         y = self.linear(layer_values)

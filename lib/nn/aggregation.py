@@ -1,9 +1,9 @@
-from typing import List, Literal
+from typing import List, Literal, Protocol
 
 import torch
 from torch_scatter import scatter_add, scatter_mean
 
-from lib.nn.utils.utils import ReshapeWithPeriod
+from lib.nn.utils.utils import ViewWithPeriod
 
 AggregationType = Literal["mean", "sum"]
 
@@ -12,6 +12,10 @@ class SimpleAggregation(torch.nn.Module):
     def __init__(self, dim: int = 1) -> None:
         super().__init__()
         self.dim = dim
+
+    @property
+    def is_matching_dimension(self) -> bool:
+        return True
 
     def forward(self, tensor: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError()
@@ -39,24 +43,45 @@ def _build_simple_aggregation(agg_type: AggregationType, dim: int = 1):
         raise ValueError()
 
 
-class ReshapeAndAggregate(torch.nn.Module):
+class ReshapeAggregateLike(Protocol):
+    @property
+    def is_matching_dimension(self) -> bool:
+        ...
+
+    def get_reshape(self) -> ViewWithPeriod:
+        """Give ViewWithPeriod if is_matching_dimension == True, else fail."""
+        ...
+
+    def get_aggregate(self) -> SimpleAggregation:
+        """Give SimpleAggregation if is_matching_dimension == True, else fail."""
+        ...
+
+
+class ReshapeAggregateModuleLike(ReshapeAggregateLike, Protocol):
+    def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
+        ...
+
+
+class ReshapeAndAggregate(torch.nn.Module, ReshapeAggregateModuleLike):
     def __init__(self, period: int, agg_type: AggregationType, dim: int = 1) -> None:
         super().__init__()
-        self.reshape = ReshapeWithPeriod(period=period)
-        self.aggregation = _build_simple_aggregation(agg_type, dim=dim)
+        self.reshape = ViewWithPeriod(period=period)
+        self.aggregate = _build_simple_aggregation(agg_type, dim=dim)
+
+    @property
+    def is_matching_dimension(self) -> bool:
+        return True
+
+    def get_reshape(self) -> ViewWithPeriod:
+        return self.reshape
+
+    def get_aggregate(self) -> SimpleAggregation:
+        return self.aggregate
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.reshape(x)
-        x = self.aggregation(x)
+        x = self.aggregate(x)
         return x
-
-    @property
-    def period(self) -> int:
-        return self.reshape.period
-
-    @property
-    def dim(self) -> int:
-        return self.aggregation.dim
 
 
 def _get_scatter_func(agg: AggregationType):
@@ -68,7 +93,7 @@ def _get_scatter_func(agg: AggregationType):
         raise ValueError()
 
 
-class ScatterReduceAggregation(torch.nn.Module):
+class ScatterReduceAggregation(torch.nn.Module, ReshapeAggregateModuleLike):
     def __init__(self, agg_type: AggregationType, counts: List[int] | torch.Tensor) -> None:
         super().__init__()
         self.agg_type = agg_type
@@ -83,6 +108,16 @@ class ScatterReduceAggregation(torch.nn.Module):
 
         self.scatter_func = _get_scatter_func(agg_type)
 
+    @property
+    def is_matching_dimension(self) -> bool:
+        return False
+
+    def get_reshape(self) -> ViewWithPeriod:
+        raise ValueError("is_matching_dimension == False!")
+
+    def get_aggregate(self) -> SimpleAggregation:
+        raise ValueError("is_matching_dimension == False!")
+
     def forward(self, inp: torch.Tensor) -> torch.Tensor:
         return self.scatter_func(inp, self.index, dim=0)
 
@@ -90,7 +125,7 @@ class ScatterReduceAggregation(torch.nn.Module):
         return f"type={self.agg_type},"
 
 
-def build_optimal_aggregation(agg_type: AggregationType, counts: List[int] | torch.Tensor):
+def build_optimal_reshape_aggregate(agg_type: AggregationType, counts: List[int] | torch.Tensor):
     if not isinstance(counts, torch.Tensor):
         counts = torch.tensor(counts, dtype=torch.int32)
 

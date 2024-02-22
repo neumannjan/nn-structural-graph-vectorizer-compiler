@@ -117,3 +117,6 @@ def test_weighted_rule_layer(settings: Settings):
     print("actual shape", actual.shape)
 
     assert ((expected - actual).abs() <= 0.01).all()
+
+if __name__ == "__main__":
+    test_weighted_rule_layer(SETTINGS_PARAMS[0])

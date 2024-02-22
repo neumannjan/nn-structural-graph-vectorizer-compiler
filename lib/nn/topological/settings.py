@@ -12,3 +12,5 @@ class Settings:
     check_same_layers_assumption: bool = True
     # TODO: ASSUMPTION: all neurons in a given WeightedRuleLayer have the same number of inputs
     check_same_inputs_dim_assumption: bool = True
+
+    optimize_linear_gathers: bool = True

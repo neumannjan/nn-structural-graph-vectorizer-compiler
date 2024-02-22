@@ -50,7 +50,7 @@ def test_same_no_of_inputs(settings: Settings):
     layer = AggregationLayer(
         layer_neurons=SAMPLE1.getInputs(),
         neuron_ordinals=ordinals,
-        aggregation="sum",
+        aggregation_type="sum",
     )
     expected = torch.tensor([8, 12, 20])
 
@@ -70,7 +70,7 @@ def test_variable_no_of_inputs(settings: Settings):
     layer = AggregationLayer(
         layer_neurons=SAMPLE2.getInputs(),
         neuron_ordinals=ordinals,
-        aggregation="sum",
+        aggregation_type="sum",
     )
     expected = torch.tensor([8, 9, 15, 28, 22, 52])
 
