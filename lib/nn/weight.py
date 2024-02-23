@@ -39,6 +39,19 @@ class WeightLike(Protocol):
         ...
 
 
+class WeightModuleLike(Protocol):
+    @property
+    def shape(self) -> torch.Size:
+        ...
+
+    @property
+    def is_multiple(self) -> bool:
+        ...
+
+    def __call__(self) -> torch.Tensor:
+        ...
+
+
 def _get_single_shape(shape: torch.Size | tuple[int, ...] | list[int], shape_single: bool):
     if shape_single:
         return shape
@@ -46,7 +59,14 @@ def _get_single_shape(shape: torch.Size | tuple[int, ...] | list[int], shape_sin
         return shape[1:]
 
 
-class Weight(torch.nn.Module, WeightLike):
+def get_weight_shape_single(weight: WeightLike | WeightModuleLike):
+    if weight.is_multiple:
+        return weight.shape[1:]
+    else:
+        return weight.shape
+
+
+class Weight(torch.nn.Module, WeightLike, WeightModuleLike):
     def __init__(self, weight: torch.nn.Parameter, learnable: bool) -> None:
         super().__init__()
         self.weight = weight
@@ -104,7 +124,7 @@ class Weight(torch.nn.Module, WeightLike):
         )
 
 
-class UnitWeight(Weight, WeightLike):
+class UnitWeight(Weight, WeightLike, WeightModuleLike):
     def __init__(self, tensor: torch.Tensor | None = None) -> None:
         if tensor is None:
             tensor = torch.tensor([1.0])
@@ -138,7 +158,7 @@ class UnitWeight(Weight, WeightLike):
         return UnitWeights(self.weight.unsqueeze(0))
 
 
-class UnitWeights(Weight, WeightLike):
+class UnitWeights(Weight, WeightLike, WeightModuleLike):
     def __init__(self, tensor: torch.Tensor | None = None) -> None:
         if tensor is None:
             tensor = torch.tensor([1.0])
@@ -178,7 +198,7 @@ class UnitWeights(Weight, WeightLike):
         return self
 
 
-class Weights(Weight, WeightLike):
+class Weights(Weight, WeightLike, WeightModuleLike):
     def __init__(self, weights: torch.nn.Parameter, learnable: bool) -> None:
         super().__init__(weights, learnable)
 
@@ -213,7 +233,7 @@ def create_weight(tensor: torch.Tensor, is_learnable: bool) -> Weight:
     return Weight(torch.nn.Parameter(torch.atleast_1d(tensor), requires_grad=is_learnable), learnable=is_learnable)
 
 
-class StackWeights(torch.nn.Module):
+class StackWeights(torch.nn.Module, WeightModuleLike):
     def __init__(self, weights_unsqueezed: Sequence[torch.nn.Parameter]) -> None:
         super().__init__()
         self.weights = torch.nn.ParameterList([w for w in weights_unsqueezed])
@@ -221,31 +241,76 @@ class StackWeights(torch.nn.Module):
     def forward(self) -> torch.Tensor:
         return torch.concatenate(tuple(self.weights))
 
+    @property
+    def shape(self) -> torch.Size:
+        n_weights = sum((w.shape[0] for w in self.weights))
 
-class ExpandWeight(torch.nn.Module):
+        shape = [n_weights]
+        shape.extend(self.weights[0].shape)
+
+        return torch.Size(shape)
+
+    @property
+    def is_multiple(self) -> bool:
+        return True
+
+
+class ExpandWeight(torch.nn.Module, WeightModuleLike):
     def __init__(self, weight: Weight, shape: torch.Size | tuple[int, ...] | list[int], shape_single: bool) -> None:
         super().__init__()
         self.weight = weight
-        self.shape = shape
-        self.shape_single = shape_single
+        self._shape = shape if shape_single else shape[1:]
 
     def forward(self) -> torch.Tensor:
-        return self.weight.expand_to(self.shape, self.shape_single)
+        return self.weight.expand_to(self._shape, shape_single=True)
+
+    @property
+    def shape(self) -> torch.Size:
+        shape = []
+
+        if self.is_multiple:
+            shape.append(self.weight.shape[0])
+
+        shape.extend(self._shape)
+
+        return torch.Size(shape)
+
+    @property
+    def is_multiple(self) -> bool:
+        return self.weight.is_multiple
 
 
-class StackModules(torch.nn.Module):
-    def __init__(self, modules_unsqueezed: Sequence[torch.nn.Module]) -> None:
+class StackWeightModules(torch.nn.Module, WeightModuleLike):
+    def __init__(self, modules_unsqueezed: Sequence[WeightModuleLike]) -> None:
         super().__init__()
+
+        assert all((m.is_multiple for m in modules_unsqueezed))
 
         the_modules = []
 
         for module in modules_unsqueezed:
-            if isinstance(module, StackModules):
+            if isinstance(module, StackWeightModules):
                 the_modules.extend(module.the_modules)
             else:
                 the_modules.append(module)
 
         self.the_modules = torch.nn.ModuleList(the_modules)
+
+    @property
+    def weight_modules(self) -> Sequence[WeightModuleLike]:
+        return self.the_modules
+
+    @property
+    def shape(self) -> torch.Size:
+        n_weights = sum((m.shape[0] for m in self.weight_modules))
+        shape = [n_weights]
+        shape.extend(self.weight_modules[0].shape[1:])
+
+        return torch.Size(shape)
+
+    @property
+    def is_multiple(self) -> bool:
+        return True
 
     def forward(self) -> torch.Tensor:
         modules = [m() for m in self.the_modules]
@@ -278,7 +343,7 @@ def stack_weights_nonlearnable(
 
 def stack_weights_learnable(
     weights: Sequence[Weight | None], shape_hull: torch.Size | tuple[int, ...] | list[int] | None = None
-) -> Weights | StackModules | None:
+) -> Weights | StackWeightModules | None:
     ws = [w for w in weights if w is not None]
     assert all((w.learnable for w in ws))
 
@@ -299,7 +364,7 @@ def stack_weights_learnable(
         ws, key=lambda w: sum(_get_single_shape(w.shape, shape_single=False)) == shape_hull_sum
     )
 
-    ws_final: list[Weights | StackModules] = []
+    ws_final: list[Weights | StackWeightModules] = []
 
     for group_shape_sum_matches_hull, group in ws_grouped:
         if group_shape_sum_matches_hull:
@@ -314,14 +379,14 @@ def stack_weights_learnable(
                 w_this = Weights(torch.nn.Parameter(w_this, requires_grad=True), learnable=True)
         else:
             ws_this = [ExpandWeight(w, shape_hull, shape_single=True) for w in group]
-            w_this = StackModules(ws_this)
+            w_this = StackWeightModules(ws_this)
 
         ws_final.append(w_this)
 
     if len(ws_final) == 1:
         w_final = ws_final[0]
     else:
-        w_final = StackModules(ws_final)
+        w_final = StackWeightModules(ws_final)
 
     return w_final
 
@@ -338,13 +403,11 @@ def _build_weights(weights: Iterable, out_map: dict[str, int], weights_out: list
             weights_out.append(weight)
 
 
-def build_weights_from_java(layer_neurons: list) -> tuple[torch.nn.Module, dict[str, int]]:
+def build_weights_from_java(layer_neurons: list):
     def _iter_all_weights():
         return (w for n in layer_neurons for w in n.getWeights())
 
     idx_map: dict[str, int] = {}
-
-    weights: list[Weight] = []
 
     weights_learnable: list[Weight] = []
     weights_nonlearnable: list[Weight] = []
@@ -362,7 +425,7 @@ def build_weights_from_java(layer_neurons: list) -> tuple[torch.nn.Module, dict[
     w_nonlearnable = stack_weights_nonlearnable(weights_nonlearnable, shape_hull)
 
     if w_learnable is not None and w_nonlearnable is not None:
-        out = StackModules([w_learnable, w_nonlearnable])
+        out = StackWeightModules([w_learnable, w_nonlearnable])
     elif w_learnable is not None:
         out = w_learnable
     elif w_nonlearnable is not None:

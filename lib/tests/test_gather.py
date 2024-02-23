@@ -10,7 +10,7 @@ from lib.nn.gather import (
     SliceValues,
     TakeEachNth,
     TakeValue,
-    build_optimal_inputs_gather,
+    build_optimal_multi_layer_gather,
 )
 from lib.nn.topological.layers import LayerOrdinal, TopologicalNetwork, compute_neuron_ordinals
 from lib.nn.topological.settings import Settings
@@ -70,7 +70,7 @@ def test_gather_module(
     for l in layers[1:]:
         input_layer_ordinal_pairs = [ordinals[inp.getIndex()] for n in network[l.index] for inp in n.getInputs()]
 
-        gather = build_optimal_inputs_gather(input_layer_ordinal_pairs)
+        gather = build_optimal_multi_layer_gather(input_layer_ordinal_pairs)
 
         print("Layer", l.index)
         print(gather)
@@ -102,7 +102,7 @@ def test_slice_gather():
     inputs = {0: torch.tensor(list(range(total)))}
     expected = torch.tensor(ordinals)
 
-    gather_module = build_optimal_inputs_gather(input_layer_ordinal_pairs)
+    gather_module = build_optimal_multi_layer_gather(input_layer_ordinal_pairs)
     actual = gather_module(inputs)
 
     assert isinstance(_get_underlying_gather_module(gather_module), SliceValues)
@@ -129,7 +129,7 @@ def test_take(unsqueeze_times: int, idx: int, expected: torch.Tensor):
     input_layer_ordinal_pairs = [LayerOrdinal(0, idx)]
     inputs = {0: _unsqueeze_times(torch.arange(0, total, dtype=torch.int), times=unsqueeze_times)}
 
-    gather_module = build_optimal_inputs_gather(input_layer_ordinal_pairs)
+    gather_module = build_optimal_multi_layer_gather(input_layer_ordinal_pairs)
     actual = gather_module(inputs)
 
     assert isinstance(_get_underlying_gather_module(gather_module), TakeValue)
@@ -155,7 +155,7 @@ def test_take_each_nth(take_idx: int, range_len: int, range_repeats: int, ordina
 
     inputs = {0: input}
 
-    gather_module = build_optimal_inputs_gather(input_layer_ordinal_pairs)
+    gather_module = build_optimal_multi_layer_gather(input_layer_ordinal_pairs)
     actual = gather_module(inputs)
 
     print("Expected:", expected)
@@ -179,7 +179,7 @@ def test_take_each_nth_when_total_length_not_divisible_by_width(ordinals_to_take
 
     inputs = {0: input}
 
-    gather_module = build_optimal_inputs_gather(input_layer_ordinal_pairs)
+    gather_module = build_optimal_multi_layer_gather(input_layer_ordinal_pairs)
     actual = gather_module(inputs)
     expected_t = torch.tensor(expected, dtype=torch.float)
 

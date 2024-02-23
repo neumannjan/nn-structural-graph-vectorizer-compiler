@@ -1,15 +1,16 @@
 import warnings
+from itertools import product
 
 import torch
 
 from lib.nn.gather import (
     build_optimal_gather,
     build_optimal_gather_and_reshape,
-    build_optimal_inputs_gather,
-    build_optimal_inputs_gather_and_reshape,
+    build_optimal_multi_layer_gather,
+    build_optimal_multi_layer_gather_and_reshape,
 )
 from lib.nn.topological.layers import Ordinals
-from lib.nn.weight import build_weights_from_java
+from lib.nn.weight import build_weights_from_java, get_weight_shape_single
 
 
 class Linear(torch.nn.Module):
@@ -31,9 +32,9 @@ class Linear(torch.nn.Module):
         ]
 
         if period is None:
-            gather = build_optimal_inputs_gather(input_layer_ordinal_pairs)
+            gather = build_optimal_multi_layer_gather(input_layer_ordinal_pairs)
         else:
-            gather = build_optimal_inputs_gather_and_reshape(input_layer_ordinal_pairs, dim=period)
+            gather = build_optimal_multi_layer_gather_and_reshape(input_layer_ordinal_pairs, dim=period)
 
         self.weight, weight_idx_map = build_weights_from_java(layer_neurons)
 

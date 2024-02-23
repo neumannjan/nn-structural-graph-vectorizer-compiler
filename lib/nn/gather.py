@@ -1,4 +1,5 @@
-from typing import Protocol, Sequence, TypeVar, overload, runtime_checkable
+from collections import defaultdict
+from typing import Protocol, Sequence, runtime_checkable
 
 import numpy as np
 import torch
@@ -83,7 +84,7 @@ class SliceValues(torch.nn.Module, GatherModuleLike):
         return self
 
     def forward(self, layer_input: torch.Tensor):
-        return layer_input[self.start: self.end]
+        return layer_input[self.start : self.end]
 
 
 class TakeEachNth(torch.nn.Module, GatherModuleLike):
@@ -113,7 +114,7 @@ class TakeEachNth(torch.nn.Module, GatherModuleLike):
         return self
 
     def forward(self, layer_input: torch.Tensor):
-        return layer_input[self.start: self.end: self.step]
+        return layer_input[self.start : self.end : self.step]
 
 
 class GenericGather(torch.nn.Module, GatherModuleLike):
@@ -253,7 +254,7 @@ def build_optimal_single_layer_gather(input_layer: int, ordinals: list[int]):
     return SingleLayerGather(input_layer, gather)
 
 
-class MultiLayerSetGather(torch.nn.Module, LayerGatherModuleLike):
+class LayersGatherConcat(torch.nn.Module, LayerGatherModuleLike):
     """
     Gather for inputs coming from multiple layers.
 
@@ -261,18 +262,12 @@ class MultiLayerSetGather(torch.nn.Module, LayerGatherModuleLike):
     Provides a mapping to remember which value contains which neuron output.
     """
 
-    def __init__(self, input_layer_ordinal_pairs: Sequence[LayerOrdinal]) -> None:
+    def __init__(self, per_layer_ordinals: dict[int, list[int]]) -> None:
         super().__init__()
-        self.input_layer_ordinal_pairs = input_layer_ordinal_pairs
-
-        self.layers = sorted(set((l for l, _ in input_layer_ordinal_pairs)), reverse=True)
+        self.layers = sorted(per_layer_ordinals.keys(), reverse=True)
         layers_map = {l: i for i, l in enumerate(self.layers)}
 
         ### setup single-layer gathers ###
-
-        per_layer_ordinals: dict[int, list[int]] = {
-            layer: sorted(set((o for l, o in input_layer_ordinal_pairs if l == layer))) for layer in self.layers
-        }
 
         # each gather is a set gather, so there is no optimal period for any of them
         self.layer_gathers = torch.nn.ModuleDict(
@@ -307,7 +302,7 @@ class MultiLayerSetGather(torch.nn.Module, LayerGatherModuleLike):
     def is_optimal(self) -> bool:
         return True
 
-    def get_optimal(self) -> "MultiLayerSetGather":
+    def get_optimal(self) -> "LayersGatherConcat":
         return self
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
@@ -336,7 +331,7 @@ class MultiLayerGather(torch.nn.Module, LayerGatherModuleLike):
     Finally, performs the non-set gather using a final single Gather.
     """
 
-    def __init__(self, multi_layer_set_gather: MultiLayerSetGather, final_gather: GatherModuleLike) -> None:
+    def __init__(self, multi_layer_set_gather: LayersGatherConcat, final_gather: GatherModuleLike) -> None:
         super().__init__()
         self.multi_layer_set_gather = multi_layer_set_gather
 
@@ -368,14 +363,21 @@ class MultiLayerGather(torch.nn.Module, LayerGatherModuleLike):
         return x
 
 
-def build_optimal_inputs_gather(input_layer_ordinal_pairs: list[LayerOrdinal]):
+def build_optimal_multi_layer_gather(input_layer_ordinal_pairs: list[LayerOrdinal]):
     layer0, _ = input_layer_ordinal_pairs[0]
     is_single_layer = all((layer0 == l for l, _ in input_layer_ordinal_pairs[1:]))
 
     if is_single_layer:
         return build_optimal_single_layer_gather(layer0, [o for _, o in input_layer_ordinal_pairs])
 
-    multi_layer_set_gather = MultiLayerSetGather(input_layer_ordinal_pairs)
+    per_layer_ordinals_set: dict[int, set[int]] = defaultdict(lambda: set())
+
+    for l, o in input_layer_ordinal_pairs:
+        per_layer_ordinals_set[l].add(o)
+
+    per_layer_ordinals = {l: sorted(o) for l, o in per_layer_ordinals_set.items()}
+
+    multi_layer_set_gather = LayersGatherConcat(per_layer_ordinals)
     final_ordinals = [multi_layer_set_gather.idx_map[p] for p in input_layer_ordinal_pairs]
     final_gather = build_optimal_gather(final_ordinals)
 
@@ -454,7 +456,7 @@ def build_optimal_gather_and_reshape(ordinals: list[int], dim: int):
     return GatherAndReshape(gather, reshape)
 
 
-def build_optimal_inputs_gather_and_reshape(input_layer_ordinal_pairs: list[LayerOrdinal], dim: int):
-    gather = build_optimal_inputs_gather(input_layer_ordinal_pairs)
+def build_optimal_multi_layer_gather_and_reshape(input_layer_ordinal_pairs: list[LayerOrdinal], dim: int):
+    gather = build_optimal_multi_layer_gather(input_layer_ordinal_pairs)
     reshape = ViewWithPeriod(dim)
     return LayerGatherAndReshape(gather, reshape)
