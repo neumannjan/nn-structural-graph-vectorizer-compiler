@@ -1,23 +1,19 @@
-import itertools
 import math
 from typing import Sequence
 
 import numpy as np
 import pytest
 import torch
-from lib.nn.topological.layers import LayerDefinition, compute_neuron_ordinals, get_neurons_per_layer
-from lib.nn.topological.settings import Settings
+from lib.nn.sources.dict_source import NeuralNetworkDefinitionDict, Neuron, WeightDefinitionImpl
+from lib.nn.sources.source import LayerDefinition
 from lib.nn.topological.weighted_atom_layer import WeightedAtomLayer
-from lib.tests.utils.network_mock import MockJavaNeuron, MockJavaWeight
-from lib.tests.utils.test_params import SETTINGS_PARAMS
 from lib.utils import atleast_3d_rev
 
 LAYERS = [
-    LayerDefinition("", 16),
-    LayerDefinition("", 13),
-    LayerDefinition("", 12),
+    LayerDefinition(16, "FactLayer"),
+    LayerDefinition(13, "WeightedAtomLayer"),
+    LayerDefinition(12, "AggregationLayer"),
 ]
-
 
 WEIGHTS: dict[int, list[float]] = {
     13: [0.39, -0.34, 0.99],
@@ -36,32 +32,27 @@ OUTPUTS: dict[int, list[float]] = {
     5: [-0.6351, 0.4053, 0.3185],
     0: [-0.5511, 0.7163, -0.5784],
     8: [0.6169, 0.5080, 0.7064],
-    6: [ 0.4382,  0.3452, -0.3185],
-    1: [ 0.7616,  0.4301, -0.4382],
+    6: [0.4382, 0.3452, -0.3185],
+    1: [0.7616, 0.4301, -0.4382],
     9: [-0.4053, -0.6469, -0.7398],
     -1: [math.tanh(1.0)] * 3,
     -2: [math.tanh(1.0)],
 }
 
 
-def build_sample_from_input_indices(indices: Sequence[int]) -> tuple[MockJavaNeuron, torch.Tensor]:
-    index_factory = iter(itertools.count())
-
-    def _n():
-        return next(index_factory)
-
-    input_neuron = MockJavaNeuron(_n(), 12)
-
+def build_sample_from_input_indices(indices: Sequence[int]) -> tuple[NeuralNetworkDefinitionDict, torch.Tensor]:
     weights = [
-        MockJavaWeight(index=i, value=np.expand_dims(np.array(WEIGHTS[i]), -1), learnable=i >= 0) for i in indices
+        WeightDefinitionImpl(id=i, value=np.expand_dims(torch.tensor(WEIGHTS[i]), -1), learnable=i >= 0)
+        for i in indices
     ]
 
-    sample = MockJavaNeuron(
-        _n(),
-        16,
-        [  #
-            MockJavaNeuron(_n(), 13, inputs=[input_neuron], weights=[w]) for w in weights
-        ],
+    sample = NeuralNetworkDefinitionDict(
+        layers=LAYERS,
+        neurons={
+            16: [Neuron(0)],
+            13: [Neuron(1000 + i, inputs=[0], weights=[w]) for i, w in enumerate(weights)],
+            12: [Neuron(1000 + len(weights), inputs=[1000 + i for i in range(len(weights))])],
+        },
     )
 
     outputs = torch.tensor([OUTPUTS[i] for i in indices]).unsqueeze(-1)
@@ -78,18 +69,15 @@ INDICES_PARAMS = [
 ]
 
 
-@pytest.mark.parametrize(["indices", "settings"], list(itertools.product(INDICES_PARAMS, SETTINGS_PARAMS)))
-def test_weighted_atom_layer(indices: Sequence[int], settings: Settings):
+@pytest.mark.parametrize("indices", INDICES_PARAMS)
+def test_weighted_atom_layer(indices: Sequence[int]):
     inputs = {
-        12: atleast_3d_rev(torch.tensor([1.0])),
+        16: atleast_3d_rev(torch.tensor([1.0])),
     }
 
-    sample, expected = build_sample_from_input_indices(indices)
-    network = get_neurons_per_layer([sample])
+    network, expected = build_sample_from_input_indices(indices)
 
-    _, ordinals = compute_neuron_ordinals(LAYERS, network, settings)
-
-    layer = WeightedAtomLayer(sample.getInputs(), ordinals)
+    layer = WeightedAtomLayer(network[13])
 
     print(layer)
 
@@ -104,4 +92,4 @@ def test_weighted_atom_layer(indices: Sequence[int], settings: Settings):
 
 
 if __name__ == "__main__":
-    test_weighted_atom_layer(INDICES_PARAMS[0], SETTINGS_PARAMS[0])
+    test_weighted_atom_layer(INDICES_PARAMS[0])

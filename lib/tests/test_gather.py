@@ -1,4 +1,5 @@
 import itertools
+from typing import Sequence
 
 import pytest
 import torch
@@ -12,7 +13,7 @@ from lib.nn.gather import (
     TakeValue,
     build_optimal_multi_layer_gather,
 )
-from lib.nn.topological.layers import LayerOrdinal, TopologicalNetwork, compute_neuron_ordinals
+from lib.nn.sources.source import LayerOrdinal, NeuralNetworkDefinition
 from lib.nn.topological.settings import Settings
 from lib.tests.utils.network_mock import generate_example_network
 from lib.utils import atleast_3d_rev
@@ -20,15 +21,16 @@ from lib.utils import atleast_3d_rev
 
 def _do_the_test(
     gather_module: torch.nn.Module,
-    input_layer_ordinal_pairs: list[LayerOrdinal],
-    network: TopologicalNetwork,
+    network: NeuralNetworkDefinition,
+    inputs_ordinals: Sequence[LayerOrdinal],
     all_same: bool,
 ):
     # input: indices of the neurons (so that for each neuron, its index is in its position)
-    layer_values = {l: atleast_3d_rev(torch.tensor([n.getIndex() for n in neurons])) for l, neurons in network.items()}
+    layer_values = {ld.id: atleast_3d_rev(torch.tensor(list(neurons.ids))) for ld, neurons in network.items()}
 
     # expected output: list of the neuron indices that the module is supposed to gather
-    expected = torch.tensor([network[l][o].getIndex() for l, o in input_layer_ordinal_pairs])
+    ids_per_layer = {ld.id: list(network[ld].ordinals.ids()) for ld in network.layers}
+    expected = torch.tensor([ids_per_layer[l][o] for l, o in inputs_ordinals])
 
     # actual output:
     actual: torch.Tensor = torch.squeeze(gather_module(layer_values))
@@ -63,18 +65,15 @@ def test_gather_module(
     assume_facts_same: bool,
     execution_number: int,
 ):
-    settings = Settings(assume_facts_same=assume_facts_same)
+    network = generate_example_network(inputs_from_previous_layer_only=inputs_from_previous_layer_only)
+    for ld, neurons in itertools.islice(network.items(), 1, None):
+        inputs_ordinals = list(neurons.inputs.ordinals)
 
-    layers, network = generate_example_network(inputs_from_previous_layer_only=inputs_from_previous_layer_only)
-    _, ordinals = compute_neuron_ordinals(layers, network, settings=settings)
-    for l in layers[1:]:
-        input_layer_ordinal_pairs = [ordinals[inp.getIndex()] for n in network[l.index] for inp in n.getInputs()]
+        gather = build_optimal_multi_layer_gather(inputs_ordinals)
 
-        gather = build_optimal_multi_layer_gather(input_layer_ordinal_pairs)
-
-        print("Layer", l.index)
+        print("Layer", ld)
         print(gather)
-        _do_the_test(gather, input_layer_ordinal_pairs, network, all_same=(assume_facts_same and l == 1))
+        _do_the_test(gather, network, inputs_ordinals, all_same=(assume_facts_same and ld.type == "FactLayer"))
 
 
 def _get_underlying_gather_module(gather_module):
@@ -98,11 +97,11 @@ def test_slice_gather():
     slice_end = 100
     ordinals = list(range(slice_start, slice_end))
     total = 400
-    input_layer_ordinal_pairs = [LayerOrdinal(0, i) for i in ordinals]
+    inputs_ordinals = [LayerOrdinal(0, i) for i in ordinals]
     inputs = {0: torch.tensor(list(range(total)))}
     expected = torch.tensor(ordinals)
 
-    gather_module = build_optimal_multi_layer_gather(input_layer_ordinal_pairs)
+    gather_module = build_optimal_multi_layer_gather(inputs_ordinals)
     actual = gather_module(inputs)
 
     assert isinstance(_get_underlying_gather_module(gather_module), SliceValues)
@@ -126,10 +125,10 @@ def _unsqueeze_times(tensor: torch.Tensor, times: int) -> torch.Tensor:
 @pytest.mark.parametrize(["unsqueeze_times", "idx", "expected"], TAKE_PARAMS)
 def test_take(unsqueeze_times: int, idx: int, expected: torch.Tensor):
     total = 400
-    input_layer_ordinal_pairs = [LayerOrdinal(0, idx)]
+    inputs_ordinals = [LayerOrdinal(0, idx)]
     inputs = {0: _unsqueeze_times(torch.arange(0, total, dtype=torch.int), times=unsqueeze_times)}
 
-    gather_module = build_optimal_multi_layer_gather(input_layer_ordinal_pairs)
+    gather_module = build_optimal_multi_layer_gather(inputs_ordinals)
     actual = gather_module(inputs)
 
     assert isinstance(_get_underlying_gather_module(gather_module), TakeValue)
@@ -151,11 +150,11 @@ TAKE_EACH_NTH_PARAMS = [
 def test_take_each_nth(take_idx: int, range_len: int, range_repeats: int, ordinals_to_take: list[int], expected: float):
     input = torch.arange(0, range_len, dtype=torch.float).repeat(range_repeats)
 
-    input_layer_ordinal_pairs = [LayerOrdinal(0, o) for o in ordinals_to_take]
+    inputs_ordinals = [LayerOrdinal(0, o) for o in ordinals_to_take]
 
     inputs = {0: input}
 
-    gather_module = build_optimal_multi_layer_gather(input_layer_ordinal_pairs)
+    gather_module = build_optimal_multi_layer_gather(inputs_ordinals)
     actual = gather_module(inputs)
 
     print("Expected:", expected)
@@ -175,11 +174,11 @@ TAKE_EACH_NTH_NONDIV_PARAMS = [
 def test_take_each_nth_when_total_length_not_divisible_by_width(ordinals_to_take: list[int], expected: list[float]):
     input = torch.tensor([0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1], dtype=torch.float)
 
-    input_layer_ordinal_pairs = [LayerOrdinal(0, o) for o in ordinals_to_take]
+    inputs_ordinals = [LayerOrdinal(0, o) for o in ordinals_to_take]
 
     inputs = {0: input}
 
-    gather_module = build_optimal_multi_layer_gather(input_layer_ordinal_pairs)
+    gather_module = build_optimal_multi_layer_gather(inputs_ordinals)
     actual = gather_module(inputs)
     expected_t = torch.tensor(expected, dtype=torch.float)
 

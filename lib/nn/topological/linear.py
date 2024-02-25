@@ -1,5 +1,4 @@
 import warnings
-from itertools import product
 
 import torch
 
@@ -9,39 +8,33 @@ from lib.nn.gather import (
     build_optimal_multi_layer_gather,
     build_optimal_multi_layer_gather_and_reshape,
 )
-from lib.nn.topological.layers import Ordinals
-from lib.nn.weight import build_weights_from_java, get_weight_shape_single
+from lib.nn.sources.source import Neurons
+from lib.nn.weight import create_weights
 
 
 class Linear(torch.nn.Module):
     def __init__(
         self,
-        layer_neurons: list,
-        neuron_ordinals: Ordinals,
+        neurons: Neurons,
         period: int | None = None,
         optimize_gathers: bool = True,
     ) -> None:
         super().__init__()
 
-        self.neuron_ids = [n.getIndex() for n in layer_neurons]
+        self.neuron_ids = neurons.ids
 
         self.period = period
 
-        input_layer_ordinal_pairs = [
-            neuron_ordinals[int(inp.getIndex())] for n in layer_neurons for inp in n.getInputs()
-        ]
+        inputs_ordinals = list(neurons.inputs.ordinals)
 
         if period is None:
-            gather = build_optimal_multi_layer_gather(input_layer_ordinal_pairs)
+            gather = build_optimal_multi_layer_gather(inputs_ordinals)
         else:
-            gather = build_optimal_multi_layer_gather_and_reshape(input_layer_ordinal_pairs, dim=period)
+            gather = build_optimal_multi_layer_gather_and_reshape(inputs_ordinals, dim=period)
 
-        self.weight, weight_idx_map = build_weights_from_java(layer_neurons)
+        self.weight, weight_idx_map = create_weights(neurons.input_weights)
 
-        def _iter_all_weights():
-            return (w for n in layer_neurons for w in n.getWeights())
-
-        weight_idxs: list[int] = [weight_idx_map[str(w.index)] for w in _iter_all_weights()]
+        weight_idxs: list[int] = [weight_idx_map[str(w.id)] for w in neurons.input_weights]
 
         if period is None:
             gather_weights = build_optimal_gather(weight_idxs)

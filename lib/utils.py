@@ -1,5 +1,7 @@
+import functools
 import heapq
-from typing import Generic, Iterable, Sequence, TypeVar
+from collections.abc import Collection
+from typing import Callable, Generic, Iterable, Iterator, Sequence, TypeVar
 
 import numpy as np
 import torch
@@ -65,6 +67,15 @@ def _detect_possible_last_incomplete(inp: np.ndarray) -> tuple[np.ndarray, np.nd
         return inp, None
 
     return inp[:last_idx], inp[last_idx:]
+
+
+def cache(func):
+    @functools.wraps(func)
+    @functools.lru_cache(maxsize=None)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+
+    return wrapper
 
 
 _T = TypeVar("_T")
@@ -245,3 +256,58 @@ def detect_repeating_sequence_in_list(
             return inp_first[:k]
 
     return None
+
+
+def head_and_rest(it: Iterator[_T] | Iterable[_T]) -> tuple[_T, Iterator[_T]]:
+    if not isinstance(it, Iterator):
+        it = iter(it)
+
+    head = next(it)
+    return head, it
+
+
+class MapCollection(Collection[_T]):
+    def __init__(self, mapping: Callable[[_S], _T], orig: Collection[_S]) -> None:
+        super().__init__()
+        self._orig = orig
+        self._mapping = mapping
+
+    def __len__(self) -> int:
+        return len(self._orig)
+
+    def __iter__(self) -> Iterator[_T]:
+        return map(self._mapping, self._orig)
+
+    def __contains__(self, x: object) -> bool:
+        for y in self:
+            if y == x:
+                return True
+
+        return False
+
+
+class LambdaIterable(Iterable[_T]):
+    def __init__(self, func: Callable[[], Iterator[_T]]) -> None:
+        self._func = func
+
+    def __iter__(self) -> Iterator[_T]:
+        return self._func()
+
+
+def print_with_ellipsis(it: Iterator[str], after=5) -> str:
+    vals: list[str] = []
+
+    for i in range(after):
+        try:
+            val = next(it)
+            vals.append(str(val))
+        except StopIteration:
+            return ", ".join(vals)
+
+    try:
+        val = next(it)
+    except StopIteration:
+        return ", ".join(vals)
+
+    vals.append("...")
+    return ", ".join(vals)

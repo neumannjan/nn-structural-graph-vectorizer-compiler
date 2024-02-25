@@ -1,25 +1,19 @@
-import itertools
-
-import numpy as np
-import pytest
 import torch
-from lib.nn.topological.layers import LayerDefinition, compute_neuron_ordinals, get_neurons_per_layer
-from lib.nn.topological.settings import Settings
+from lib.nn.sources.dict_source import NeuralNetworkDefinitionDict, Neuron, WeightDefinitionImpl
+from lib.nn.sources.source import LayerDefinition
 from lib.nn.topological.weighted_rule_layer import WeightedRuleLayer
-from lib.tests.utils.network_mock import MockJavaNeuron, MockJavaWeight
-from lib.tests.utils.test_params import SETTINGS_PARAMS
 
 LAYERS = [
-    LayerDefinition("", 16),
-    LayerDefinition("", 13),
-    LayerDefinition("", 12),
+    LayerDefinition(16, "FactLayer"),
+    LayerDefinition(13, "WeightedRuleLayer"),
+    LayerDefinition(12, "AggregationLayer"),
 ]
 
-UNIT_WEIGHT = MockJavaWeight(0, np.array([1]), learnable=False)
+UNIT_WEIGHT = WeightDefinitionImpl(0, torch.tensor([1.0]), learnable=False)
 WEIGHTS = {
-    15: MockJavaWeight(
+    15: WeightDefinitionImpl(
         15,
-        np.array(
+        torch.tensor(
             [  #
                 [0.95, 0.2, 0.54],
                 [-0.81, -0.09, 0.23],
@@ -28,9 +22,9 @@ WEIGHTS = {
         ),
         learnable=True,
     ),
-    14: MockJavaWeight(
+    14: WeightDefinitionImpl(
         14,
-        np.array(
+        torch.tensor(
             [  #
                 [0.24, -0.96, -0.94],
                 [-0.25, -0.17, -0.94],
@@ -42,37 +36,25 @@ WEIGHTS = {
 }
 
 
-def build_sample(weights: list[MockJavaWeight], n_neurons: int):
+def build_sample(weights: list[WeightDefinitionImpl], n_neurons: int):
     n_weights = len(weights)
 
-    index_factory = iter(itertools.count())
-
-    def _n():
-        return next(index_factory)
-
-    return MockJavaNeuron(
-        _n(),
-        16,
-        [
-            MockJavaNeuron(
-                _n(),
-                13,
-                [  #
-                    MockJavaNeuron(_n(), 12) for _ in range(n_weights)
-                ],
-                weights,
-            )
-            for _ in range(n_neurons)
-        ],
+    return NeuralNetworkDefinitionDict(
+        layers=LAYERS,
+        neurons={
+            16: [Neuron(i) for i in range(n_weights * n_neurons)],
+            13: [
+                Neuron(n_weights * n_neurons + i, [i * n_weights + j for j in range(n_weights)], weights) for i in range(n_neurons)
+            ],
+            12: [Neuron(-1, [n_weights * n_neurons + i for i in range(n_neurons)])],
+        },
     )
 
 
-@pytest.mark.parametrize(["settings"], [[settings] for settings in SETTINGS_PARAMS])
-def test_weighted_rule_layer(settings: Settings):
-    sample = build_sample(weights=[UNIT_WEIGHT, WEIGHTS[14], WEIGHTS[15], UNIT_WEIGHT], n_neurons=5)
-    network = get_neurons_per_layer([sample])
+def test_weighted_rule_layer():
+    network = build_sample(weights=[UNIT_WEIGHT, WEIGHTS[14], WEIGHTS[15], UNIT_WEIGHT], n_neurons=5)
     inputs = {
-        12: torch.tensor(
+        16: torch.tensor(
             [
                 [-0.12, -0.62, -0.38],
                 [0.65, 0.11, 0.2],
@@ -97,12 +79,7 @@ def test_weighted_rule_layer(settings: Settings):
             ]
         ).unsqueeze(-1)
     }
-    _, ordinals = compute_neuron_ordinals(LAYERS, network, settings)
-    print(ordinals)
-    layer = WeightedRuleLayer(
-        layer_neurons=sample.getInputs(),
-        neuron_ordinals=ordinals,
-    )
+    layer = WeightedRuleLayer(neurons=network[13])
 
     print(layer)
 
@@ -118,5 +95,6 @@ def test_weighted_rule_layer(settings: Settings):
 
     assert ((expected - actual).abs() <= 0.01).all()
 
+
 if __name__ == "__main__":
-    test_weighted_rule_layer(SETTINGS_PARAMS[0])
+    test_weighted_rule_layer()

@@ -8,7 +8,6 @@ from lib.datasets.dataset import MyDataset
 from lib.datasets.mutagenesis import MyMutagenesis, MyMutagenesisMultip
 from lib.nn.topological.settings import Settings
 from lib.tests.utils.test_params import DEVICE_PARAMS, SETTINGS_PARAMS
-from lib.utils import value_to_tensor
 
 DATASET_PARAMS = [
     MyMutagenesis(),
@@ -44,13 +43,11 @@ def do_test_dataset(dataset: MyDataset, device: str, settings: Settings):
 
         results: dict[int, torch.Tensor] = runnable.forward_pass()
 
-        for layer in runnable.layers:
-            expected = torch.squeeze(
-                torch.stack([value_to_tensor(n.getRawState().getValue()) for n in runnable.network[layer.index]])
-            )
-            actual = torch.squeeze(results[layer.index]).detach().cpu()
+        for layer in runnable.network.layers:
+            expected = torch.squeeze(torch.stack(list(runnable.network[layer.id].get_values_torch())))
+            actual = torch.squeeze(results[layer.id]).detach().cpu()
             assert (torch.abs(expected - actual) < tolerance).all(), (
-                f"Values do not match at layer {layer.index} ({layer.type}). "
+                f"Values do not match at layer {layer.id} ({layer.type}). "
                 f"Max difference is {torch.max(torch.abs(expected - actual))}. "
                 f"Expected: {expected}\n"
                 f"Actual: {actual}"
@@ -80,4 +77,5 @@ def test_mutagenesis_multip(device: str, settings: Settings):
 if __name__ == "__main__":
     stts = SETTINGS_PARAMS[0]
     stts.optimize_linear_gathers = True
+    stts.group_learnable_weight_parameters = False
     test_mutagenesis("cpu", stts)

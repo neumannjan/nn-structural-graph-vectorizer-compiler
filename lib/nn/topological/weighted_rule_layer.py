@@ -1,29 +1,27 @@
 import torch
 
-from lib.nn.topological.layers import Ordinals
+from lib.nn.sources.source import Neurons
 from lib.nn.topological.linear import Linear
+from lib.utils import head_and_rest
 
 
 class WeightedRuleLayer(torch.nn.Module):
     def __init__(
         self,
-        layer_neurons: list,
-        neuron_ordinals: Ordinals,
+        neurons: Neurons,
         check_same_inputs_dim_assumption=True,
         optimize_linear_gathers=True,
     ) -> None:
         super().__init__()
 
-        neuron = layer_neurons[0]
-
-        inputs_dim = len(neuron.getInputs())
+        head_len, rest_lengths = head_and_rest(neurons.input_lengths)
 
         if check_same_inputs_dim_assumption:
-            for n in layer_neurons:
-                assert inputs_dim == len(n.getInputs())
+            for l in rest_lengths:
+                assert head_len == l
 
         self.linear = Linear(
-            layer_neurons, neuron_ordinals, period=inputs_dim, optimize_gathers=optimize_linear_gathers
+            neurons, period=head_len, optimize_gathers=optimize_linear_gathers
         )
 
     def forward(self, layer_values: dict[int, torch.Tensor]):

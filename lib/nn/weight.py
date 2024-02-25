@@ -3,7 +3,7 @@ from typing import Iterable, Protocol, Sequence
 
 import torch
 
-from lib.utils import value_to_tensor
+from lib.nn.sources.source import WeightDefinition
 
 
 class WeightLike(Protocol):
@@ -342,7 +342,9 @@ def stack_weights_nonlearnable(
 
 
 def stack_weights_learnable(
-    weights: Sequence[Weight | None], shape_hull: torch.Size | tuple[int, ...] | list[int] | None = None
+    weights: Sequence[Weight | None],
+    shape_hull: torch.Size | tuple[int, ...] | list[int] | None = None,
+    group_learnable_weight_parameters=True,
 ) -> Weights | StackWeightModules | None:
     ws = [w for w in weights if w is not None]
     assert all((w.learnable for w in ws))
@@ -359,12 +361,17 @@ def stack_weights_learnable(
 
     shape_hull_sum = sum(shape_hull)
 
-    # split into (consecutive!) chunks by whether shape sum matches shape_hull_sum
-    ws_grouped = itertools.groupby(
-        ws, key=lambda w: sum(_get_single_shape(w.shape, shape_single=False)) == shape_hull_sum
-    )
-
     ws_final: list[Weights | StackWeightModules] = []
+
+    def _get_weight_shape_sum_matches_hull(w: Weights) -> bool:
+        return sum(_get_single_shape(w.shape, shape_single=False)) == shape_hull_sum
+
+    if group_learnable_weight_parameters:
+        # split into (consecutive!) chunks by whether shape sum matches shape_hull_sum
+        ws_grouped = itertools.groupby(ws, key=_get_weight_shape_sum_matches_hull)
+    else:
+        # split trivially into individual weights
+        ws_grouped = [(_get_weight_shape_sum_matches_hull(w), [w]) for w in ws]
 
     for group_shape_sum_matches_hull, group in ws_grouped:
         if group_shape_sum_matches_hull:
@@ -391,29 +398,28 @@ def stack_weights_learnable(
     return w_final
 
 
-def _build_weights(weights: Iterable, out_map: dict[str, int], weights_out: list[Weight]):
+def _create_weights(weights: Iterable[WeightDefinition], out_map: dict[str, int], weights_out: list[Weight]):
     for weight in weights:
-        w_idx = str(weight.index)
+        w_idx = str(weight.id)
 
         if w_idx not in out_map:
             out_map[w_idx] = len(out_map)
 
-            w_tensor = value_to_tensor(weight.value)
-            weight = create_weight(w_tensor, is_learnable=weight.isLearnable())
+            w_tensor = weight.get_value_torch()
+            weight = create_weight(w_tensor, is_learnable=weight.learnable)
             weights_out.append(weight)
 
 
-def build_weights_from_java(layer_neurons: list):
-    def _iter_all_weights():
-        return (w for n in layer_neurons for w in n.getWeights())
-
+def create_weights(weight_definitions: Iterable[WeightDefinition], group_learnable_weight_parameters=True):
     idx_map: dict[str, int] = {}
 
     weights_learnable: list[Weight] = []
     weights_nonlearnable: list[Weight] = []
 
-    _build_weights(filter(lambda w: w.isLearnable(), _iter_all_weights()), idx_map, weights_learnable)
-    _build_weights(filter(lambda w: not w.isLearnable(), _iter_all_weights()), idx_map, weights_nonlearnable)
+    weight_definitions = list(weight_definitions)
+
+    _create_weights(filter(lambda w: w.learnable, weight_definitions), idx_map, weights_learnable)
+    _create_weights(filter(lambda w: not w.learnable, weight_definitions), idx_map, weights_nonlearnable)
 
     shapes_all = [_get_single_shape(w.shape, shape_single=not w.is_multiple) for w in weights_learnable]
 
@@ -421,7 +427,9 @@ def build_weights_from_java(layer_neurons: list):
 
     shape_hull = torch.broadcast_shapes(*shapes_all)
 
-    w_learnable = stack_weights_learnable(weights_learnable, shape_hull)
+    w_learnable = stack_weights_learnable(
+        weights_learnable, shape_hull, group_learnable_weight_parameters=group_learnable_weight_parameters
+    )
     w_nonlearnable = stack_weights_nonlearnable(weights_nonlearnable, shape_hull)
 
     if w_learnable is not None and w_nonlearnable is not None:

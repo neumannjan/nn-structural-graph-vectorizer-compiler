@@ -4,7 +4,7 @@ from typing import Protocol, Sequence, runtime_checkable
 import numpy as np
 import torch
 
-from lib.nn.topological.layers import LayerOrdinal
+from lib.nn.sources.source import LayerOrdinal
 from lib.nn.utils.utils import Repeat, ViewWithPeriod
 from lib.utils import detect_repeating_sequence_in_list
 
@@ -363,22 +363,22 @@ class MultiLayerGather(torch.nn.Module, LayerGatherModuleLike):
         return x
 
 
-def build_optimal_multi_layer_gather(input_layer_ordinal_pairs: list[LayerOrdinal]):
-    layer0, _ = input_layer_ordinal_pairs[0]
-    is_single_layer = all((layer0 == l for l, _ in input_layer_ordinal_pairs[1:]))
+def build_optimal_multi_layer_gather(inputs_ordinals: list[LayerOrdinal]):
+    layer0, _ = inputs_ordinals[0]
+    is_single_layer = all((layer0 == l for l, _ in inputs_ordinals[1:]))
 
     if is_single_layer:
-        return build_optimal_single_layer_gather(layer0, [o for _, o in input_layer_ordinal_pairs])
+        return build_optimal_single_layer_gather(layer0, [o for _, o in inputs_ordinals])
 
     per_layer_ordinals_set: dict[int, set[int]] = defaultdict(lambda: set())
 
-    for l, o in input_layer_ordinal_pairs:
+    for l, o in inputs_ordinals:
         per_layer_ordinals_set[l].add(o)
 
     per_layer_ordinals = {l: sorted(o) for l, o in per_layer_ordinals_set.items()}
 
     multi_layer_set_gather = LayersGatherConcat(per_layer_ordinals)
-    final_ordinals = [multi_layer_set_gather.idx_map[p] for p in input_layer_ordinal_pairs]
+    final_ordinals = [multi_layer_set_gather.idx_map[p] for p in inputs_ordinals]
     final_gather = build_optimal_gather(final_ordinals)
 
     return MultiLayerGather(multi_layer_set_gather, final_gather)
@@ -456,7 +456,7 @@ def build_optimal_gather_and_reshape(ordinals: list[int], dim: int):
     return GatherAndReshape(gather, reshape)
 
 
-def build_optimal_multi_layer_gather_and_reshape(input_layer_ordinal_pairs: list[LayerOrdinal], dim: int):
-    gather = build_optimal_multi_layer_gather(input_layer_ordinal_pairs)
+def build_optimal_multi_layer_gather_and_reshape(inputs_ordinals: list[LayerOrdinal], dim: int):
+    gather = build_optimal_multi_layer_gather(inputs_ordinals)
     reshape = ViewWithPeriod(dim)
     return LayerGatherAndReshape(gather, reshape)
