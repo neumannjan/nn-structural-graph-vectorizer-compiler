@@ -77,5 +77,5 @@ def test_mutagenesis_multip(device: str, settings: Settings):
 if __name__ == "__main__":
     stts = SETTINGS_PARAMS[0]
     stts.optimize_linear_gathers = True
-    stts.group_learnable_weight_parameters = False
+    stts.group_learnable_weight_parameters = True
     test_mutagenesis("cpu", stts)

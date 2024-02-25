@@ -32,6 +32,30 @@ class GatherModuleLike(GatherLike, Protocol):
         ...
 
 
+class NoopGather(torch.nn.Module, GatherModuleLike):
+    def __init__(self, n_items: int) -> None:
+        super().__init__()
+        self._n_items = n_items
+
+    @property
+    def total_items(self) -> int:
+        return self._n_items
+
+    @property
+    def optimal_period(self) -> int:
+        return self._n_items
+
+    @property
+    def is_optimal(self) -> bool:
+        return True
+
+    def get_optimal(self) -> "NoopGather":
+        return self
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x
+
+
 class TakeValue(torch.nn.Module, GatherModuleLike):
     def __init__(self, ordinal: int) -> None:
         super().__init__()
@@ -45,7 +69,7 @@ class TakeValue(torch.nn.Module, GatherModuleLike):
         return 1
 
     @property
-    def optimal_period(self) -> int | None:
+    def optimal_period(self) -> int:
         return self.total_items
 
     @property
@@ -73,7 +97,7 @@ class SliceValues(torch.nn.Module, GatherModuleLike):
         return self.end - self.start
 
     @property
-    def optimal_period(self) -> int | None:
+    def optimal_period(self) -> int:
         return self.total_items
 
     @property
@@ -103,7 +127,7 @@ class TakeEachNth(torch.nn.Module, GatherModuleLike):
         return -(-len // self.step)
 
     @property
-    def optimal_period(self) -> int | None:
+    def optimal_period(self) -> int:
         return self.total_items
 
     @property
@@ -130,7 +154,7 @@ class GenericGather(torch.nn.Module, GatherModuleLike):
         return len(self.ordinals)
 
     @property
-    def optimal_period(self) -> int | None:
+    def optimal_period(self) -> int:
         return self.total_items
 
     @property
@@ -156,7 +180,7 @@ class GatherAndRepeatNonOptimal(torch.nn.Module, GatherModuleLike):
         return self.repeat.total_length
 
     @property
-    def optimal_period(self) -> int | None:
+    def optimal_period(self) -> int:
         return self.gather.optimal_period
 
     @property
@@ -175,7 +199,7 @@ class GatherAndRepeatNonOptimal(torch.nn.Module, GatherModuleLike):
 def build_optimal_gather(
     ordinals: Sequence[int],
     allow_subseq=True,
-):
+) -> TakeValue | SliceValues | TakeEachNth | GenericGather | GatherAndRepeatNonOptimal:
     all_inputs_the_same = all((ordinals[0] == o for o in ordinals[1:]))
 
     if all_inputs_the_same:
@@ -450,13 +474,13 @@ class LayerGatherAndReshape(torch.nn.Module, LayerGatherModuleLike):
         return x
 
 
-def build_optimal_gather_and_reshape(ordinals: list[int], dim: int):
+def build_optimal_gather_and_reshape(ordinals: list[int], period: int):
     gather = build_optimal_gather(ordinals)
-    reshape = ViewWithPeriod(dim)
+    reshape = ViewWithPeriod(period)
     return GatherAndReshape(gather, reshape)
 
 
-def build_optimal_multi_layer_gather_and_reshape(inputs_ordinals: list[LayerOrdinal], dim: int):
+def build_optimal_multi_layer_gather_and_reshape(inputs_ordinals: list[LayerOrdinal], period: int):
     gather = build_optimal_multi_layer_gather(inputs_ordinals)
-    reshape = ViewWithPeriod(dim)
+    reshape = ViewWithPeriod(period)
     return LayerGatherAndReshape(gather, reshape)

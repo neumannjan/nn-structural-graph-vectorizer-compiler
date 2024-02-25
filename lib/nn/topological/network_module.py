@@ -2,7 +2,7 @@ import torch
 from tqdm.auto import tqdm
 
 from lib.datasets import MyMutagenesis
-from lib.nn.sources.source import LayerType, NeuralNetworkDefinition
+from lib.nn.sources.source import NeuralNetworkDefinition
 from lib.nn.topological.aggregation_layer import AggregationLayer
 from lib.nn.topological.fact_layer import FactLayer
 from lib.nn.topological.settings import Settings
@@ -24,13 +24,13 @@ class NetworkModule(torch.nn.Module):
 
         for l, neurons in tqdm(source.items(), desc="Layers"):
             if l.type == "FactLayer":
-                module = FactLayer(neurons, assume_facts_same=settings.assume_facts_same)
+                module = FactLayer(neurons, settings)
             elif l.type == "WeightedAtomLayer":
-                module = WeightedAtomLayer(neurons, optimize_linear_gathers=settings.optimize_linear_gathers)
+                module = WeightedAtomLayer(neurons, settings)
             elif l.type == "WeightedRuleLayer":
-                module = WeightedRuleLayer(neurons, optimize_linear_gathers=settings.optimize_linear_gathers)
+                module = WeightedRuleLayer(neurons, settings)
             elif l.type == "AggregationLayer":
-                module = AggregationLayer(neurons)
+                module = AggregationLayer(neurons, settings)
             else:
                 raise NotImplementedError(l.type)
 

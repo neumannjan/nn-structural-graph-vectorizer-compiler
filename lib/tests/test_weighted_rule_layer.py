@@ -1,7 +1,10 @@
+import pytest
 import torch
 from lib.nn.sources.dict_source import NeuralNetworkDefinitionDict, Neuron, WeightDefinitionImpl
 from lib.nn.sources.source import LayerDefinition
+from lib.nn.topological.settings import Settings
 from lib.nn.topological.weighted_rule_layer import WeightedRuleLayer
+from lib.tests.utils.test_params import SETTINGS_PARAMS
 
 LAYERS = [
     LayerDefinition(16, "FactLayer"),
@@ -44,14 +47,16 @@ def build_sample(weights: list[WeightDefinitionImpl], n_neurons: int):
         neurons={
             16: [Neuron(i) for i in range(n_weights * n_neurons)],
             13: [
-                Neuron(n_weights * n_neurons + i, [i * n_weights + j for j in range(n_weights)], weights) for i in range(n_neurons)
+                Neuron(n_weights * n_neurons + i, [i * n_weights + j for j in range(n_weights)], weights)
+                for i in range(n_neurons)
             ],
             12: [Neuron(-1, [n_weights * n_neurons + i for i in range(n_neurons)])],
         },
     )
 
 
-def test_weighted_rule_layer():
+@pytest.mark.parametrize("settings", SETTINGS_PARAMS)
+def test_weighted_rule_layer(settings: Settings):
     network = build_sample(weights=[UNIT_WEIGHT, WEIGHTS[14], WEIGHTS[15], UNIT_WEIGHT], n_neurons=5)
     inputs = {
         16: torch.tensor(
@@ -79,7 +84,7 @@ def test_weighted_rule_layer():
             ]
         ).unsqueeze(-1)
     }
-    layer = WeightedRuleLayer(neurons=network[13])
+    layer = WeightedRuleLayer(neurons=network[13], settings=settings)
 
     print(layer)
 
@@ -97,4 +102,4 @@ def test_weighted_rule_layer():
 
 
 if __name__ == "__main__":
-    test_weighted_rule_layer()
+    test_weighted_rule_layer(SETTINGS_PARAMS[0])

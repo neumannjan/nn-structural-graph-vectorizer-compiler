@@ -1,3 +1,4 @@
+import itertools
 import math
 from typing import Sequence
 
@@ -6,7 +7,9 @@ import pytest
 import torch
 from lib.nn.sources.dict_source import NeuralNetworkDefinitionDict, Neuron, WeightDefinitionImpl
 from lib.nn.sources.source import LayerDefinition
+from lib.nn.topological.settings import Settings
 from lib.nn.topological.weighted_atom_layer import WeightedAtomLayer
+from lib.tests.utils.test_params import SETTINGS_PARAMS
 from lib.utils import atleast_3d_rev
 
 LAYERS = [
@@ -69,15 +72,15 @@ INDICES_PARAMS = [
 ]
 
 
-@pytest.mark.parametrize("indices", INDICES_PARAMS)
-def test_weighted_atom_layer(indices: Sequence[int]):
+@pytest.mark.parametrize(["indices", "settings"], list(itertools.product(INDICES_PARAMS, SETTINGS_PARAMS)))
+def test_weighted_atom_layer(indices: Sequence[int], settings: Settings):
     inputs = {
         16: atleast_3d_rev(torch.tensor([1.0])),
     }
 
     network, expected = build_sample_from_input_indices(indices)
 
-    layer = WeightedAtomLayer(network[13])
+    layer = WeightedAtomLayer(network[13], settings=settings)
 
     print(layer)
 
@@ -92,4 +95,4 @@ def test_weighted_atom_layer(indices: Sequence[int]):
 
 
 if __name__ == "__main__":
-    test_weighted_atom_layer(INDICES_PARAMS[0])
+    test_weighted_atom_layer(INDICES_PARAMS[0], SETTINGS_PARAMS[0])

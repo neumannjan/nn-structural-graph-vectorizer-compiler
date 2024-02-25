@@ -1,9 +1,19 @@
 import itertools
-from typing import Iterable, Protocol, Sequence
+from typing import Collection, Iterable, Protocol, Sequence
 
+import numpy as np
 import torch
 
+from lib.nn.gather import (
+    GatherAndRepeatNonOptimal,
+    GatherAndReshape,
+    NoopGather,
+    build_optimal_gather,
+    build_optimal_gather_and_reshape,
+)
 from lib.nn.sources.source import WeightDefinition
+from lib.nn.utils.utils import ViewWithPeriod
+from lib.utils import detect_repeating_sequence_in_list
 
 
 class WeightLike(Protocol):
@@ -96,7 +106,7 @@ class Weight(torch.nn.Module, WeightLike, WeightModuleLike):
 
         return self.weight.view(shape)
 
-    def expand_as_weight(self, shape: torch.Size | tuple[int, ...] | list[int], shape_single: bool) -> "WeightLike":
+    def expand_as_weight(self, shape: torch.Size | tuple[int, ...] | list[int], shape_single: bool) -> "Weight":
         tensor = self.expand_to(shape, shape_single)
         return Weight(torch.nn.Parameter(tensor, requires_grad=self.learnable), learnable=self.learnable)
 
@@ -143,7 +153,7 @@ class UnitWeight(Weight, WeightLike, WeightModuleLike):
 
         return torch.ones(shape)
 
-    def expand_as_weight(self, shape: torch.Size | tuple[int, ...] | list[int], shape_single: bool) -> "WeightLike":
+    def expand_as_weight(self, shape: torch.Size | tuple[int, ...] | list[int], shape_single: bool) -> "UnitWeight":
         tensor = self.expand_to(shape, shape_single)
         return UnitWeight(tensor)
 
@@ -183,7 +193,7 @@ class UnitWeights(Weight, WeightLike, WeightModuleLike):
         out = out.view(out_shape)
         return out
 
-    def expand_as_weight(self, shape: torch.Size | tuple[int, ...] | list[int], shape_single: bool) -> "WeightLike":
+    def expand_as_weight(self, shape: torch.Size | tuple[int, ...] | list[int], shape_single: bool) -> "UnitWeights":
         tensor = self.expand_to(shape, shape_single)
         return UnitWeights(tensor)
 
@@ -317,7 +327,7 @@ class StackWeightModules(torch.nn.Module, WeightModuleLike):
         return torch.concatenate(modules)
 
 
-def stack_weights_nonlearnable(
+def _stack_weights_nonlearnable(
     weights: Sequence[Weight | None], shape_hull: torch.Size | tuple[int, ...] | list[int] | None = None
 ) -> Weights | None:
     ws = [w for w in weights if w is not None]
@@ -341,13 +351,12 @@ def stack_weights_nonlearnable(
     return w
 
 
-def stack_weights_learnable(
+def _stack_weights_by_sum_match(
     weights: Sequence[Weight | None],
     shape_hull: torch.Size | tuple[int, ...] | list[int] | None = None,
     group_learnable_weight_parameters=True,
 ) -> Weights | StackWeightModules | None:
     ws = [w for w in weights if w is not None]
-    assert all((w.learnable for w in ws))
 
     if len(ws) == 0:
         return None
@@ -363,17 +372,22 @@ def stack_weights_learnable(
 
     ws_final: list[Weights | StackWeightModules] = []
 
-    def _get_weight_shape_sum_matches_hull(w: Weights) -> bool:
-        return sum(_get_single_shape(w.shape, shape_single=False)) == shape_hull_sum
+    id_provider = iter(itertools.count())
 
-    if group_learnable_weight_parameters:
-        # split into (consecutive!) chunks by whether shape sum matches shape_hull_sum
-        ws_grouped = itertools.groupby(ws, key=_get_weight_shape_sum_matches_hull)
-    else:
-        # split trivially into individual weights
-        ws_grouped = [(_get_weight_shape_sum_matches_hull(w), [w]) for w in ws]
+    def _get_group(w: Weights):
+        weight_shape_sum_matches_hull = sum(_get_single_shape(w.shape, shape_single=False)) == shape_hull_sum
+        learnable = w.learnable
 
-    for group_shape_sum_matches_hull, group in ws_grouped:
+        if group_learnable_weight_parameters or not learnable:
+            id = -1
+        else:
+            id = next(id_provider)
+
+        return weight_shape_sum_matches_hull, learnable, id
+
+    ws_grouped = itertools.groupby(ws, key=_get_group)
+
+    for (group_shape_sum_matches_hull, learnable, _), group in ws_grouped:
         if group_shape_sum_matches_hull:
             ws_this = [
                 w.expand_as_weight(shape_hull, shape_single=True) if w.shape[1:] != shape_hull else w for w in group
@@ -383,7 +397,7 @@ def stack_weights_learnable(
                 w_this = ws_this[0]
             else:
                 w_this = torch.concatenate([w.as_parameter() for w in ws_this])
-                w_this = Weights(torch.nn.Parameter(w_this, requires_grad=True), learnable=True)
+                w_this = Weights(torch.nn.Parameter(w_this, requires_grad=learnable), learnable=learnable)
         else:
             ws_this = [ExpandWeight(w, shape_hull, shape_single=True) for w in group]
             w_this = StackWeightModules(ws_this)
@@ -398,9 +412,9 @@ def stack_weights_learnable(
     return w_final
 
 
-def _create_weights(weights: Iterable[WeightDefinition], out_map: dict[str, int], weights_out: list[Weight]):
+def _create_weights_set(weights: Iterable[WeightDefinition], out_map: dict[int, int], weights_out: list[Weight]):
     for weight in weights:
-        w_idx = str(weight.id)
+        w_idx = weight.id
 
         if w_idx not in out_map:
             out_map[w_idx] = len(out_map)
@@ -410,16 +424,16 @@ def _create_weights(weights: Iterable[WeightDefinition], out_map: dict[str, int]
             weights_out.append(weight)
 
 
-def create_weights(weight_definitions: Iterable[WeightDefinition], group_learnable_weight_parameters=True):
-    idx_map: dict[str, int] = {}
+def create_weights_using_packing_strategy(
+    weight_definitions: Collection[WeightDefinition], group_learnable_weight_parameters=True
+):
+    idx_map: dict[int, int] = {}
 
     weights_learnable: list[Weight] = []
     weights_nonlearnable: list[Weight] = []
 
-    weight_definitions = list(weight_definitions)
-
-    _create_weights(filter(lambda w: w.learnable, weight_definitions), idx_map, weights_learnable)
-    _create_weights(filter(lambda w: not w.learnable, weight_definitions), idx_map, weights_nonlearnable)
+    _create_weights_set(filter(lambda w: w.learnable, weight_definitions), idx_map, weights_learnable)
+    _create_weights_set(filter(lambda w: not w.learnable, weight_definitions), idx_map, weights_nonlearnable)
 
     shapes_all = [_get_single_shape(w.shape, shape_single=not w.is_multiple) for w in weights_learnable]
 
@@ -427,10 +441,10 @@ def create_weights(weight_definitions: Iterable[WeightDefinition], group_learnab
 
     shape_hull = torch.broadcast_shapes(*shapes_all)
 
-    w_learnable = stack_weights_learnable(
+    w_learnable = _stack_weights_by_sum_match(
         weights_learnable, shape_hull, group_learnable_weight_parameters=group_learnable_weight_parameters
     )
-    w_nonlearnable = stack_weights_nonlearnable(weights_nonlearnable, shape_hull)
+    w_nonlearnable = _stack_weights_nonlearnable(weights_nonlearnable, shape_hull)
 
     if w_learnable is not None and w_nonlearnable is not None:
         out = StackWeightModules([w_learnable, w_nonlearnable])
@@ -442,3 +456,85 @@ def create_weights(weight_definitions: Iterable[WeightDefinition], group_learnab
         raise ValueError("There are no weights!")
 
     return out, idx_map
+
+
+def _check_is_each_learnable_weight_used_only_once(
+    weight_definitions: Collection[WeightDefinition], period: int | None
+) -> tuple[bool, Collection[WeightDefinition]]:
+    weight_definitions_dict = {wd.id: wd for wd in weight_definitions}
+
+    ids_order = np.array([wd.id for wd in weight_definitions])
+
+    weight_definitions_modified = weight_definitions
+
+    if period is not None:
+        # TODO: make a `detect_repeating_K_sequence_in_list`
+        subseq = detect_repeating_sequence_in_list(ids_order, allow_last_incomplete=False)
+        if subseq is not None and len(subseq) == period:
+            ids_order = subseq
+            weight_definitions_modified = [weight_definitions_dict[id] for id in subseq]
+
+    id_counts = dict(np.stack(np.unique(ids_order, return_counts=True), axis=0).T.tolist())
+
+    out = all((v == 1 for wd_id, v in id_counts.items() if weight_definitions_dict[wd_id].learnable))
+
+    if out:
+        return out, weight_definitions_modified
+    else:
+        return out, weight_definitions
+
+
+def create_weights_and_gather(
+    weight_definitions: Collection[WeightDefinition],
+    period: int | None = None,
+    group_learnable_weight_parameters=True,
+):
+    n_orig_weight_definitions = len(weight_definitions)
+    each_learnable_used_only_once, weight_definitions = _check_is_each_learnable_weight_used_only_once(
+        weight_definitions, period=period
+    )
+
+    if not each_learnable_used_only_once:
+        # must default to creating the gather and the weight independently
+
+        weight, idx_map = create_weights_using_packing_strategy(
+            weight_definitions, group_learnable_weight_parameters=group_learnable_weight_parameters
+        )
+
+        weight_idxs: list[int] = [idx_map[wd.id] for wd in weight_definitions]
+
+        if period is None:
+            gather = build_optimal_gather(weight_idxs)
+        else:
+            gather = build_optimal_gather_and_reshape(weight_idxs, period=period)
+
+        return weight, gather
+
+    # can create the weights already in order (such that no gather operation is needed)
+    # TODO: write a `detect_repeating_K_sequence_in_list` and make sure that the gather gets the hint
+    weights: list[Weight] = [
+        create_weight(wd.get_value_torch(), is_learnable=wd.learnable) for wd in weight_definitions
+    ]
+
+    shapes_all = [_get_single_shape(w.shape, shape_single=not w.is_multiple) for w in weights]
+    shape_hull = torch.broadcast_shapes(*shapes_all)
+
+    # expand all nonlearnable weights
+    weights = [w if w.learnable else w.expand_as_weight(shape_hull, shape_single=True) for w in weights]
+    weight = _stack_weights_by_sum_match(
+        weights, shape_hull=shape_hull, group_learnable_weight_parameters=group_learnable_weight_parameters
+    )
+    assert weight is not None
+
+    gather = NoopGather(n_items=len(weight_definitions))
+
+    if n_orig_weight_definitions > len(weight_definitions):
+        gather = GatherAndRepeatNonOptimal(
+            gather,
+            repeats=-(-n_orig_weight_definitions // len(weight_definitions)),
+            total_length=n_orig_weight_definitions,
+        )
+
+    if period is not None:
+        gather = GatherAndReshape(gather, ViewWithPeriod(period))
+    return weight, gather

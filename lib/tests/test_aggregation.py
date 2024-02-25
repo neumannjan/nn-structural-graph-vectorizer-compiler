@@ -1,8 +1,11 @@
+import pytest
 import torch
 from lib.nn.sources.dict_source import NeuralNetworkDefinitionDict
 from lib.nn.sources.source import LayerDefinition
 from lib.nn.topological.aggregation_layer import AggregationLayer
+from lib.nn.topological.settings import Settings
 from lib.tests.utils.network_mock import Neuron
+from lib.tests.utils.test_params import SETTINGS_PARAMS
 
 LAYERS = [
     LayerDefinition(16, "FactLayer"),
@@ -34,12 +37,14 @@ SAMPLE2 = {
 }
 
 
-def test_same_no_of_inputs():
+@pytest.mark.parametrize("settings", SETTINGS_PARAMS)
+def test_same_no_of_inputs(settings: Settings):
     inputs = {16: torch.tensor([2, 2, 2, 2, 3, 3, 3, 3, 5, 5, 5, 5])}
     network = NeuralNetworkDefinitionDict(layers=LAYERS, neurons=SAMPLE1)
     layer = AggregationLayer(
         neurons=network[13],
         aggregation_type="sum",
+        settings=settings,
     )
     expected = torch.tensor([8, 12, 20])
 
@@ -48,12 +53,14 @@ def test_same_no_of_inputs():
     assert (expected == actual).all()
 
 
-def test_variable_no_of_inputs():
+@pytest.mark.parametrize("settings", SETTINGS_PARAMS)
+def test_variable_no_of_inputs(settings: Settings):
     inputs = {16: torch.tensor([2, 2, 2, 2, 3, 3, 3, 5, 5, 5, 7, 7, 7, 7, 11, 11, 13, 13, 13, 13])}
     network = NeuralNetworkDefinitionDict(layers=LAYERS, neurons=SAMPLE2)
     layer = AggregationLayer(
         neurons=network[13],
         aggregation_type="sum",
+        settings=settings,
     )
     expected = torch.tensor([8, 9, 15, 28, 22, 52])
 
@@ -63,4 +70,4 @@ def test_variable_no_of_inputs():
 
 
 if __name__ == "__main__":
-    test_variable_no_of_inputs()
+    test_variable_no_of_inputs(SETTINGS_PARAMS[0])
