@@ -113,4 +113,4 @@ if __name__ == "__main__":
     stts = SETTINGS_PARAMS[0]
     stts.optimize_linear_gathers = True
     stts.group_learnable_weight_parameters = True
-    model = test(MyMutagenesis("gcnconv", "original"), "cpu", stts)
+    model = test(MyMutagenesis("simple", "original"), "cpu", stts)

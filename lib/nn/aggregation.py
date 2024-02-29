@@ -3,7 +3,7 @@ from typing import List, Literal, Protocol
 import torch
 from torch_scatter import scatter_add, scatter_mean
 
-from lib.nn.utils.utils import ViewWithPeriod
+from lib.nn.gather import ViewWithPeriod
 
 AggregationType = Literal["mean", "sum"]
 
@@ -62,10 +62,10 @@ class ReshapeAggregateModuleLike(ReshapeAggregateLike, Protocol):
         ...
 
 
-class ReshapeAndAggregate(torch.nn.Module, ReshapeAggregateModuleLike):
-    def __init__(self, period: int, agg_type: AggregationType, dim: int = 1) -> None:
+class ViewAndAggregate(torch.nn.Module, ReshapeAggregateModuleLike):
+    def __init__(self, input_length: int, period: int, agg_type: AggregationType, dim: int = 1) -> None:
         super().__init__()
-        self.reshape = ViewWithPeriod(period=period)
+        self.reshape = ViewWithPeriod(input_length=input_length, period=period)
         self.aggregate = _build_simple_aggregation(agg_type, dim=dim)
 
     @property
@@ -130,6 +130,7 @@ def build_optimal_reshape_aggregate(agg_type: AggregationType, counts: List[int]
         counts = torch.tensor(counts, dtype=torch.int32)
 
     if (counts[1:] == counts[0]).all():
-        return ReshapeAndAggregate(period=int(counts[0].item()), agg_type=agg_type, dim=1)
+        period = int(counts[0].item())
+        return ViewAndAggregate(input_length=period * counts.shape[0], period=period, agg_type=agg_type, dim=1)
 
     return ScatterReduceAggregation(agg_type, counts=counts)

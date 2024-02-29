@@ -4,8 +4,8 @@ from typing import Sequence
 import pytest
 import torch
 from lib.nn.gather import (
-    GatherAndRepeatNonOptimal,
-    GatherAndReshape,
+    GatherAndRepeat,
+    GatherAndView,
     MultiLayerGather,
     SingleLayerGather,
     SliceValues,
@@ -14,7 +14,6 @@ from lib.nn.gather import (
     build_optimal_multi_layer_gather,
 )
 from lib.nn.sources.source import LayerOrdinal, NeuralNetworkDefinition
-from lib.nn.topological.settings import Settings
 from lib.tests.utils.network_mock import generate_example_network
 from lib.utils import atleast_3d_rev
 
@@ -78,13 +77,13 @@ def test_gather_module(
 
 def _get_underlying_gather_module(gather_module):
     while True:
-        if isinstance(gather_module, GatherAndRepeatNonOptimal):
+        if isinstance(gather_module, GatherAndRepeat):
             gather_module = gather_module.gather
         elif isinstance(gather_module, SingleLayerGather):
             gather_module = gather_module.delegate
         elif isinstance(gather_module, MultiLayerGather):
             gather_module = gather_module.final_gather
-        elif isinstance(gather_module, GatherAndReshape):
+        elif isinstance(gather_module, GatherAndView):
             gather_module = gather_module.gather
         else:
             break
