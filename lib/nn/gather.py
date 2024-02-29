@@ -216,7 +216,7 @@ def build_optimal_gather(
 
     if allow_subseq:
         subseq = detect_repeating_sequence_in_list(ordinals, allow_last_incomplete=True)
-        if subseq is not None:
+        if subseq is not None and len(subseq) <= len(ordinals) // 2:
             subseq_gather = build_optimal_gather(subseq.tolist(), allow_subseq=False)
             repeats = -(-len(ordinals) // subseq_gather.optimal_period)
             total_length = len(ordinals)
