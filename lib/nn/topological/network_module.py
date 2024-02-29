@@ -16,19 +16,19 @@ d = MyMutagenesis()
 class NetworkModule(torch.nn.Module):
     def __init__(
         self,
-        source: NeuralNetworkDefinition,
+        network: NeuralNetworkDefinition,
         settings: Settings,
     ) -> None:
         super().__init__()
         model = torch.nn.Sequential()
 
-        for l, neurons in tqdm(source.items(), desc="Layers"):
+        for l, neurons in tqdm(network.items(), desc="Layers"):
             if l.type == "FactLayer":
                 module = FactLayer(neurons, settings)
             elif l.type == "WeightedAtomLayer":
-                module = WeightedAtomLayer(neurons, settings)
+                module = WeightedAtomLayer(network, neurons, settings)
             elif l.type == "WeightedRuleLayer":
-                module = WeightedRuleLayer(neurons, settings)
+                module = WeightedRuleLayer(network, neurons, settings)
             elif l.type == "AggregationLayer":
                 module = AggregationLayer(neurons, settings)
             else:

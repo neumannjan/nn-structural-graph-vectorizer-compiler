@@ -1,7 +1,7 @@
 import torch
 
-from lib.nn.sources.source import Neurons
-from lib.nn.topological.linear import Linear
+from lib.nn.sources.source import NeuralNetworkDefinition, Neurons
+from lib.nn.topological.linear import build_optimal_linear
 from lib.nn.topological.settings import Settings
 from lib.utils import head_and_rest
 
@@ -9,6 +9,7 @@ from lib.utils import head_and_rest
 class WeightedRuleLayer(torch.nn.Module):
     def __init__(
         self,
+        network: NeuralNetworkDefinition,
         neurons: Neurons,
         settings: Settings,
     ) -> None:
@@ -20,11 +21,12 @@ class WeightedRuleLayer(torch.nn.Module):
         for l in rest_lengths:
             assert head_len == l
 
-        # TODO: write a heuristic to choose optimal linear layer implementation
-        self.linear = Linear(
+        self.linear = build_optimal_linear(
+            network,
             neurons,
             period=head_len,
             settings=settings,
+            gather_unique_first=False,
         )
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
