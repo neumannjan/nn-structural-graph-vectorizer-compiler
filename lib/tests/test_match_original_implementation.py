@@ -1,17 +1,46 @@
 import itertools
+from collections.abc import Collection
 
 import jpype
 import pytest
 import torch
 from lib.benchmarks.runnables.torch_gather_runnable import TorchGatherRunnable
 from lib.datasets.dataset import MyDataset
-from lib.datasets.mutagenesis import MyMutagenesis, MyMutagenesisMultip
+from lib.datasets.mutagenesis import MutagenesisSource, MutagenesisTemplate, MyMutagenesis
 from lib.nn.topological.settings import Settings
 from lib.tests.utils.test_params import DEVICE_PARAMS, SETTINGS_PARAMS
 
-DATASET_PARAMS = [
-    MyMutagenesis(),
-    MyMutagenesisMultip(),
+
+def _ms(s: Collection[MutagenesisSource]):
+    return s
+
+
+def _mt(t: Collection[MutagenesisTemplate]):
+    return t
+
+
+COMMON_DATASET_PARAMS: list[MyDataset] = [
+    *[
+        MyMutagenesis(source=s, template=t)
+        for s, t in itertools.product(
+            # sources
+            _ms(["original"]),
+            # templates
+            _mt(["simple"]),  # TODO: add the rest
+        )
+    ]
+]
+
+EXTENDED_DATASET_PARAMS: list[MyDataset] = [
+    *[
+        MyMutagenesis(source=s, template=t)
+        for s, t in itertools.product(
+            # sources
+            _ms(["10x"]),
+            # templates
+            _mt(["simple"]),  # TODO: add the rest
+        )
+    ]
 ]
 
 
@@ -65,19 +94,23 @@ def do_test_dataset(dataset: MyDataset, device: str, settings: Settings):
         raise e
 
 
-@pytest.mark.parametrize(["device", "settings"], list(itertools.product(DEVICE_PARAMS, SETTINGS_PARAMS)))
-def test_mutagenesis(device: str, settings: Settings):
-    return do_test_dataset(MyMutagenesis(), device, settings)
+@pytest.mark.parametrize(
+    ["dataset", "device", "settings"], list(itertools.product(COMMON_DATASET_PARAMS, DEVICE_PARAMS, SETTINGS_PARAMS))
+)
+def test(dataset: MyDataset, device: str, settings: Settings):
+    return do_test_dataset(dataset, device, settings)
 
 
-@pytest.mark.parametrize(["device", "settings"], list(itertools.product(DEVICE_PARAMS, SETTINGS_PARAMS)))
+@pytest.mark.parametrize(
+    ["dataset", "device", "settings"], list(itertools.product(EXTENDED_DATASET_PARAMS, DEVICE_PARAMS, SETTINGS_PARAMS))
+)
 @pytest.mark.long
-def test_mutagenesis_multip(device: str, settings: Settings):
-    return do_test_dataset(MyMutagenesisMultip(), device, settings)
+def test_extended(dataset: MyDataset, device: str, settings: Settings):
+    return do_test_dataset(dataset, device, settings)
 
 
 if __name__ == "__main__":
     stts = SETTINGS_PARAMS[0]
     stts.optimize_linear_gathers = True
     stts.group_learnable_weight_parameters = True
-    model = test_mutagenesis("cpu", stts)
+    model = test(MyMutagenesis("gcnconv", "original"), "cpu", stts)

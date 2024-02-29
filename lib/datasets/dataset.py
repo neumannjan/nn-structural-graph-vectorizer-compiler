@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from collections.abc import Callable
 from typing import NamedTuple
 
 from neuralogic.core import BuiltDataset, Settings, Template
@@ -16,14 +16,14 @@ class BuiltDatasetInstance(NamedTuple):
 
 
 class MyDataset:
-    def __init__(self, name: str, template: Template, dataset: BaseDataset) -> None:
+    def __init__(self, name: str, template: Callable[[], Template], dataset: BaseDataset) -> None:
         self.name = name
         self.template = template
         self.dataset = dataset
         self.settings = Settings(compute_neuron_layer_indices=True)
 
     def build(self, sample_run=False) -> BuiltDatasetInstance:
-        neuralogic = self.template.build(self.settings)
+        neuralogic = self.template().build(self.settings)
         built_dataset = neuralogic.build_dataset(self.dataset)
 
         if sample_run:

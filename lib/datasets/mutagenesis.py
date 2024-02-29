@@ -1,4 +1,6 @@
+from collections.abc import Callable
 from pathlib import Path
+from typing import Literal
 
 from neuralogic.core import R, Template, V
 from neuralogic.dataset.file import FileDataset
@@ -37,32 +39,69 @@ def simple_template():
     )
     template += R.predict[1, 3] <= R.layer_3(V.X)
 
+    print(template)
+
+    # GCN se zapnutejma self-loopama a bez normalizace ?
+
     return template
 
 
+def simple_template_no_bond_embed():
+    template = Template()
+
+    template.add_rules(
+        [(R.atom_embed(V.A)[3,] <= R.get(atom)(V.A)) for atom in ["c", "o", "br", "i", "f", "h", "n", "cl"]]
+    )
+
+    template += R.layer_1(V.X) <= (
+        R.atom_embed(V.X)[3, 3],
+        R.atom_embed(V.Y)[3, 3],
+        R.bond(V.X, V.Y, V.B),
+    )
+    template += R.layer_2(V.X) <= (
+        R.layer_1(V.X)[3, 3],
+        R.layer_1(V.Y)[3, 3],
+        R.bond(V.X, V.Y, V.B),
+    )
+    template += R.layer_3(V.X) <= (
+        R.layer_2(V.X)[3, 3],
+        R.layer_2(V.Y)[3, 3],
+        R.bond(V.X, V.Y, V.B),
+    )
+    template += R.predict[1, 3] <= R.layer_3(V.X)
+
+    # GCN se zapnutejma self-loopama a bez normalizace ?
+
+    return template
+
+
+MutagenesisTemplate = Literal["simple", "simple_nobond"]
+
+
+TEMPLATE_MAP: dict[MutagenesisTemplate, Callable[[], Template]] = {
+    "simple": simple_template,
+    "simple_nobond": simple_template_no_bond_embed,
+}
+
+
+MutagenesisSource = Literal["original", "10x"]
+
+
+SOURCE_DIRECTORY_MAP: dict[MutagenesisSource, Path] = {
+    "original": Path(".") / "dataset" / "mutagenesis",
+    "10x": Path(".") / "dataset" / "mutagenesis_multip",
+}
+
+
 class MyMutagenesis(MyDataset):
-    def __init__(self) -> None:
-        directory = Path(".") / "dataset" / "mutagenesis"
+    def __init__(self, template: MutagenesisTemplate = "simple", source: MutagenesisSource = "original") -> None:
+        directory = SOURCE_DIRECTORY_MAP[source]
 
         dataset = FileDataset(
             examples_file=str(directory / "examples.txt"),
             queries_file=str(directory / "queries.txt"),
         )
 
-        template = simple_template()
+        the_template = TEMPLATE_MAP[template]
 
-        super().__init__("mutagenesis", template, dataset)
-
-
-class MyMutagenesisMultip(MyDataset):
-    def __init__(self) -> None:
-        directory = Path(".") / "dataset" / "mutagenesis_multip"
-
-        dataset = FileDataset(
-            examples_file=str(directory / "examples.txt"),
-            queries_file=str(directory / "queries.txt"),
-        )
-
-        template = simple_template()
-
-        super().__init__("mutagenesis", template, dataset)
+        super().__init__("mutagenesis", the_template, dataset)
