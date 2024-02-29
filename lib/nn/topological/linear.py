@@ -1,86 +1,145 @@
-from typing import Iterable
+import warnings
+from typing import OrderedDict
 
 import torch
 
-from lib.nn.gather import build_optimal_gather_module, build_optimal_single_layer_gather_module_unwrapped
-from lib.nn.topological.layers import Ordinals
-from lib.nn.weight import concatenate_weights, create_weight
-from lib.utils import value_to_tensor
-
-
-def _build_weights(weights: Iterable, out_map: dict[str, int], weights_out: list[torch.Tensor]):
-    for weight in weights:
-        w_idx = str(weight.index)
-
-        if w_idx not in out_map:
-            out_map[w_idx] = len(out_map)
-
-            w_tensor = value_to_tensor(weight.value)
-            weights_out.append(w_tensor)
+from lib.nn.gather import (
+    build_optimal_gather,
+    build_optimal_multi_layer_gather,
+    build_optimal_multi_layer_gather_and_reshape,
+)
+from lib.nn.sources.source import Neurons
+from lib.nn.topological.settings import Settings
+from lib.nn.weight import create_weights_and_gather
 
 
 class Linear(torch.nn.Module):
     def __init__(
         self,
-        layer_neurons: list,
-        neuron_ordinals: Ordinals,
+        neurons: Neurons,
+        settings: Settings,
         period: int | None = None,
     ) -> None:
         super().__init__()
 
-        self.neuron_ids = [n.getIndex() for n in layer_neurons]
+        self.neuron_ids = neurons.ids
 
         self.period = period
 
-        self.gather = build_optimal_gather_module(
-            [neuron_ordinals[int(inp.getIndex())] for n in layer_neurons for inp in n.getInputs()],
+        inputs_ordinals = list(neurons.inputs.ordinals)
+
+        if period is None:
+            gather = build_optimal_multi_layer_gather(inputs_ordinals)
+        else:
+            gather = build_optimal_multi_layer_gather_and_reshape(inputs_ordinals, period=period)
+        self.gather = gather
+
+        weight_definitions = list(neurons.input_weights)
+        self.weight, self.gather_weights = create_weights_and_gather(
+            weight_definitions,
             period=period,
+            group_learnable_weight_parameters=settings.group_learnable_weight_parameters,
         )
 
-        def _iter_all_weights():
-            return (w for n in layer_neurons for w in n.getWeights())
+        if period is not None and settings.optimize_linear_gathers:
+            # can we simplify?
+            can_simplify_inputs = self.gather.optimal_period == period and not self.gather.is_optimal
+            can_simplify_weights = self.gather_weights.optimal_period == period and not self.gather_weights.is_optimal
 
-        idx_map: dict[str, int] = {}
+            if can_simplify_inputs and can_simplify_weights:
+                # TODO
+                warnings.warn(
+                    "Can simplify both weights and inputs due to matching dimensionality, "
+                    "but it is not implemented yet, so the run will be slow."
+                )
+            elif can_simplify_inputs:
+                self.gather = gather.get_optimal()
+            elif can_simplify_weights:
+                self.gather_weights = self.gather_weights.get_optimal()
 
-        weights_learnable: list[torch.Tensor] = []
-        weights_nonlearnable: list[torch.Tensor] = []
-
-        _build_weights(filter(lambda w: w.isLearnable(), _iter_all_weights()), idx_map, weights_learnable)
-        _build_weights(filter(lambda w: not w.isLearnable(), _iter_all_weights()), idx_map, weights_nonlearnable)
-
-        if len(weights_learnable) > 0:
-            # ensure all learnable weights have the same dimensions
-            assert all(
-                (weights_learnable[0].shape == w.shape for w in weights_learnable[1:])
-            ), f"Learnable weights' dimensions do not match: {[w.shape for w in weights_learnable]}"
-
-            # expand all non-learnable weights to the same shape as learnable weights
-            weights_nonlearnable = [
-                create_weight(t, is_learnable=False).expand_to(weights_learnable[0]) for t in weights_nonlearnable
-            ]
-
-            weight_learnable = torch.nn.Parameter(torch.stack(weights_learnable), requires_grad=True)
-        else:
-            weight_learnable = None
-
-        if len(weights_nonlearnable) > 0:
-            weight_nonlearnable = torch.nn.Parameter(torch.stack(weights_nonlearnable), requires_grad=False)
-        else:
-            weight_nonlearnable = None
-
-        self.weight = concatenate_weights(weight_learnable, weight_nonlearnable)
-
-        weight_idxs: list[int] = [idx_map[str(w.index)] for w in _iter_all_weights()]
-        self.gather_weights = build_optimal_single_layer_gather_module_unwrapped(ordinals=weight_idxs, period=period)
+        # TODO invert gather+linear to gather_set+linear+gather if beneficial
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
-        with torch.profiler.record_function('LINEAR_GATHER'):
+        with torch.profiler.record_function('LINEAR__GATHER_INPS'):
             input_values = self.gather(layer_values)
-        with torch.profiler.record_function('LINEAR_WEIGHTS_GATHER'):
-            w = self.gather_weights(self.weight())
-        with torch.profiler.record_function('LINEAR_LINEAR'):
+        with torch.profiler.record_function('LINEAR__WEIGHT'):
+            w = self.weight()
+        with torch.profiler.record_function('LINEAR__GATHER_WEIGHTS'):
+            w = self.gather_weights(w)
+        with torch.profiler.record_function('LINEAR__LINEAR'):
             y = w @ input_values
         return y
 
-    def extra_repr(self):
+    def extra_repr(self) -> str:
+        return f"period={self.period},"
+
+
+class UniqueLinearAndCollect(torch.nn.Module):
+    def __init__(
+        self,
+        neurons: Neurons,
+        settings: Settings,
+        period: int | None = None,
+    ) -> None:
+        super().__init__()
+
+        self.neuron_ids = neurons.ids
+
+        self.period = period
+
+        inputs_ordinals = list(neurons.inputs.ordinals)
+        weight_definitions = list(neurons.input_weights)
+
+        inputs_weights_pairs = list(zip(inputs_ordinals, weight_definitions))
+        inputs_weights_pairs_unique = list(OrderedDict.fromkeys(inputs_weights_pairs).keys())
+
+        inputs_ordinals_unique = [o for o, _ in inputs_weights_pairs_unique]
+        weight_definitions_unique = [wd for _, wd in inputs_weights_pairs_unique]
+
+        to_order_idxs = [inputs_weights_pairs_unique.index(key) for key in inputs_weights_pairs]
+
+        if period is None:
+            gather = build_optimal_multi_layer_gather(inputs_ordinals_unique)
+        else:
+            gather = build_optimal_multi_layer_gather_and_reshape(inputs_ordinals_unique, period=period)
+        self.gather = gather
+
+        self.weight, self.gather_weights = create_weights_and_gather(
+            weight_definitions_unique,
+            period=period,
+            group_learnable_weight_parameters=settings.group_learnable_weight_parameters,
+        )
+
+        if period is not None and settings.optimize_linear_gathers:
+            # can we simplify?
+            can_simplify_inputs = self.gather.optimal_period == period and not self.gather.is_optimal
+            can_simplify_weights = self.gather_weights.optimal_period == period and not self.gather_weights.is_optimal
+
+            if can_simplify_inputs and can_simplify_weights:
+                # TODO
+                warnings.warn(
+                    "Can simplify both weights and inputs due to matching dimensionality, "
+                    "but it is not implemented yet, so the run will be slow."
+                )
+            elif can_simplify_inputs:
+                self.gather = gather.get_optimal()
+            elif can_simplify_weights:
+                self.gather_weights = self.gather_weights.get_optimal()
+
+        self.post_linear_gather = build_optimal_gather(to_order_idxs)
+
+    def forward(self, layer_values: dict[int, torch.Tensor]):
+        with torch.profiler.record_function('LINEAR__GATHER_INPS_UNIQ'):
+            input_values = self.gather(layer_values)
+        with torch.profiler.record_function('LINEAR__WEIGHT'):
+            w = self.weight()
+        with torch.profiler.record_function('LINEAR__GATHER_WEIGHTS_UNIQ'):
+            w = self.gather_weights(w)
+        with torch.profiler.record_function('LINEAR__LINEAR'):
+            y = w @ input_values
+        with torch.profiler.record_function('LINEAR__POST_GATHER'):
+            y = self.post_linear_gather(y)
+        return y
+
+    def extra_repr(self) -> str:
         return f"period={self.period},"

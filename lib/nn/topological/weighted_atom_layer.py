@@ -1,14 +1,24 @@
 import torch
 
-from lib.nn.topological.layers import Ordinals
+from lib.nn.sources.source import Neurons
+from lib.nn.topological.settings import Settings
 
-from .linear import Linear
+from .linear import UniqueLinearAndCollect
 
 
 class WeightedAtomLayer(torch.nn.Module):
-    def __init__(self, layer_neurons: list, neuron_ordinals: Ordinals) -> None:
+    def __init__(
+        self,
+        neurons: Neurons,
+        settings: Settings,
+    ) -> None:
         super().__init__()
-        self.linear = Linear(layer_neurons, neuron_ordinals, period=None)
+        # TODO: write a heuristic to choose optimal linear layer implementation
+        self.linear = UniqueLinearAndCollect(
+            neurons,
+            period=None,
+            settings=settings,
+        )
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
         with torch.profiler.record_function('WEIGHTED_ATOM_LINEAR'):

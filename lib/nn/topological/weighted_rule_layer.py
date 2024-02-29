@@ -1,27 +1,31 @@
 import torch
 
-from lib.nn.topological.layers import Ordinals
+from lib.nn.sources.source import Neurons
 from lib.nn.topological.linear import Linear
+from lib.nn.topological.settings import Settings
+from lib.utils import head_and_rest
 
 
 class WeightedRuleLayer(torch.nn.Module):
     def __init__(
         self,
-        layer_neurons: list,
-        neuron_ordinals: Ordinals,
-        check_same_inputs_dim_assumption=True,
+        neurons: Neurons,
+        settings: Settings,
     ) -> None:
         super().__init__()
 
-        neuron = layer_neurons[0]
+        head_len, rest_lengths = head_and_rest(neurons.input_lengths)
 
-        inputs_dim = len(neuron.getInputs())
+        # TODO: assumption: all neurons have the same no. of inputs (and weights)
+        for l in rest_lengths:
+            assert head_len == l
 
-        if check_same_inputs_dim_assumption:
-            for n in layer_neurons:
-                assert inputs_dim == len(n.getInputs())
-
-        self.linear = Linear(layer_neurons, neuron_ordinals, period=inputs_dim)
+        # TODO: write a heuristic to choose optimal linear layer implementation
+        self.linear = Linear(
+            neurons,
+            period=head_len,
+            settings=settings,
+        )
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
         with torch.profiler.record_function('WEIGHTED_RULE_LINEAR'):

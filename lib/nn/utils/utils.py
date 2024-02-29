@@ -1,24 +1,17 @@
 import torch
 
 
-class ReshapeWithPeriod(torch.nn.Module):
-    def __init__(self, period: int) -> None:
-        super().__init__()
-        self.period = period
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        with torch.profiler.record_function('RESHAPE'):
-            return x.reshape([-1, self.period, *x.shape[1:]])
-
-
 class ViewWithPeriod(torch.nn.Module):
     def __init__(self, period: int) -> None:
         super().__init__()
         self.period = period
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        with torch.profiler.record_function('VIEW'):
+        with torch.profiler.record_function("VIEW"):
             return x.view([-1, self.period, *x.shape[1:]])
+
+    def extra_repr(self) -> str:
+        return f"period={self.period}"
 
 
 class Repeat(torch.nn.Module):
@@ -28,28 +21,10 @@ class Repeat(torch.nn.Module):
         self.total_length = total_length
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        with torch.profiler.record_function('REPEAT'):
+        with torch.profiler.record_function("REPEAT"):
             x = x.repeat(self.repeats, *([1] * (x.dim() - 1)))
             x = x[: self.total_length]
         return x
 
-
-class Unsqueeze(torch.nn.Module):
-    def __init__(self, dim: int) -> None:
-        super().__init__()
-        self.dim = dim
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        with torch.profiler.record_function('UNSQUEEZE'):
-            return x.unsqueeze(self.dim)
-
-
-class Expand0(torch.nn.Module):
-    def __init__(self, i: int) -> None:
-        super().__init__()
-        self.i = i
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        with torch.profiler.record_function('EXPAND'):
-            x = x.expand(self.i, *x.shape[1:])
-        return x
+    def extra_repr(self) -> str:
+        return f"repeats={self.repeats}, total_length={self.total_length}"
