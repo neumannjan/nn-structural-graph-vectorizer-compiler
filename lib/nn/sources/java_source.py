@@ -105,6 +105,10 @@ class _JavaNeurons(BaseNeurons):
     def input_weights(self) -> Iterable[WeightDefinition]:
         return LambdaIterable(lambda: (_JavaWeightDefinition(w) for n in self._java_neurons for w in n.getWeights()))
 
+    @property
+    def biases(self) -> Collection[WeightDefinition]:
+        return MapCollection(lambda n: _JavaWeightDefinition(n.getOffset()), self._java_neurons)
+
     def get_values_numpy(self) -> Collection[np.ndarray]:
         return MapCollection(lambda n: value_to_numpy(n.getRawState().getValue()), self._java_neurons)
 

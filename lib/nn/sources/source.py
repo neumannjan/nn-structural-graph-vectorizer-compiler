@@ -5,7 +5,7 @@ from typing import Iterable, Iterator, Literal, NamedTuple, OrderedDict, Protoco
 import numpy as np
 import torch
 
-LayerType = Literal["FactLayer", "WeightedAtomLayer", "WeightedRuleLayer", "AggregationLayer"]
+LayerType = Literal["FactLayer", "WeightedAtomLayer", "WeightedRuleLayer", "AggregationLayer", "RuleLayer"]
 
 
 @dataclass(frozen=True)
@@ -118,6 +118,10 @@ class Neurons(Protocol):
 
     @property
     def input_weights(self) -> Iterable[WeightDefinition]:
+        ...
+
+    @property
+    def biases(self) -> Collection[WeightDefinition]:
         ...
 
     def get_values_numpy(self) -> Collection[np.ndarray]:

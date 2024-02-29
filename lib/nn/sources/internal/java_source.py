@@ -34,7 +34,7 @@ class JavaNeuron(Protocol):
     def getIndex(self) -> int:
         ...
 
-    def getInputs(self) -> list["JavaNeuron"]:
+    def getInputs(self) -> Sequence["JavaNeuron"]:
         ...
 
     def getRawState(self) -> Any:
@@ -46,7 +46,10 @@ class JavaNeuron(Protocol):
     def getLayer(self) -> int:
         ...
 
-    def getWeights(self) -> Any:
+    def getWeights(self) -> Sequence[JavaWeight]:
+        ...
+
+    def getOffset(self) -> JavaWeight:
         ...
 
 
@@ -55,6 +58,7 @@ CLASS_TO_LAYER_TYPE_MAP: dict[str, LayerType] = {
     "WeightedAtomNeuron": "WeightedAtomLayer",
     "WeightedRuleNeuron": "WeightedRuleLayer",
     "AggregationNeuron": "AggregationLayer",
+    "RuleNeuron": "RuleLayer"
 }
 
 
