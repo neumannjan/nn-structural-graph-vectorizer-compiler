@@ -84,7 +84,7 @@ def test_weighted_rule_layer(settings: Settings):
             ]
         ).unsqueeze(-1)
     }
-    layer = WeightedRuleLayer(neurons=network[13], settings=settings)
+    layer = WeightedRuleLayer(network, neurons=network[13], settings=settings)
 
     print(layer)
 
