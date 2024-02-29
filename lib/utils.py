@@ -258,6 +258,183 @@ def detect_repeating_sequence_in_list(
     return None
 
 
+def detect_repeating_K_sequence_in_list(
+    inp: Sequence[int] | np.ndarray, period: int, allow_last_incomplete=False
+) -> np.ndarray | None:
+    """
+    Find the smallest repeating subsequence `s` of length `period` that the input sequence `t` is made from.
+
+    Find the smallest repeating subsequence `s` of length `period` that the input sequence `t` is made from
+    (such that `t = ss...s`).
+
+    Returns None if no such subsequence exists or if the only such subsequence
+    is the original sequence `t` itself.
+    If `allow_last_incomplete` is `True`, allows the final repetition to be incomplete.
+
+    >>> detect_repeating_K_sequence_in_list([0], 4, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([0, 1], 4, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2], 4, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2], 4, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0], 4, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1], 4, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2], 4, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2], 4, allow_last_incomplete=False)
+    array([0, 1, 2, 2])
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0], 4, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0, 1], 4, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 2], 4, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 2, 2], 4, allow_last_incomplete=False)
+    array([0, 1, 2, 2])
+    >>> detect_repeating_K_sequence_in_list([0], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([0, 1], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0, 1], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 2], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 2, 2], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([0], 4, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([0, 1], 4, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2], 4, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2], 4, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0], 4, allow_last_incomplete=True)
+    array([0, 1, 2, 2])
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1], 4, allow_last_incomplete=True)
+    array([0, 1, 2, 2])
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2], 4, allow_last_incomplete=True)
+    array([0, 1, 2, 2])
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2], 4, allow_last_incomplete=True)
+    array([0, 1, 2, 2])
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0], 4, allow_last_incomplete=True)
+    array([0, 1, 2, 2])
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0, 1], 4, allow_last_incomplete=True)
+    array([0, 1, 2, 2])
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 2], 4, allow_last_incomplete=True)
+    array([0, 1, 2, 2])
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 2, 2], 4, allow_last_incomplete=True)
+    array([0, 1, 2, 2])
+    >>> detect_repeating_K_sequence_in_list([0], 3, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([0, 1], 3, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2], 3, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2], 3, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0], 3, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1], 3, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2], 3, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2], 3, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0], 3, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0, 1], 3, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 2], 3, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 2, 2], 3, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([0], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([0, 0], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([0, 0, 0], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([0, 0, 0, 0], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([0, 0, 0, 0, 0], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([0, 0, 0, 0, 0, 0], 3, allow_last_incomplete=False)
+    array([0, 0, 0])
+    >>> detect_repeating_K_sequence_in_list([0, 0, 0, 0, 0, 0, 0], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([0], 3, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([0, 0], 3, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([0, 0, 0], 3, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([0, 0, 0, 0], 3, allow_last_incomplete=True)
+    array([0, 0, 0])
+    >>> detect_repeating_K_sequence_in_list([0, 0, 0, 0, 0], 3, allow_last_incomplete=True)
+    array([0, 0, 0])
+    >>> detect_repeating_K_sequence_in_list([0, 0, 0, 0, 0, 0], 3, allow_last_incomplete=True)
+    array([0, 0, 0])
+    >>> detect_repeating_K_sequence_in_list([0, 0, 0, 0, 0, 0, 0], 3, allow_last_incomplete=True)
+    array([0, 0, 0])
+    >>> detect_repeating_K_sequence_in_list([2, 0], 4, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1], 4, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2], 4, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2], 4, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0], 4, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1], 4, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2], 4, allow_last_incomplete=False)
+    array([2, 0, 1, 2])
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2], 4, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0], 4, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0, 1], 4, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 2], 4, allow_last_incomplete=False)
+    array([2, 0, 1, 2])
+    >>> detect_repeating_K_sequence_in_list([2, 0], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0, 1], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 2], 3, allow_last_incomplete=False)
+    >>> detect_repeating_K_sequence_in_list([2, 0], 4, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1], 4, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2], 4, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2], 4, allow_last_incomplete=True)
+    array([2, 0, 1, 2])
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0], 4, allow_last_incomplete=True)
+    array([2, 0, 1, 2])
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1], 4, allow_last_incomplete=True)
+    array([2, 0, 1, 2])
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2], 4, allow_last_incomplete=True)
+    array([2, 0, 1, 2])
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2], 4, allow_last_incomplete=True)
+    array([2, 0, 1, 2])
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0], 4, allow_last_incomplete=True)
+    array([2, 0, 1, 2])
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0, 1], 4, allow_last_incomplete=True)
+    array([2, 0, 1, 2])
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 2], 4, allow_last_incomplete=True)
+    array([2, 0, 1, 2])
+    >>> detect_repeating_K_sequence_in_list([2, 0], 3, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1], 3, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2], 3, allow_last_incomplete=True)
+    array([2, 0, 1])
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2], 3, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0], 3, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1], 3, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2], 3, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2], 3, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0], 3, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0, 1], 3, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 2], 3, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 3], 4, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 3], 4, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 3], 4, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 3], 4, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 3], 4, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 3], 4, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 3], 4, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0, 3], 4, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 3], 4, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 2, 3], 4, allow_last_incomplete=True)
+    """
+    k = period
+
+    if len(inp) <= k:
+        return None
+
+    inp = np.array(inp)
+    max_len = (inp.shape[0] // k) * k
+
+    if not allow_last_incomplete and max_len < inp.shape[0]:
+        return None
+
+    inp_first, inp_last = inp[:max_len], inp[max_len:]
+
+    if np.all(inp_first.reshape([-1, k]) == inp_first[:k]) and (
+        len(inp_last) == 0 or np.all(inp_last == inp_first[: len(inp_last)])
+    ):
+        return inp_first[:k]
+
+    return None
+
+
 def head_and_rest(it: Iterator[_T] | Iterable[_T]) -> tuple[_T, Iterator[_T]]:
     if not isinstance(it, Iterator):
         it = iter(it)

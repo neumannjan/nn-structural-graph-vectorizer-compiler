@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Protocol, Sequence, runtime_checkable
+from typing import Protocol, Sequence, TypeVar, runtime_checkable
 
 import numpy as np
 import torch
@@ -226,6 +226,43 @@ class GatherAndRepeat(torch.nn.Module, GatherModuleLike):
         return x
 
 
+@runtime_checkable
+class LayerGatherModuleLike(GatherLike, Protocol):
+    def get_optimal(self) -> "LayerGatherModuleLike":
+        ...
+
+    def __call__(self, layer_values: dict[int, torch.Tensor]) -> torch.Tensor:
+        ...
+
+
+class LayerGatherAndRepeat(torch.nn.Module, LayerGatherModuleLike):
+    def __init__(self, the_gather_module: LayerGatherModuleLike, repeats: int, total_length: int) -> None:
+        super().__init__()
+        self.gather = the_gather_module
+        # Repeat is slow !!
+        self.repeat = Repeat(the_gather_module.total_items, repeats, total_length)
+
+    @property
+    def total_items(self) -> int:
+        return self.repeat.total_length
+
+    @property
+    def optimal_period(self) -> int:
+        return self.gather.optimal_period
+
+    @property
+    def is_optimal(self) -> bool:
+        return False
+
+    def get_optimal(self) -> "LayerGatherModuleLike":
+        return self.gather.get_optimal()
+
+    def forward(self, layer_values: dict[int, torch.Tensor]) -> torch.Tensor:
+        x = self.gather(layer_values)
+        x = self.repeat(x)
+        return x
+
+
 def build_optimal_gather(
     ordinals: Sequence[int],
     allow_subseq=True,
@@ -257,15 +294,6 @@ def build_optimal_gather(
             return GatherAndRepeat(subseq_gather, repeats=repeats, total_length=total_length)
 
     return GenericGather(ordinals)
-
-
-@runtime_checkable
-class LayerGatherModuleLike(GatherLike, Protocol):
-    def get_optimal(self) -> "LayerGatherModuleLike":
-        ...
-
-    def __call__(self, layer_values: dict[int, torch.Tensor]) -> torch.Tensor:
-        ...
 
 
 class SingleLayerGather(torch.nn.Module, LayerGatherModuleLike):
@@ -545,3 +573,23 @@ def build_optimal_multi_layer_gather_and_reshape(inputs_ordinals: list[LayerOrdi
     gather = build_optimal_multi_layer_gather(inputs_ordinals)
     reshape = ViewWithPeriod(input_length=gather.total_items, period=period)
     return LayerGatherAndView(gather, reshape)
+
+
+def get_optimal_gather_for_period(gather: GatherModuleLike, period: int) -> GatherModuleLike:
+    if gather.optimal_period == period:
+        return gather if gather.is_optimal else gather.get_optimal()
+    elif period % gather.optimal_period == 0:
+        opt = gather.get_optimal()
+        return GatherAndRepeat(opt, repeats=period // opt.total_items, total_length=period)
+
+    return gather
+
+
+def get_optimal_layer_gather_for_period(gather: LayerGatherModuleLike, period: int) -> LayerGatherModuleLike:
+    if gather.optimal_period == period:
+        return gather if gather.is_optimal else gather.get_optimal()
+    elif period % gather.optimal_period == 0:
+        opt = gather.get_optimal()
+        return LayerGatherAndRepeat(opt, repeats=period // opt.total_items, total_length=period)
+
+    return gather

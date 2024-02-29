@@ -8,15 +8,16 @@ from lib.nn.gather import (
     GatherModuleLike,
     LayerGatherModuleLike,
     NoopGather,
-    SliceValues,
     build_optimal_gather,
     build_optimal_gather_and_reshape,
     build_optimal_multi_layer_gather,
     build_optimal_multi_layer_gather_and_reshape,
+    get_optimal_gather_for_period,
+    get_optimal_layer_gather_for_period,
 )
 from lib.nn.sources.source import LayerOrdinal, NeuralNetworkDefinition, Neurons, WeightDefinition
 from lib.nn.topological.settings import Settings
-from lib.nn.weight import WeightModuleLike, create_weights_and_gather
+from lib.nn.weight import create_weights_and_gather
 
 
 class Linear(torch.nn.Module):
@@ -65,8 +66,11 @@ def _build_optimal_linear(
 
     if period is not None and optimize_linear_gathers:
         # can we simplify?
-        can_simplify_inputs = gather.optimal_period == period and not gather.is_optimal
-        can_simplify_weight = weight.optimal_period == period and not weight.is_optimal
+        gather_optimal = get_optimal_layer_gather_for_period(gather, period=period)
+        weight_optimal = get_optimal_gather_for_period(weight, period=period)
+
+        can_simplify_inputs = gather_optimal != gather
+        can_simplify_weight = weight_optimal != weight
 
         if can_simplify_inputs and can_simplify_weight:
             # TODO
@@ -75,9 +79,9 @@ def _build_optimal_linear(
                 "but it is not implemented yet, so the run will be slow."
             )
         elif can_simplify_inputs:
-            gather = gather.get_optimal()
+            gather = gather_optimal
         elif can_simplify_weight:
-            weight = weight.get_optimal()
+            weight = weight_optimal
 
     return Linear(gather, weight)
 
@@ -174,11 +178,13 @@ def build_optimal_linear(
 
         if all_inputs_ones:
             # can skip the matmul entirely and can just return the weights
-            return ReturnWeights(create_weights_and_gather(
-                weight_definitions,
-                period=period,
-                group_learnable_weight_parameters=settings.group_learnable_weight_parameters,
-            ))
+            return ReturnWeights(
+                create_weights_and_gather(
+                    weight_definitions,
+                    period=period,
+                    group_learnable_weight_parameters=settings.group_learnable_weight_parameters,
+                )
+            )
 
     inputs_ordinals = list(neurons.inputs.ordinals)
 

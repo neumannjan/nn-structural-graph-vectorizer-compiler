@@ -15,7 +15,7 @@ from lib.nn.gather import (
     build_optimal_gather_and_reshape,
 )
 from lib.nn.sources.source import WeightDefinition
-from lib.utils import detect_repeating_sequence_in_list
+from lib.utils import detect_repeating_K_sequence_in_list
 
 
 class WeightLike(GatherLike, Protocol):
@@ -648,9 +648,8 @@ def _check_is_each_learnable_weight_used_only_once(
     weight_definitions_modified = weight_definitions
 
     if period is not None:
-        # TODO: use a `detect_repeating_K_sequence_in_list`
-        subseq = detect_repeating_sequence_in_list(ids_order, allow_last_incomplete=False)
-        if subseq is not None and len(subseq) == period:
+        subseq = detect_repeating_K_sequence_in_list(ids_order, period=period, allow_last_incomplete=False)
+        if subseq is not None:
             ids_order = subseq
             weight_definitions_modified = [weight_definitions_dict[id] for id in subseq]
 
@@ -687,7 +686,6 @@ def create_weights_and_gather(
         return weight
 
     # can create the weights already in order (such that no gather operation is needed)
-    # TODO: write a `detect_repeating_K_sequence_in_list` and make sure that the gather gets the hint
     weights: list[Weight] = [
         create_weight(wd.get_value_torch(), is_learnable=wd.learnable) for wd in weight_definitions
     ]
