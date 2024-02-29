@@ -98,7 +98,7 @@ def do_test_dataset(dataset: MyDataset, device: str, settings: Settings):
     ["dataset", "device", "settings"], list(itertools.product(COMMON_DATASET_PARAMS, DEVICE_PARAMS, SETTINGS_PARAMS))
 )
 def test(dataset: MyDataset, device: str, settings: Settings):
-    return do_test_dataset(dataset, device, settings)
+    do_test_dataset(dataset, device, settings)
 
 
 @pytest.mark.parametrize(
@@ -106,11 +106,11 @@ def test(dataset: MyDataset, device: str, settings: Settings):
 )
 @pytest.mark.long
 def test_extended(dataset: MyDataset, device: str, settings: Settings):
-    return do_test_dataset(dataset, device, settings)
+    do_test_dataset(dataset, device, settings)
 
 
 if __name__ == "__main__":
     stts = SETTINGS_PARAMS[0]
     stts.optimize_linear_gathers = True
     stts.group_learnable_weight_parameters = True
-    model = test(MyMutagenesis("simple", "original"), "cpu", stts)
+    model = do_test_dataset(MyMutagenesis("simple", "original"), "cpu", stts)
