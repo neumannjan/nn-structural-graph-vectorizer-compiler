@@ -54,6 +54,12 @@ class _JavaWeightDefinition(BaseWeightDefinition):
     def get_value_torch(self) -> torch.Tensor:
         return value_to_tensor(self._java_weight.value)
 
+    def __hash__(self) -> int:
+        return hash((self.learnable, self.id))
+
+    def __eq__(self, value: object) -> bool:
+        return isinstance(value, WeightDefinition) and self.learnable == value.learnable and self.id == value.id
+
 
 class _JavaNeurons(BaseNeurons):
     def __init__(

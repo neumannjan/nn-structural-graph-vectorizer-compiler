@@ -16,9 +16,11 @@ class WeightedRuleLayer(torch.nn.Module):
 
         head_len, rest_lengths = head_and_rest(neurons.input_lengths)
 
+        # TODO: assumption: all neurons have the same no. of inputs (and weights)
         for l in rest_lengths:
             assert head_len == l
 
+        # TODO: write a heuristic to choose optimal linear layer implementation
         self.linear = Linear(
             neurons,
             period=head_len,

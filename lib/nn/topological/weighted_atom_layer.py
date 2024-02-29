@@ -3,7 +3,7 @@ import torch
 from lib.nn.sources.source import Neurons
 from lib.nn.topological.settings import Settings
 
-from .linear import Linear
+from .linear import UniqueLinearAndCollect
 
 
 class WeightedAtomLayer(torch.nn.Module):
@@ -13,7 +13,8 @@ class WeightedAtomLayer(torch.nn.Module):
         settings: Settings,
     ) -> None:
         super().__init__()
-        self.linear = Linear(
+        # TODO: write a heuristic to choose optimal linear layer implementation
+        self.linear = UniqueLinearAndCollect(
             neurons,
             period=None,
             settings=settings,

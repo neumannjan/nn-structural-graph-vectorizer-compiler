@@ -21,6 +21,8 @@ from lib.utils import MapCollection, cache
 
 
 class WeightDefinitionImpl(BaseWeightDefinition):
+    __slots__ = ("_learnable", "_id", "_value_np", "_value_torch")
+
     def __init__(self, id: int, value: np.ndarray | torch.Tensor, learnable: bool) -> None:
         self._id = id
         if isinstance(value, np.ndarray):
@@ -57,6 +59,12 @@ class WeightDefinitionImpl(BaseWeightDefinition):
                 self._value_torch = torch.tensor(self._value_np)
 
         return self._value_torch
+
+    def __hash__(self) -> int:
+        return hash((self.learnable, self.id))
+
+    def __eq__(self, value: object) -> bool:
+        return isinstance(value, WeightDefinition) and self.id == value.id and self.learnable == value.learnable
 
 
 @dataclass(frozen=True)

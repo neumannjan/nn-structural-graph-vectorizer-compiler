@@ -1,6 +1,6 @@
 from collections.abc import Collection
 from dataclasses import dataclass
-from typing import Iterable, Iterator, Literal, NamedTuple, OrderedDict, Protocol
+from typing import Iterable, Iterator, Literal, NamedTuple, OrderedDict, Protocol, runtime_checkable
 
 import numpy as np
 import torch
@@ -73,6 +73,7 @@ class LayerDefinitions(Protocol):
         ...
 
 
+@runtime_checkable
 class WeightDefinition(Protocol):
     @property
     def learnable(self) -> bool:
@@ -86,6 +87,12 @@ class WeightDefinition(Protocol):
         ...
 
     def get_value_torch(self) -> torch.Tensor:
+        ...
+
+    def __hash__(self) -> int:
+        ...
+
+    def __eq__(self, value: object) -> bool:
         ...
 
 

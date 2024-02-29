@@ -57,6 +57,8 @@ def do_test_dataset(dataset: MyDataset, device: str, settings: Settings):
         print("Actual:", actual)
         print("All values match!")
 
+        return runnable.model
+
     except jpype.JException as e:
         print(e.message())
         print(e.stacktrace())
@@ -65,17 +67,17 @@ def do_test_dataset(dataset: MyDataset, device: str, settings: Settings):
 
 @pytest.mark.parametrize(["device", "settings"], list(itertools.product(DEVICE_PARAMS, SETTINGS_PARAMS)))
 def test_mutagenesis(device: str, settings: Settings):
-    do_test_dataset(MyMutagenesis(), device, settings)
+    return do_test_dataset(MyMutagenesis(), device, settings)
 
 
 @pytest.mark.parametrize(["device", "settings"], list(itertools.product(DEVICE_PARAMS, SETTINGS_PARAMS)))
 @pytest.mark.long
 def test_mutagenesis_multip(device: str, settings: Settings):
-    do_test_dataset(MyMutagenesisMultip(), device, settings)
+    return do_test_dataset(MyMutagenesisMultip(), device, settings)
 
 
 if __name__ == "__main__":
     stts = SETTINGS_PARAMS[0]
     stts.optimize_linear_gathers = True
     stts.group_learnable_weight_parameters = True
-    test_mutagenesis("cpu", stts)
+    model = test_mutagenesis("cpu", stts)
