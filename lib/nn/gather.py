@@ -1,11 +1,11 @@
 from collections import defaultdict
-from typing import Protocol, Sequence, TypeVar, runtime_checkable
+from typing import Iterable, Protocol, Sequence, runtime_checkable
 
 import numpy as np
 import torch
 
 from lib.nn.sources.source import LayerOrdinal
-from lib.utils import detect_repeating_sequence_in_list
+from lib.utils import detect_repeating_K_sequence_in_list, detect_repeating_sequence_in_list
 
 
 class GatherLike(Protocol):
@@ -266,11 +266,16 @@ class LayerGatherAndRepeat(torch.nn.Module, LayerGatherModuleLike):
 def build_optimal_gather(
     ordinals: Sequence[int],
     allow_subseq=True,
+    period_hint: int | None = None,
 ) -> TakeValue | SliceValues | TakeEachNth | GenericGather | GatherAndRepeat:
+    ###### simple retrieval ######
+
     all_inputs_the_same = all((ordinals[0] == o for o in ordinals[1:]))
 
     if all_inputs_the_same:
         return TakeValue(ordinals[0])
+
+    ###### simple slicing #######
 
     step = ordinals[1] - ordinals[0]
     all_ordinals_differ_by_step = all((b - a == step for a, b in zip(ordinals[:-1], ordinals[1:])))
@@ -281,8 +286,17 @@ def build_optimal_gather(
 
         return TakeEachNth(step=step, start=ordinals[0], end=ordinals[-1] + 1)
 
+    ###### subsequence with (optimizable) repeat: #######
+
     if allow_subseq:
-        subseq = detect_repeating_sequence_in_list(ordinals, allow_last_incomplete=True)
+        subseq = None
+        if period_hint is not None:
+            # try the hint first
+            subseq = detect_repeating_K_sequence_in_list(ordinals, period=period_hint, allow_last_incomplete=True)
+
+        if subseq is None:
+            subseq = detect_repeating_sequence_in_list(ordinals, allow_last_incomplete=True)
+
         if subseq is not None and len(subseq) <= len(ordinals) // 2:
             subseq_gather = build_optimal_gather(subseq.tolist(), allow_subseq=False)
             repeats = -(-len(ordinals) // subseq_gather.optimal_period)
@@ -292,6 +306,8 @@ def build_optimal_gather(
                 return subseq_gather
 
             return GatherAndRepeat(subseq_gather, repeats=repeats, total_length=total_length)
+
+    ###### generic fallback implementation ######
 
     return GenericGather(ordinals)
 
@@ -330,10 +346,24 @@ class SingleLayerGather(torch.nn.Module, LayerGatherModuleLike):
         return x
 
 
-def build_optimal_single_layer_gather(input_layer: int, ordinals: list[int]):
+def build_optimal_single_layer_gather(input_layer: int, ordinals: list[int], period_hint: int | None = None):
     """Build the optimal gather network module when inputs are guaranteed to come from a single layer."""
-    gather = build_optimal_gather(ordinals)
+    gather = build_optimal_gather(ordinals, period_hint=period_hint)
     return SingleLayerGather(input_layer, gather)
+
+
+def _expand_concat_tensors(xs: list[torch.Tensor]) -> torch.Tensor:
+    # TODO: Do we really need broadcasting here? Can we resolve this in a simpler way
+    # (such as ideally by knowing the input dimensions)?
+    shapes = [t.shape[1:] for t in xs]
+
+    shape_hull = [-1]
+    shape_hull.extend(torch.broadcast_shapes(*shapes))
+
+    xs = [t.expand(*shape_hull) for t in xs]
+
+    x = torch.concatenate(xs)
+    return x
 
 
 class LayersGatherConcat(torch.nn.Module, LayerGatherModuleLike):
@@ -385,17 +415,7 @@ class LayersGatherConcat(torch.nn.Module, LayerGatherModuleLike):
 
     def forward(self, layer_values: dict[int, torch.Tensor]):
         xs = [self.layer_gathers[str(layer)](layer_values[layer]) for layer in self.layers]
-
-        # TODO: Do we really need broadcasting here? Can we resolve this in a simpler way
-        # (such as ideally by knowing the input dimensions)?
-        shapes = [t.shape[1:] for t in xs]
-
-        shape_hull = [-1]
-        shape_hull.extend(torch.broadcast_shapes(*shapes))
-
-        xs = [t.expand(*shape_hull) for t in xs]
-
-        x = torch.concatenate(xs)
+        x = _expand_concat_tensors(xs)
         return x
 
 
@@ -441,12 +461,12 @@ class MultiLayerGather(torch.nn.Module, LayerGatherModuleLike):
         return x
 
 
-def build_optimal_multi_layer_gather(inputs_ordinals: list[LayerOrdinal]):
+def build_optimal_multi_layer_gather(inputs_ordinals: list[LayerOrdinal], period_hint: int | None = None):
     layer0, _ = inputs_ordinals[0]
     is_single_layer = all((layer0 == l for l, _ in inputs_ordinals[1:]))
 
     if is_single_layer:
-        return build_optimal_single_layer_gather(layer0, [o for _, o in inputs_ordinals])
+        return build_optimal_single_layer_gather(layer0, [o for _, o in inputs_ordinals], period_hint=period_hint)
 
     per_layer_ordinals_set: dict[int, set[int]] = defaultdict(lambda: set())
 
@@ -457,7 +477,7 @@ def build_optimal_multi_layer_gather(inputs_ordinals: list[LayerOrdinal]):
 
     multi_layer_set_gather = LayersGatherConcat(per_layer_ordinals)
     final_ordinals = [multi_layer_set_gather.idx_map[p] for p in inputs_ordinals]
-    final_gather = build_optimal_gather(final_ordinals)
+    final_gather = build_optimal_gather(final_ordinals, period_hint=period_hint)
 
     return MultiLayerGather(multi_layer_set_gather, final_gather)
 
@@ -564,13 +584,13 @@ class LayerGatherAndView(torch.nn.Module, LayerGatherModuleLike):
 
 
 def build_optimal_gather_and_reshape(ordinals: list[int], period: int):
-    gather = build_optimal_gather(ordinals)
+    gather = build_optimal_gather(ordinals, period_hint=period)
     reshape = ViewWithPeriod(input_length=gather.total_items, period=period)
     return GatherAndView(gather, reshape)
 
 
 def build_optimal_multi_layer_gather_and_reshape(inputs_ordinals: list[LayerOrdinal], period: int):
-    gather = build_optimal_multi_layer_gather(inputs_ordinals)
+    gather = build_optimal_multi_layer_gather(inputs_ordinals, period_hint=period)
     reshape = ViewWithPeriod(input_length=gather.total_items, period=period)
     return LayerGatherAndView(gather, reshape)
 
