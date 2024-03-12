@@ -1,4 +1,4 @@
-from typing import Protocol, runtime_checkable
+from typing import Protocol, Union, runtime_checkable
 
 import torch
 
@@ -26,6 +26,14 @@ class LayerInputPipe(torch.nn.Module):
         cls_name = self.__class__.__name__
         return f"{cls_name}[{self.layer_index}]({repr(self.delegate)})"
 
+    def __getattr__(self, name: str) -> Union[torch.Tensor, torch.nn.Module]:
+        delegate = super().__getattr__('delegate')
+
+        if name == 'delegate':
+            return delegate
+
+        return delegate.__getattr__(name)
+
 
 class LayerOutputPipe(torch.nn.Module):
     def __init__(self, layer: int, delegate: torch.nn.Module) -> None:
@@ -44,3 +52,11 @@ class LayerOutputPipe(torch.nn.Module):
     def __repr__(self):
         cls_name = self.__class__.__name__
         return f"{cls_name}[{self.layer_index}]({repr(self.delegate)})"
+
+    def __getattr__(self, name: str) -> Union[torch.Tensor, torch.nn.Module]:
+        delegate = super().__getattr__('delegate')
+
+        if name == 'delegate':
+            return delegate
+
+        return delegate.__getattr__(name)

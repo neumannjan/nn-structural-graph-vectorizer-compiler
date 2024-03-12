@@ -40,3 +40,6 @@ class NetworkModule(torch.nn.Module):
 
     def forward(self):
         return self.model(None)
+
+    def __getitem__(self, layer_ord: int):
+        return self.model[layer_ord]
