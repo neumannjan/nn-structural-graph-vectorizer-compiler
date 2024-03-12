@@ -474,7 +474,7 @@ class LambdaIterable(Iterable[_T]):
 def print_with_ellipsis(it: Iterator[str], after=5) -> str:
     vals: list[str] = []
 
-    for i in range(after):
+    for _ in range(after):
         try:
             val = next(it)
             vals.append(str(val))
