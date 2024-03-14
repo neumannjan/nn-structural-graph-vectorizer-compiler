@@ -13,3 +13,5 @@ class Settings:
 
     # TODO: must be disabled (?) when batch is smaller than full (due to weights sharing)
     group_learnable_weight_parameters: bool = True
+
+    allow_non_builtin_torch_ops: bool = True

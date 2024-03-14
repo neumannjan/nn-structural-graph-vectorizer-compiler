@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Iterable, Protocol, Sequence, runtime_checkable
+from typing import Protocol, Sequence, runtime_checkable
 
 import numpy as np
 import torch
@@ -107,7 +107,7 @@ class SliceValues(torch.nn.Module, GatherModuleLike):
         return self
 
     def forward(self, layer_input: torch.Tensor):
-        return layer_input[self.start: self.end]
+        return layer_input[self.start : self.end]
 
 
 class TakeEachNth(torch.nn.Module, GatherModuleLike):
@@ -137,7 +137,7 @@ class TakeEachNth(torch.nn.Module, GatherModuleLike):
         return self
 
     def forward(self, layer_input: torch.Tensor):
-        return layer_input[self.start: self.end: self.step]
+        return layer_input[self.start : self.end : self.step]
 
 
 class GenericGather(torch.nn.Module, GatherModuleLike):
@@ -461,13 +461,7 @@ class MultiLayerGather(torch.nn.Module, LayerGatherModuleLike):
         return x
 
 
-def build_optimal_multi_layer_gather(inputs_ordinals: list[LayerOrdinal], period_hint: int | None = None):
-    layer0, _ = inputs_ordinals[0]
-    is_single_layer = all((layer0 == l for l, _ in inputs_ordinals[1:]))
-
-    if is_single_layer:
-        return build_optimal_single_layer_gather(layer0, [o for _, o in inputs_ordinals], period_hint=period_hint)
-
+def _build_multi_layer_gather(inputs_ordinals: list[LayerOrdinal], period_hint: int | None = None):
     per_layer_ordinals_set: dict[int, set[int]] = defaultdict(lambda: set())
 
     for l, o in inputs_ordinals:
@@ -480,6 +474,21 @@ def build_optimal_multi_layer_gather(inputs_ordinals: list[LayerOrdinal], period
     final_gather = build_optimal_gather(final_ordinals, period_hint=period_hint)
 
     return MultiLayerGather(multi_layer_set_gather, final_gather)
+
+
+def build_optimal_multi_layer_gather(
+    inputs_ordinals: list[LayerOrdinal], period_hint: int | None = None, use_scatter: bool = False
+):
+    layer0, _ = inputs_ordinals[0]
+    is_single_layer = all((layer0 == l for l, _ in inputs_ordinals[1:]))
+
+    if is_single_layer:
+        return build_optimal_single_layer_gather(layer0, [o for _, o in inputs_ordinals], period_hint=period_hint)
+
+    if use_scatter:
+        raise NotImplementedError()
+    else:
+        return _build_multi_layer_gather(inputs_ordinals, period_hint)
 
 
 class ViewWithPeriod(torch.nn.Module, GatherModuleLike):

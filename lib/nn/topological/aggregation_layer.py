@@ -19,7 +19,9 @@ class AggregationLayer(torch.nn.Module):
 
         inputs_dims = torch.tensor(list(neurons.input_lengths), dtype=torch.int32)
 
-        reshape_agg = build_optimal_reshape_aggregate(aggregation_type, counts=inputs_dims)
+        reshape_agg = build_optimal_reshape_aggregate(
+            aggregation_type, counts=inputs_dims, allow_non_builtin_torch_ops=settings.allow_non_builtin_torch_ops
+        )
 
         inputs_ordinals = list(neurons.inputs.ordinals)
 

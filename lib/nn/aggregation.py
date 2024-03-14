@@ -1,9 +1,9 @@
-from typing import List, Literal, Protocol
+from typing import List, Literal, Protocol, Union
 
 import torch
-from torch_scatter import scatter_add, scatter_mean
 
 from lib.nn.gather import ViewWithPeriod
+from lib.nn.scatter import ReductionType, build_optimal_scatter
 
 AggregationType = Literal["mean", "sum"]
 
@@ -84,29 +84,13 @@ class ViewAndAggregate(torch.nn.Module, ReshapeAggregateModuleLike):
         return x
 
 
-def _get_scatter_func(agg: AggregationType):
-    if agg == "mean":
-        return scatter_mean
-    elif agg == "sum":
-        return scatter_add
-    else:
-        raise ValueError()
-
-
-class ScatterReduceAggregation(torch.nn.Module, ReshapeAggregateModuleLike):
-    def __init__(self, agg_type: AggregationType, counts: List[int] | torch.Tensor) -> None:
+class ScatterAggregate(torch.nn.Module, ReshapeAggregateModuleLike):
+    def __init__(self, scatter: torch.nn.Module) -> None:
         super().__init__()
-        self.agg_type = agg_type
+        self.delegate = scatter
 
-        if not isinstance(counts, torch.Tensor):
-            counts = torch.tensor(counts, dtype=torch.int32)
-
-        self.index = torch.nn.Parameter(
-            torch.repeat_interleave(torch.arange(0, counts.shape[0]), repeats=counts),
-            requires_grad=False,
-        )
-
-        self.scatter_func = _get_scatter_func(agg_type)
+    def forward(self, x):
+        return self.delegate(x)
 
     @property
     def is_matching_dimension(self) -> bool:
@@ -118,14 +102,34 @@ class ScatterReduceAggregation(torch.nn.Module, ReshapeAggregateModuleLike):
     def get_aggregate(self) -> SimpleAggregation:
         raise ValueError("is_matching_dimension == False!")
 
-    def forward(self, inp: torch.Tensor) -> torch.Tensor:
-        return self.scatter_func(inp, self.index, dim=0)
+    def __repr__(self):
+        cls_name = self.__class__.__name__
+        return f"{cls_name}({repr(self.delegate)})"
 
-    def extra_repr(self) -> str:
-        return f"type={self.agg_type},"
+    def __getattr__(self, name: str) -> Union[torch.Tensor, torch.nn.Module]:
+        delegate = super().__getattr__("delegate")
+
+        if name == "delegate":
+            return delegate
+
+        return delegate.__getattr__(name)
 
 
-def build_optimal_reshape_aggregate(agg_type: AggregationType, counts: List[int] | torch.Tensor):
+def _build_scatter_reduce_aggregation(
+    counts: list[int] | torch.Tensor, reduce: ReductionType, allow_non_builtin_torch_ops: bool
+):
+    if not isinstance(counts, torch.Tensor):
+        counts = torch.tensor(counts, dtype=torch.int32)
+
+    index = torch.repeat_interleave(torch.arange(0, counts.shape[0]), repeats=counts)
+    return ScatterAggregate(
+        build_optimal_scatter(index=index, reduce=reduce, allow_non_builtin_torch_ops=allow_non_builtin_torch_ops)
+    )
+
+
+def build_optimal_reshape_aggregate(
+    agg_type: AggregationType, counts: List[int] | torch.Tensor, allow_non_builtin_torch_ops: bool
+):
     if not isinstance(counts, torch.Tensor):
         counts = torch.tensor(counts, dtype=torch.int32)
 
@@ -133,4 +137,6 @@ def build_optimal_reshape_aggregate(agg_type: AggregationType, counts: List[int]
         period = int(counts[0].item())
         return ViewAndAggregate(input_length=period * counts.shape[0], period=period, agg_type=agg_type, dim=1)
 
-    return ScatterReduceAggregation(agg_type, counts=counts)
+    return _build_scatter_reduce_aggregation(
+        counts, reduce=agg_type, allow_non_builtin_torch_ops=allow_non_builtin_torch_ops
+    )

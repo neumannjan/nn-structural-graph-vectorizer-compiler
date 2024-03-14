@@ -1,4 +1,3 @@
-import itertools
 import os
 
 from lib.nn.topological.settings import Settings
@@ -9,6 +8,7 @@ SETTINGS_PARAMS = [
     Settings(check_same_layers_assumption=False),
     Settings(check_same_layers_assumption=False, optimize_linear_gathers=False),
     Settings(check_same_layers_assumption=False, group_learnable_weight_parameters=False),
+    Settings(check_same_layers_assumption=False, allow_non_builtin_torch_ops=False),
 ]
 
 DEVICE_PARAMS = [

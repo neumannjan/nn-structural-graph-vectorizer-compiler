@@ -113,4 +113,5 @@ if __name__ == "__main__":
     stts = SETTINGS_PARAMS[0]
     stts.optimize_linear_gathers = True
     stts.group_learnable_weight_parameters = True
+    stts.allow_non_builtin_torch_ops = True
     model = do_test_dataset(MyMutagenesis("simple", "original"), "cpu", stts)
