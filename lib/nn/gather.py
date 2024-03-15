@@ -4,7 +4,7 @@ from typing import Mapping, Protocol, Sequence, runtime_checkable
 import numpy as np
 import torch
 
-from lib.nn.sources.source import LayerOrdinal
+from lib.nn.sources.base import LayerOrdinal
 from lib.utils import detect_repeating_K_sequence_in_list, detect_repeating_sequence_in_list
 
 

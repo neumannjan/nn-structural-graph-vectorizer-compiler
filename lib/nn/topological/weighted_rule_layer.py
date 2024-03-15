@@ -2,7 +2,7 @@ from typing import Mapping
 
 import torch
 
-from lib.nn.sources.source import NeuralNetworkDefinition, Neurons
+from lib.nn.sources.base import Network, Neurons
 from lib.nn.topological.linear import build_optimal_linear
 from lib.nn.topological.settings import Settings
 from lib.nn.transformation import build_transformation
@@ -12,7 +12,7 @@ from lib.utils import head_and_rest
 class WeightedRuleLayer(torch.nn.Module):
     def __init__(
         self,
-        network: NeuralNetworkDefinition,
+        network: Network,
         neurons: Neurons,
         settings: Settings,
     ) -> None:

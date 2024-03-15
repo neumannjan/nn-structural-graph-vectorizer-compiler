@@ -1,6 +1,7 @@
 import functools
 import heapq
 from collections.abc import Collection
+from types import MethodType
 from typing import Callable, Generic, Iterable, Iterator, Sequence, TypeVar
 
 import numpy as np
@@ -445,7 +446,6 @@ def head_and_rest(it: Iterator[_T] | Iterable[_T]) -> tuple[_T, Iterator[_T]]:
 
 class MapCollection(Collection[_T]):
     def __init__(self, mapping: Callable[[_S], _T], orig: Collection[_S]) -> None:
-        super().__init__()
         self._orig = orig
         self._mapping = mapping
 
@@ -461,6 +461,18 @@ class MapCollection(Collection[_T]):
                 return True
 
         return False
+
+
+class MapSequence(Sequence[_T]):
+    def __init__(self, mapping: Callable[[_S], _T], orig: Sequence[_S]) -> None:
+        self._orig = orig
+        self._mapping = mapping
+
+    def __getitem__(self, key: int) -> _T:
+        return self._mapping(self._orig[key])
+
+    def __len__(self) -> int:
+        return len(self._orig)
 
 
 class LambdaIterable(Iterable[_T]):
@@ -488,3 +500,37 @@ def print_with_ellipsis(it: Iterator[str], after=5) -> str:
 
     vals.append("...")
     return ", ".join(vals)
+
+
+class _PreferenceDelegate:
+    def __init__(self, *delegates) -> None:
+        self._delegates = delegates
+
+    def __getattr__(self, name: str):
+        for d in self._delegates:
+            if hasattr(d, name):
+                return getattr(d, name)
+
+        raise RuntimeError()
+
+
+def delegate(delegate: str, *methods: str):
+    def actual_decorator(cls):
+        @functools.wraps(cls)
+        def wrapper(*const_kargs, **const_kwargs):
+            instance = cls(*const_kargs, **const_kwargs)
+
+            the_delegate = getattr(instance, delegate)
+
+            new_self = _PreferenceDelegate(instance, the_delegate)
+
+            for method_name in methods:
+                underlying_method = getattr(the_delegate, method_name)
+                new_self_method = MethodType(underlying_method.__func__, new_self)
+                object.__setattr__(instance, method_name, new_self_method)
+
+            return instance
+
+        return wrapper
+
+    return actual_decorator

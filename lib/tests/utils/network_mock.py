@@ -1,8 +1,9 @@
 import random
 from typing import Sequence
 
-from lib.nn.sources.dict_source import NeuralNetworkDefinitionDict, Neuron
-from lib.nn.sources.source import LayerDefinition, LayerType, NeuralNetworkDefinition
+from lib.nn import sources
+from lib.nn.sources.minimal_api.dict import Neuron
+from lib.nn.sources.base import LayerDefinition, LayerType, Network
 from lib.tests.utils.neuron_mock import NeuronTestFactory
 
 EXAMPLE_LAYER_IDS: list[int] = [16, 13, 12, 11, 10, 9, 8, 7]
@@ -11,7 +12,7 @@ _A: list[LayerType] = ["AggregationLayer"]
 EXAMPLE_LAYER_TYPES: Sequence[LayerType] = ["FactLayer", *(_A * 7)]
 
 
-def generate_example_network(inputs_from_previous_layer_only=False) -> NeuralNetworkDefinition:
+def generate_example_network(inputs_from_previous_layer_only=False) -> Network:
     neurons: dict[int, list[Neuron]] = {}
 
     layers = [LayerDefinition(id=l, type=t) for l, t in zip(EXAMPLE_LAYER_IDS, EXAMPLE_LAYER_TYPES)]
@@ -38,4 +39,4 @@ def generate_example_network(inputs_from_previous_layer_only=False) -> NeuralNet
         else:
             prev_neurons += neurons[layer]
 
-    return NeuralNetworkDefinitionDict(layers=layers, neurons=neurons)
+    return sources.from_dict(layers=layers, neurons=neurons)

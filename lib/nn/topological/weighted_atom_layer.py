@@ -2,7 +2,7 @@ from typing import Mapping
 
 import torch
 
-from lib.nn.sources.source import NeuralNetworkDefinition, Neurons
+from lib.nn.sources.base import Network, Neurons
 from lib.nn.topological.settings import Settings
 from lib.nn.transformation import build_transformation
 from lib.utils import head_and_rest
@@ -13,7 +13,7 @@ from .linear import build_optimal_linear
 class WeightedAtomLayer(torch.nn.Module):
     def __init__(
         self,
-        network: NeuralNetworkDefinition,
+        network: Network,
         neurons: Neurons,
         settings: Settings,
     ) -> None:

@@ -7,8 +7,7 @@ from neuralogic.core.builder.builder import NeuralSample
 from tqdm.auto import tqdm
 
 from lib.nn.definitions.ops import TransformationDef
-from lib.nn.sources.source import LayerDefinition, LayerDefinitions, LayerOrdinal, LayerType
-from lib.nn.topological.settings import Settings
+from lib.nn.sources.base import LayerDefinition, LayerType
 from lib.other_utils import camel_to_snake
 
 
@@ -190,23 +189,5 @@ def compute_java_neurons_per_layer(samples: Sequence[NeuralSample | JavaNeuron])
             inp_index = int(inp.getIndex())
             if inp_index not in visited:
                 queue.append(inp)
-
-    return out
-
-
-def compute_java_ordinals_for_layer(
-    layer_def: LayerDefinition, neurons: list[JavaNeuron], settings: Settings
-) -> dict[int, LayerOrdinal]:
-    return {int(n.getIndex()): LayerOrdinal(layer_def.id, i) for i, n in enumerate(neurons)}
-
-
-def compute_java_neurons(
-    neurons_per_layer: dict[int, list[JavaNeuron]], layer_definitions: LayerDefinitions
-) -> dict[int, JavaNeuron]:
-    out: dict[int, JavaNeuron] = {}
-
-    for layer in layer_definitions:
-        for java_neuron in neurons_per_layer[layer.id]:
-            out[java_neuron.getIndex()] = java_neuron
 
     return out

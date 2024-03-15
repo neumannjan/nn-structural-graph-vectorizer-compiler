@@ -15,7 +15,7 @@ from lib.nn.gather import (
     get_optimal_gather_for_period,
     get_optimal_layer_gather_for_period,
 )
-from lib.nn.sources.source import LayerOrdinal, NeuralNetworkDefinition, Neurons, WeightDefinition
+from lib.nn.sources.base import LayerOrdinal, Network, Neurons, WeightDefinition
 from lib.nn.topological.settings import Settings
 from lib.nn.weight import create_weights_and_gather
 
@@ -160,7 +160,7 @@ def _build_optimal_linear_unique_and_gather(
 
 
 def build_optimal_linear(
-    network: NeuralNetworkDefinition,
+    network: Network,
     neurons: Neurons,
     period: int | None,
     settings: Settings,

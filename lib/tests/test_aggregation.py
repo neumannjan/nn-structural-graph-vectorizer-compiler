@@ -1,7 +1,7 @@
 import pytest
 import torch
-from lib.nn.sources.dict_source import NeuralNetworkDefinitionDict
-from lib.nn.sources.source import LayerDefinition
+from lib.nn import sources
+from lib.nn.sources.base import LayerDefinition
 from lib.nn.topological.aggregation_layer import AggregationLayer
 from lib.nn.topological.settings import Settings
 from lib.tests.utils.neuron_mock import NeuronTestFactory
@@ -18,7 +18,7 @@ def build_sample1():
     factory = NeuronTestFactory(layers=LAYERS, id_provider_starts=[0, 1000, 10000])
 
     return {
-        16: [factory.create(16) for j in range(12)],
+        16: [factory.create(16) for _ in range(12)],
         13: [
             factory.create(13, inputs=[0, 1, 2, 3]),
             factory.create(13, inputs=[4, 5, 6, 7]),
@@ -32,7 +32,7 @@ def build_sample2():
     factory = NeuronTestFactory(layers=LAYERS, id_provider_starts=[0, 1000, 10000])
 
     return {
-        16: [factory.create(16) for j in range(20)],
+        16: [factory.create(16) for _ in range(20)],
         13: [
             factory.create(13, inputs=[0, 1, 2, 3]),
             factory.create(13, inputs=[4, 5, 6]),
@@ -48,7 +48,7 @@ def build_sample2():
 @pytest.mark.parametrize("settings", SETTINGS_PARAMS)
 def test_same_no_of_inputs(settings: Settings):
     inputs = {16: torch.tensor([2, 2, 2, 2, 3, 3, 3, 3, 5, 5, 5, 5])}
-    network = NeuralNetworkDefinitionDict(layers=LAYERS, neurons=build_sample1())
+    network = sources.from_dict(layers=LAYERS, neurons=build_sample1())
     layer = AggregationLayer(
         neurons=network[13],
         aggregation_type="sum",
@@ -64,7 +64,7 @@ def test_same_no_of_inputs(settings: Settings):
 @pytest.mark.parametrize("settings", SETTINGS_PARAMS)
 def test_variable_no_of_inputs(settings: Settings):
     inputs = {16: torch.tensor([2, 2, 2, 2, 3, 3, 3, 5, 5, 5, 7, 7, 7, 7, 11, 11, 13, 13, 13, 13])}
-    network = NeuralNetworkDefinitionDict(layers=LAYERS, neurons=build_sample2())
+    network = sources.from_dict(layers=LAYERS, neurons=build_sample2())
     layer = AggregationLayer(
         neurons=network[13],
         aggregation_type="sum",

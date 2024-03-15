@@ -3,7 +3,7 @@ import itertools
 import numpy as np
 import torch
 
-from lib.nn.sources.source import LayerNeurons
+from lib.nn.sources.base import LayerNeurons
 from lib.nn.topological.settings import Settings
 from lib.utils import atleast_3d_rev, head_and_rest
 

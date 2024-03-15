@@ -13,14 +13,14 @@ from lib.nn.gather import (
     TakeValue,
     build_optimal_multi_layer_gather,
 )
-from lib.nn.sources.source import LayerOrdinal, NeuralNetworkDefinition
+from lib.nn.sources.base import LayerOrdinal, Network
 from lib.tests.utils.network_mock import generate_example_network
 from lib.utils import atleast_3d_rev
 
 
 def _do_the_test(
     gather_module: torch.nn.Module,
-    network: NeuralNetworkDefinition,
+    network: Network,
     inputs_ordinals: Sequence[LayerOrdinal],
 ):
     # input: indices of the neurons (so that for each neuron, its index is in its position)

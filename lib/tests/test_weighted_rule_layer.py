@@ -3,8 +3,9 @@ from typing import Sequence
 import numpy as np
 import pytest
 import torch
-from lib.nn.sources.dict_source import NeuralNetworkDefinitionDict, Neuron, WeightDefinitionImpl
-from lib.nn.sources.source import LayerDefinition
+from lib.nn import sources
+from lib.nn.sources.minimal_api.dict import WeightDefinitionImpl
+from lib.nn.sources.base import LayerDefinition
 from lib.nn.topological.settings import Settings
 from lib.nn.topological.weighted_rule_layer import WeightedRuleLayer
 from lib.tests.utils.neuron_mock import NeuronTestFactory
@@ -50,10 +51,10 @@ def build_sample(weights: list[WeightDefinitionImpl], facts_values: Sequence[np.
 
     factory = NeuronTestFactory(layers=LAYERS, id_provider_starts=0)
 
-    return NeuralNetworkDefinitionDict(
+    return sources.from_dict(
         layers=LAYERS,
         neurons={
-            16: [factory.create(16, value=v) for i, v in enumerate(facts_values)],
+            16: [factory.create(16, value=v) for v in facts_values],
             13: [
                 factory.create(13, inputs=[i * n_weights + j for j in range(n_weights)], weights=weights)
                 for i in range(n_neurons)

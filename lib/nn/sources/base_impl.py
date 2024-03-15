@@ -1,7 +1,7 @@
-from lib.nn.sources.source import (
+from lib.nn.sources.base import (
     LayerDefinitions,
     LayerNeurons,
-    NeuralNetworkDefinition,
+    Network,
     Neurons,
     Ordinals,
     WeightDefinition,
@@ -37,7 +37,7 @@ class BaseLayerNeurons(LayerNeurons):
         return f"{self.__class__.__name__}({self.layer.id}: {self.layer.type} -> (length: {len(self)}))"
 
 
-class BaseNeuralNetworkDefinition(NeuralNetworkDefinition):
+class BaseNetwork(Network):
     def __repr__(self) -> str:
         items = [f"({ns.layer.id}: {ns.layer.type} -> (length: {len(ns)}))" for ns in self]
         items = ", ".join(items)

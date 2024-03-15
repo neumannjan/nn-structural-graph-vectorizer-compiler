@@ -5,7 +5,7 @@ import torch
 
 from lib.nn.aggregation import AggregationType, build_optimal_reshape_aggregate
 from lib.nn.gather import build_optimal_multi_layer_gather, build_optimal_multi_layer_gather_and_reshape
-from lib.nn.sources.source import Neurons
+from lib.nn.sources.base import Neurons
 from lib.nn.topological.settings import Settings
 
 

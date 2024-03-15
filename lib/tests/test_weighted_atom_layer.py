@@ -5,8 +5,9 @@ from typing import Sequence
 import numpy as np
 import pytest
 import torch
-from lib.nn.sources.dict_source import NeuralNetworkDefinitionDict, WeightDefinitionImpl
-from lib.nn.sources.source import LayerDefinition
+from lib.nn import sources
+from lib.nn.sources.minimal_api.dict import WeightDefinitionImpl
+from lib.nn.sources.base import LayerDefinition, Network
 from lib.nn.topological.settings import Settings
 from lib.nn.topological.weighted_atom_layer import WeightedAtomLayer
 from lib.tests.utils.neuron_mock import NeuronTestFactory
@@ -44,7 +45,7 @@ OUTPUTS: dict[int, list[float]] = {
 }
 
 
-def build_sample_from_input_indices(indices: Sequence[int]) -> tuple[NeuralNetworkDefinitionDict, torch.Tensor]:
+def build_sample_from_input_indices(indices: Sequence[int]) -> tuple[Network, torch.Tensor]:
     weights = [
         WeightDefinitionImpl(id=i, value=np.expand_dims(torch.tensor(WEIGHTS[i]), -1), learnable=i >= 0)
         for i in indices
@@ -52,11 +53,11 @@ def build_sample_from_input_indices(indices: Sequence[int]) -> tuple[NeuralNetwo
 
     factory = NeuronTestFactory(layers=LAYERS, id_provider_starts=[0, 1000, 1000 + len(weights)])
 
-    sample = NeuralNetworkDefinitionDict(
+    sample = sources.from_dict(
         layers=LAYERS,
         neurons={
             16: [factory.create(16)],
-            13: [factory.create(13, inputs=[0], weights=[w]) for i, w in enumerate(weights)],
+            13: [factory.create(13, inputs=[0], weights=[w]) for w in weights],
             12: [factory.create(12, inputs=[1000 + i for i in range(len(weights))])],
         },
     )

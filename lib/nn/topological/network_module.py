@@ -2,7 +2,7 @@ import torch
 from tqdm.auto import tqdm
 
 from lib.datasets import MyMutagenesis
-from lib.nn.sources.source import NeuralNetworkDefinition
+from lib.nn.sources.base import Network
 from lib.nn.sources.views.merge_facts import MergeFactsView
 from lib.nn.topological.aggregation_layer import AggregationLayer
 from lib.nn.topological.fact_layer import FactLayer
@@ -17,7 +17,7 @@ d = MyMutagenesis()
 class NetworkModule(torch.nn.Module):
     def __init__(
         self,
-        network: NeuralNetworkDefinition,
+        network: Network,
         settings: Settings,
     ) -> None:
         super().__init__()
