@@ -3,7 +3,7 @@ from typing import Collection, Generic, Iterable, Iterator, Sequence, TypeVar
 import numpy as np
 import torch
 
-from lib.nn.definitions.ops import TransformationDef
+from lib.nn.definitions.ops import AggregationDef, TransformationDef
 from lib.nn.sources.base_impl import BaseLayerNeurons, BaseNetwork, BaseNeurons, BaseOrdinals
 from lib.nn.sources.minimal_api.base import MinimalAPINetwork
 from lib.nn.sources.minimal_api.ordinals import MinimalAPIOrdinals, MinimalAPIOrdinalsImpl
@@ -106,6 +106,9 @@ class _Neurons(BaseNeurons, Generic[_TNeurons]):
 
     def get_transformations(self) -> Sequence[TransformationDef | None]:
         return self._minimal_api.get_transformations(self._neurons)
+
+    def get_aggregations(self) -> Sequence[AggregationDef | None]:
+        return self._minimal_api.get_aggregations(self._neurons)
 
     def slice(self, sl: slice) -> "_Neurons":
         neurons = self._minimal_api.slice(self._neurons, sl)

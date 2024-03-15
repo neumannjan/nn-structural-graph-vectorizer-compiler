@@ -1,4 +1,5 @@
 from collections import defaultdict, deque
+import jpype
 from typing import Any, Protocol, Sequence
 from typing import get_args as t_get_args
 
@@ -6,7 +7,7 @@ import numpy as np
 from neuralogic.core.builder.builder import NeuralSample
 from tqdm.auto import tqdm
 
-from lib.nn.definitions.ops import TransformationDef
+from lib.nn.definitions.ops import AggregationDef, TransformationDef
 from lib.nn.sources.base import LayerDefinition, LayerType
 from lib.other_utils import camel_to_snake
 
@@ -57,6 +58,9 @@ class JavaNeuron(Protocol):
     def getTransformation(self) -> Any:
         ...
 
+    def getCombination(self) -> Any:
+        ...
+
 
 CLASS_TO_LAYER_TYPE_MAP: dict[str, LayerType] = {
     "FactNeuron": "FactLayer",
@@ -91,6 +95,32 @@ def get_transformation(java_neuron: JavaNeuron) -> TransformationDef | None:
 
     if out not in _TRANSFORMATIONS:
         raise NotImplementedError(f"Unsupported transformation: {out} (Java class {tr_class_name})")
+
+    return out
+
+
+_AGGREGATIONS: set[AggregationDef] = set(t_get_args(AggregationDef))
+
+_AggregationCls: jpype.JClass | None = None
+
+
+def get_aggregation(java_neuron: JavaNeuron) -> AggregationDef | None:
+    global _AggregationCls
+
+    java_combination = java_neuron.getCombination()
+
+    if _AggregationCls is None:
+        _AggregationCls = jpype.JClass("cz.cvut.fel.ida.algebra.functions.Aggregation")
+
+    if java_combination is None or not isinstance(java_combination, _AggregationCls):
+        return None
+
+    agg_class_name = str(java_combination.getClass().getSimpleName())
+
+    out = camel_to_snake(agg_class_name)
+
+    if out not in _AGGREGATIONS:
+        raise NotImplementedError(f"Unsupported aggregation: {out} (Java class {agg_class_name})")
 
     return out
 

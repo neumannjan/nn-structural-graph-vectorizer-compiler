@@ -4,7 +4,7 @@ from typing import Collection, Iterable, Mapping, Sequence
 import numpy as np
 import torch
 
-from lib.nn.definitions.ops import TransformationDef
+from lib.nn.definitions.ops import AggregationDef, TransformationDef
 from lib.nn.sources.base_impl import BaseWeightDefinition
 from lib.nn.sources.minimal_api.base import MinimalAPINetwork
 from lib.nn.sources.base import LayerDefinition, WeightDefinition
@@ -76,6 +76,7 @@ _ZERO_WEIGHT = WeightDefinitionImpl(id=-2, value=np.zeros(0), learnable=False)
 class Neuron:
     id: int
     transformation: TransformationDef | None
+    aggregation: AggregationDef | None
     inputs: Sequence[int] = field(default_factory=lambda: [], hash=False)
     weights: Sequence[WeightDefinition] = field(default_factory=lambda: [], hash=False)
     bias: WeightDefinition = field(default_factory=lambda: _ZERO_WEIGHT, hash=False)
@@ -142,6 +143,9 @@ class MinimalAPIDictNetwork(MinimalAPINetwork[Sequence[Neuron]]):
 
     def get_transformations(self, neurons: Sequence[Neuron]) -> Sequence[TransformationDef | None]:
         return MapSequence(lambda n: n.transformation, neurons)
+
+    def get_aggregations(self, neurons: Sequence[Neuron]) -> Sequence[AggregationDef | None]:
+        return MapSequence(lambda n: n.aggregation, neurons)
 
     def slice(self, neurons: Sequence[Neuron], sl: slice) -> Sequence[Neuron]:
         return neurons[sl]

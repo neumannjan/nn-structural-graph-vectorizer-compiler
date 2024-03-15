@@ -2,9 +2,9 @@ import random
 from typing import Sequence
 
 from lib.nn import sources
-from lib.nn.sources.minimal_api.dict import Neuron
 from lib.nn.sources.base import LayerDefinition, LayerType, Network
-from lib.tests.utils.neuron_mock import NeuronTestFactory
+from lib.nn.sources.minimal_api.dict import Neuron
+from lib.tests.utils.neuron_factory import NeuronTestFactory
 
 EXAMPLE_LAYER_IDS: list[int] = [16, 13, 12, 11, 10, 9, 8, 7]
 

@@ -15,7 +15,7 @@ from typing import (
 import numpy as np
 import torch
 
-from lib.nn.definitions.ops import TransformationDef
+from lib.nn.definitions.ops import AggregationDef, TransformationDef
 
 if TYPE_CHECKING:
     from lib.nn.sources.minimal_api.base import MinimalAPINetwork
@@ -191,6 +191,10 @@ class Neurons(Protocol):
 
     def get_transformations(self) -> Sequence[TransformationDef | None]:
         """Get the transformation function definitions attached to the neurons in this container."""
+        ...
+
+    def get_aggregations(self) -> Sequence[AggregationDef | None]:
+        """Get the aggregation function definitions attached to the neurons in this container."""
         ...
 
     def slice(self, sl: slice) -> "Neurons":

@@ -4,11 +4,11 @@ import numpy as np
 import pytest
 import torch
 from lib.nn import sources
-from lib.nn.sources.minimal_api.dict import WeightDefinitionImpl
 from lib.nn.sources.base import LayerDefinition
+from lib.nn.sources.minimal_api.dict import WeightDefinitionImpl
 from lib.nn.topological.settings import Settings
 from lib.nn.topological.weighted_rule_layer import WeightedRuleLayer
-from lib.tests.utils.neuron_mock import NeuronTestFactory
+from lib.tests.utils.neuron_factory import NeuronTestFactory
 from lib.tests.utils.test_params import SETTINGS_PARAMS
 
 LAYERS = [

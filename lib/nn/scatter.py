@@ -4,14 +4,40 @@ import numpy as np
 import torch
 from torch_scatter import scatter, segment_coo, segment_csr
 
-ReductionType = Literal["mean", "sum", "min", "max"]
+ReductionDef = Literal[
+    "mean",
+    "avg",
+    "average",
+    "minimum",
+    "min",
+    "sum",
+    "max",
+    "maximum",
+]
+
+_StrictReductionRef = Literal["min", "max", "sum", "mean"]
+
+_TO_STRICT: dict[ReductionDef, _StrictReductionRef] = {
+    "mean": "mean",
+    "avg": "mean",
+    "average": "mean",
+    "minimum": "min",
+    "min": "min",
+    "sum": "sum",
+    "max": "max",
+    "maximum": "max",
+}
+
+
+def _to_strict(reduce: ReductionDef) -> _StrictReductionRef:
+    return _TO_STRICT[reduce]
 
 
 class _ScatterBase(torch.nn.Module):
-    def __init__(self, index: torch.Tensor, reduce: ReductionType) -> None:
+    def __init__(self, index: torch.Tensor, reduce: ReductionDef) -> None:
         super().__init__()
         self.index = torch.nn.Parameter(index, requires_grad=False)
-        self.reduce = reduce
+        self.reduce = _to_strict(reduce)
 
     def extra_repr(self) -> str:
         return f"reduce={self.reduce}"
@@ -28,7 +54,7 @@ class SegmentCOO(_ScatterBase):
 
 
 class SegmentCSR(_ScatterBase):
-    def __init__(self, index: torch.Tensor, indptr: torch.Tensor, reduce: ReductionType) -> None:
+    def __init__(self, index: torch.Tensor, indptr: torch.Tensor, reduce: ReductionDef) -> None:
         super().__init__(index, reduce)
         self.indptr = torch.nn.Parameter(indptr, requires_grad=False)
 
@@ -50,7 +76,7 @@ def coo_to_csr_dim0(index: torch.Tensor, do_assert: bool = True) -> torch.Tensor
 
 
 def build_optimal_scatter(
-    index: torch.Tensor | Sequence[int] | np.ndarray, reduce: ReductionType, allow_non_builtin_torch_ops: bool
+    index: torch.Tensor | Sequence[int] | np.ndarray, reduce: ReductionDef, allow_non_builtin_torch_ops: bool
 ):
     if not isinstance(index, torch.Tensor):
         index = torch.tensor(index, dtype=torch.int32)

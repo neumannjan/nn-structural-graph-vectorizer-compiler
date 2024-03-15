@@ -4,7 +4,7 @@ from typing import Iterable, Mapping, OrderedDict, overload
 import numpy as np
 import torch
 
-from lib.nn.definitions.ops import TransformationDef
+from lib.nn.definitions.ops import AggregationDef, TransformationDef
 from lib.nn.sources.minimal_api.base import MinimalAPINetwork
 from lib.nn.sources.minimal_api.ordinals import MinimalAPIOrdinals
 from lib.nn.sources.base import LayerDefinition, LayerOrdinal, Network, Neurons, WeightDefinition
@@ -55,6 +55,9 @@ class MinimalAPINetworkFromFullProxy(MinimalAPINetwork[Neurons]):
 
     def get_transformations(self, neurons: Neurons) -> Sequence[TransformationDef | None]:
         return neurons.get_transformations()
+
+    def get_aggregations(self, neurons: Neurons) -> Sequence[AggregationDef | None]:
+        return neurons.get_aggregations()
 
     def slice(self, neurons: Neurons, sl: slice) -> Neurons:
         return neurons.slice(sl)

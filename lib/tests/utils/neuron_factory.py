@@ -2,8 +2,8 @@ import itertools
 from abc import abstractmethod
 from typing import Iterator, Protocol, Sequence
 
-from lib.nn.sources.minimal_api.dict import Neuron
 from lib.nn.sources.base import LayerDefinition, LayerType, get_layer_id
+from lib.nn.sources.minimal_api.dict import Neuron
 
 
 class _BaseTestNeuronFactory:
@@ -26,17 +26,17 @@ class _BaseTestNeuronFactoryProvider(Protocol):
 
 class _FactTestNeuronFactory(_BaseTestNeuronFactory):
     def _build_default(self) -> Neuron:
-        return Neuron(id=0, transformation="identity")
+        return Neuron(id=0, transformation="identity", aggregation=None)
 
 
 class _WeightedTestNeuronFactory(_BaseTestNeuronFactory):
     def _build_default(self) -> Neuron:
-        return Neuron(id=0, transformation="tanh")
+        return Neuron(id=0, transformation="tanh", aggregation=None)
 
 
 class _AggregationTestNeuronFactory(_BaseTestNeuronFactory):
     def _build_default(self) -> Neuron:
-        return Neuron(id=0, transformation="identity")
+        return Neuron(id=0, transformation="identity", aggregation="mean")
 
 
 _LAYER_FACTORIES: dict[LayerType, _BaseTestNeuronFactoryProvider] = {

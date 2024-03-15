@@ -16,3 +16,19 @@ TransformationDef = Literal[
     "exp",
     "sigmoid",
 ]
+
+# TODO support missing aggregations
+AggregationDef = Literal[
+    "mean",
+    "avg",
+    "average",
+    "softmax",
+    "concat",
+    "concatenation",
+    "minimum",
+    "min",
+    "sum",
+    "maximum",
+    "max",
+    "count",
+]

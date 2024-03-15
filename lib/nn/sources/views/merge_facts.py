@@ -28,6 +28,7 @@ class _MinimalAPIMergeFactsView(MinimalAPINetwork[_TNeurons]):
     get_values_numpy = Delegate()
     get_values_torch = Delegate()
     get_transformations = Delegate()
+    get_aggregations = Delegate()
     slice = Delegate()
     select_ids = Delegate()
 

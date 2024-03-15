@@ -4,7 +4,7 @@ from typing import Generic, Iterable, Mapping, Protocol, TypeVar
 import numpy as np
 import torch
 
-from lib.nn.definitions.ops import TransformationDef
+from lib.nn.definitions.ops import AggregationDef, TransformationDef
 from lib.nn.sources.base import LayerDefinition, WeightDefinition
 
 _TNeurons = TypeVar("_TNeurons")
@@ -77,7 +77,11 @@ class MinimalAPINetwork(Generic[_TNeurons], Protocol):
         ...
 
     def get_transformations(self, neurons: _TNeurons) -> Sequence[TransformationDef | None]:
-        """Return transformations from a given representation of neurons."""
+        """Return transformation function defitions from a given representation of neurons."""
+        ...
+
+    def get_aggregations(self, neurons: _TNeurons) -> Sequence[AggregationDef | None]:
+        """Return aggregation function definitions from a given representation of neurons."""
         ...
 
     def slice(self, neurons: _TNeurons, sl: slice) -> _TNeurons:

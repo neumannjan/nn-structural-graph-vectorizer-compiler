@@ -6,11 +6,11 @@ import numpy as np
 import pytest
 import torch
 from lib.nn import sources
-from lib.nn.sources.minimal_api.dict import WeightDefinitionImpl
 from lib.nn.sources.base import LayerDefinition, Network
+from lib.nn.sources.minimal_api.dict import WeightDefinitionImpl
 from lib.nn.topological.settings import Settings
 from lib.nn.topological.weighted_atom_layer import WeightedAtomLayer
-from lib.tests.utils.neuron_mock import NeuronTestFactory
+from lib.tests.utils.neuron_factory import NeuronTestFactory
 from lib.tests.utils.test_params import SETTINGS_PARAMS
 from lib.utils import atleast_3d_rev
 

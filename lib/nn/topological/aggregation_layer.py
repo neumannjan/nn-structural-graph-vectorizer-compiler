@@ -3,10 +3,11 @@ from typing import Mapping
 
 import torch
 
-from lib.nn.aggregation import AggregationType, build_optimal_reshape_aggregate
+from lib.nn.aggregation import build_optimal_reshape_aggregate
 from lib.nn.gather import build_optimal_multi_layer_gather, build_optimal_multi_layer_gather_and_reshape
 from lib.nn.sources.base import Neurons
 from lib.nn.topological.settings import Settings
+from lib.utils import head_and_rest
 
 
 class AggregationLayer(torch.nn.Module):
@@ -14,7 +15,6 @@ class AggregationLayer(torch.nn.Module):
         self,
         neurons: Neurons,
         settings: Settings,
-        aggregation_type: AggregationType = "mean",
     ) -> None:
         super().__init__()
 
@@ -22,8 +22,14 @@ class AggregationLayer(torch.nn.Module):
 
         inputs_dims = torch.tensor(list(neurons.input_lengths), dtype=torch.int32)
 
+        aggregation, as_rest = head_and_rest(neurons.get_aggregations())
+        assert aggregation is not None
+
+        for a in as_rest:
+            assert aggregation == a
+
         reshape_agg = build_optimal_reshape_aggregate(
-            aggregation_type, counts=inputs_dims, allow_non_builtin_torch_ops=settings.allow_non_builtin_torch_ops
+            aggregation, counts=inputs_dims, allow_non_builtin_torch_ops=settings.allow_non_builtin_torch_ops
         )
 
         inputs_ordinals = list(neurons.inputs.ordinals)

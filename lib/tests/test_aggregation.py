@@ -4,7 +4,7 @@ from lib.nn import sources
 from lib.nn.sources.base import LayerDefinition
 from lib.nn.topological.aggregation_layer import AggregationLayer
 from lib.nn.topological.settings import Settings
-from lib.tests.utils.neuron_mock import NeuronTestFactory
+from lib.tests.utils.neuron_factory import NeuronTestFactory
 from lib.tests.utils.test_params import SETTINGS_PARAMS
 
 LAYERS = [
@@ -20,9 +20,9 @@ def build_sample1():
     return {
         16: [factory.create(16) for _ in range(12)],
         13: [
-            factory.create(13, inputs=[0, 1, 2, 3]),
-            factory.create(13, inputs=[4, 5, 6, 7]),
-            factory.create(13, inputs=[8, 9, 10, 11]),
+            factory.create(13, inputs=[0, 1, 2, 3], aggregation="sum"),
+            factory.create(13, inputs=[4, 5, 6, 7], aggregation="sum"),
+            factory.create(13, inputs=[8, 9, 10, 11], aggregation="sum"),
         ],
         12: [factory.create(12, inputs=[1000, 1001, 1002])],
     }
@@ -34,12 +34,12 @@ def build_sample2():
     return {
         16: [factory.create(16) for _ in range(20)],
         13: [
-            factory.create(13, inputs=[0, 1, 2, 3]),
-            factory.create(13, inputs=[4, 5, 6]),
-            factory.create(13, inputs=[7, 8, 9]),
-            factory.create(13, inputs=[10, 11, 12, 13]),
-            factory.create(13, inputs=[14, 15]),
-            factory.create(13, inputs=[16, 17, 18, 19]),
+            factory.create(13, inputs=[0, 1, 2, 3], aggregation="sum"),
+            factory.create(13, inputs=[4, 5, 6], aggregation="sum"),
+            factory.create(13, inputs=[7, 8, 9], aggregation="sum"),
+            factory.create(13, inputs=[10, 11, 12, 13], aggregation="sum"),
+            factory.create(13, inputs=[14, 15], aggregation="sum"),
+            factory.create(13, inputs=[16, 17, 18, 19], aggregation="sum"),
         ],
         12: [factory.create(12, inputs=[1000, 1001, 1002, 1003, 1004, 1005])],
     }
@@ -51,7 +51,6 @@ def test_same_no_of_inputs(settings: Settings):
     network = sources.from_dict(layers=LAYERS, neurons=build_sample1())
     layer = AggregationLayer(
         neurons=network[13],
-        aggregation_type="sum",
         settings=settings,
     )
     expected = torch.tensor([8, 12, 20])
@@ -67,7 +66,6 @@ def test_variable_no_of_inputs(settings: Settings):
     network = sources.from_dict(layers=LAYERS, neurons=build_sample2())
     layer = AggregationLayer(
         neurons=network[13],
-        aggregation_type="sum",
         settings=settings,
     )
     expected = torch.tensor([8, 9, 15, 28, 22, 52])
