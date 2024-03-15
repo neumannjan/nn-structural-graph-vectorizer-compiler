@@ -1,4 +1,4 @@
-from typing import Protocol, Union, runtime_checkable
+from typing import Mapping, Protocol, Union, runtime_checkable
 
 import torch
 
@@ -16,7 +16,7 @@ class LayerInputPipe(torch.nn.Module):
         self.layer_index = layer
         self.delegate = delegate
 
-    def forward(self, layer_values: dict[int, torch.Tensor]):
+    def forward(self, layer_values: Mapping[int, torch.Tensor]):
         return self.delegate(layer_values[self.layer_index])
 
     def extra_repr(self) -> str:
@@ -41,7 +41,7 @@ class LayerOutputPipe(torch.nn.Module):
         self.delegate = delegate
         self.layer_index = layer
 
-    def forward(self, layer_values: dict[int, torch.Tensor] | None = None):
+    def forward(self, layer_values: Mapping[int, torch.Tensor] | None = None):
         # TODO: autodetect in preprocessing which layers can be thrown away when for saving memory
         if layer_values is None:
             layer_values = {}

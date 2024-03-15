@@ -1,29 +1,31 @@
+import itertools
+
+import numpy as np
 import torch
 
-from lib.nn.sources.source import Neurons
+from lib.nn.sources.source import LayerNeurons
 from lib.nn.topological.settings import Settings
 from lib.utils import atleast_3d_rev, head_and_rest
 
 
 class FactLayer(torch.nn.Module):
-    def __init__(self, neurons: Neurons, settings: Settings) -> None:
+    def __init__(self, neurons: LayerNeurons, settings: Settings) -> None:
         super().__init__()
 
         self.neuron_ids = neurons.ids
 
-        if settings.assume_facts_same:
-            first_value, values_rest = head_and_rest(neurons.get_values_torch())
+        transformations = neurons.get_transformations()
+        # TODO: assumption: FactLayer has no transformation
+        for tr in transformations:
+            assert tr in (None, "identity")
 
-            self.value = torch.nn.Parameter(atleast_3d_rev(first_value), requires_grad=False)
+        self.value = torch.nn.Parameter(
+            atleast_3d_rev(torch.stack(list(neurons.get_values_torch()))),
+            requires_grad=False,
+        )
 
-            # check
-            for value in values_rest:
-                assert (value == first_value).all()
-        else:
-            self.value = torch.nn.Parameter(
-                atleast_3d_rev(torch.stack(list(neurons.get_values_torch()))),
-                requires_grad=False,
-            )
+    def extra_repr(self) -> str:
+        return f"len={self.value.shape[0]}"
 
     def forward(self, *kargs, **kwargs):
         return self.value

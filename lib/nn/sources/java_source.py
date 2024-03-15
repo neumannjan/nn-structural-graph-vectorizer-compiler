@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from neuralogic.core.builder.builder import NeuralSample
 
+from lib.nn.definitions.ops import TransformationDef
 from lib.nn.sources.base_source import (
     BaseLayerNeurons,
     BaseNeuralNetworkDefinition,
@@ -31,6 +32,7 @@ from .internal.java_source import (
     compute_java_neurons_per_layer,
     compute_java_ordinals_for_layer,
     discover_layers,
+    get_transformation,
 )
 
 
@@ -114,6 +116,20 @@ class _JavaNeurons(BaseNeurons):
 
     def get_values_torch(self) -> Collection[torch.Tensor]:
         return MapCollection(lambda n: value_to_tensor(n.getRawState().getValue()), self._java_neurons)
+
+    def get_transformations(self) -> Collection[TransformationDef | None]:
+        return MapCollection(get_transformation, self._java_neurons)
+
+    def gather(self, ids: Sequence[int]) -> "Neurons":
+        id_set = set(ids)
+
+        ordinals_neurons = [(o, n) for o, n in zip(self._ordinals, self._java_neurons) if int(n.getIndex()) in id_set]
+
+        return _JavaNeurons(
+            network=self._network,
+            java_neurons=[n for _, n in ordinals_neurons],
+            ordinals=OrdinalsDict({int(n.getIndex()): o for o, n in ordinals_neurons}),
+        )
 
 
 class _JavaLayerNeurons(_JavaNeurons, BaseLayerNeurons):

@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Protocol, Sequence, runtime_checkable
+from typing import Mapping, Protocol, Sequence, runtime_checkable
 
 import numpy as np
 import torch
@@ -107,7 +107,7 @@ class SliceValues(torch.nn.Module, GatherModuleLike):
         return self
 
     def forward(self, layer_input: torch.Tensor):
-        return layer_input[self.start : self.end]
+        return layer_input[self.start: self.end]
 
 
 class TakeEachNth(torch.nn.Module, GatherModuleLike):
@@ -137,7 +137,7 @@ class TakeEachNth(torch.nn.Module, GatherModuleLike):
         return self
 
     def forward(self, layer_input: torch.Tensor):
-        return layer_input[self.start : self.end : self.step]
+        return layer_input[self.start: self.end: self.step]
 
 
 class GenericGather(torch.nn.Module, GatherModuleLike):
@@ -231,7 +231,7 @@ class LayerGatherModuleLike(GatherLike, Protocol):
     def get_optimal(self) -> "LayerGatherModuleLike":
         ...
 
-    def __call__(self, layer_values: dict[int, torch.Tensor]) -> torch.Tensor:
+    def __call__(self, layer_values: Mapping[int, torch.Tensor]) -> torch.Tensor:
         ...
 
 
@@ -257,7 +257,7 @@ class LayerGatherAndRepeat(torch.nn.Module, LayerGatherModuleLike):
     def get_optimal(self) -> "LayerGatherModuleLike":
         return self.gather.get_optimal()
 
-    def forward(self, layer_values: dict[int, torch.Tensor]) -> torch.Tensor:
+    def forward(self, layer_values: Mapping[int, torch.Tensor]) -> torch.Tensor:
         x = self.gather(layer_values)
         x = self.repeat(x)
         return x
@@ -340,7 +340,7 @@ class SingleLayerGather(torch.nn.Module, LayerGatherModuleLike):
     def extra_repr(self) -> str:
         return f"layer={self.input_layer},"
 
-    def forward(self, layer_values: dict[int, torch.Tensor]) -> torch.Tensor:
+    def forward(self, layer_values: Mapping[int, torch.Tensor]) -> torch.Tensor:
         x = layer_values[self.input_layer]
         x = self.delegate(x)
         return x
@@ -413,7 +413,7 @@ class LayersGatherConcat(torch.nn.Module, LayerGatherModuleLike):
     def get_optimal(self) -> "LayersGatherConcat":
         return self
 
-    def forward(self, layer_values: dict[int, torch.Tensor]):
+    def forward(self, layer_values: Mapping[int, torch.Tensor]):
         xs = [self.layer_gathers[str(layer)](layer_values[layer]) for layer in self.layers]
         x = _expand_concat_tensors(xs)
         return x
@@ -455,7 +455,7 @@ class MultiLayerGather(torch.nn.Module, LayerGatherModuleLike):
         final_optimal = self.final_gather.get_optimal()
         return MultiLayerGather(self.multi_layer_set_gather, final_optimal)
 
-    def forward(self, layer_values: dict[int, torch.Tensor]) -> torch.Tensor:
+    def forward(self, layer_values: Mapping[int, torch.Tensor]) -> torch.Tensor:
         x = self.multi_layer_set_gather(layer_values)
         x = self.final_gather(x)
         return x
@@ -476,19 +476,14 @@ def _build_multi_layer_gather(inputs_ordinals: list[LayerOrdinal], period_hint: 
     return MultiLayerGather(multi_layer_set_gather, final_gather)
 
 
-def build_optimal_multi_layer_gather(
-    inputs_ordinals: list[LayerOrdinal], period_hint: int | None = None, use_scatter: bool = False
-):
+def build_optimal_multi_layer_gather(inputs_ordinals: list[LayerOrdinal], period_hint: int | None = None):
     layer0, _ = inputs_ordinals[0]
     is_single_layer = all((layer0 == l for l, _ in inputs_ordinals[1:]))
 
     if is_single_layer:
         return build_optimal_single_layer_gather(layer0, [o for _, o in inputs_ordinals], period_hint=period_hint)
 
-    if use_scatter:
-        raise NotImplementedError()
-    else:
-        return _build_multi_layer_gather(inputs_ordinals, period_hint)
+    return _build_multi_layer_gather(inputs_ordinals, period_hint)
 
 
 class ViewWithPeriod(torch.nn.Module, GatherModuleLike):
@@ -586,7 +581,7 @@ class LayerGatherAndView(torch.nn.Module, LayerGatherModuleLike):
             view=self.view,
         )
 
-    def forward(self, layer_values: dict[int, torch.Tensor]) -> torch.Tensor:
+    def forward(self, layer_values: Mapping[int, torch.Tensor]) -> torch.Tensor:
         x = self.gather(layer_values)
         x = self.view(x)
         return x

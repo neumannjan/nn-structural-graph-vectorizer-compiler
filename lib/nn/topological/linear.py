@@ -1,5 +1,5 @@
 import warnings
-from typing import Collection, OrderedDict
+from typing import Collection, Mapping, OrderedDict
 
 import numpy as np
 import torch
@@ -30,7 +30,7 @@ class Linear(torch.nn.Module):
         self.gather = inputs_gather
         self.weight = weight
 
-    def forward(self, layer_values: dict[int, torch.Tensor]):
+    def forward(self, layer_values: Mapping[int, torch.Tensor]):
         input_values = self.gather(layer_values)
         w = self.weight()
         y = w @ input_values
@@ -42,7 +42,7 @@ class ReturnWeights(torch.nn.Module):
         super().__init__()
         self.weight = weight
 
-    def forward(self, layer_values: dict[int, torch.Tensor]):
+    def forward(self, layer_values: Mapping[int, torch.Tensor]):
         return self.weight()
 
 
@@ -119,7 +119,7 @@ class LinearAndGather(torch.nn.Module, LayerGatherModuleLike):
 
         return LinearAndGather(self.linear, gather)
 
-    def forward(self, layer_values: dict[int, torch.Tensor]):
+    def forward(self, layer_values: Mapping[int, torch.Tensor]):
         y = self.linear(layer_values)
         y = self.gather(y)
         return y

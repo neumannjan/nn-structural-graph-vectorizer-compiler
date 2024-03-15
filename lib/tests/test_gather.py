@@ -22,7 +22,6 @@ def _do_the_test(
     gather_module: torch.nn.Module,
     network: NeuralNetworkDefinition,
     inputs_ordinals: Sequence[LayerOrdinal],
-    all_same: bool,
 ):
     # input: indices of the neurons (so that for each neuron, its index is in its position)
     layer_values = {ld.id: atleast_3d_rev(torch.tensor(list(neurons.ids))) for ld, neurons in network.items()}
@@ -34,11 +33,6 @@ def _do_the_test(
     # actual output:
     actual: torch.Tensor = torch.squeeze(gather_module(layer_values))
 
-    if all_same:
-        # if all inputs are the same,
-        # the gather module takes advantage of that, but doesn't expand it by default
-        expected = expected[0]
-
     print("Expected:", expected, "shape:", expected.shape)
     print("Actual:", actual, "shape:", actual.shape, flush=True)
 
@@ -49,19 +43,17 @@ def _do_the_test(
 GATHER_TEST_PARAMS = list(
     itertools.product(
         [False, True],
-        [False, True],
         list(range(5)),
     )
 )
 
 
 @pytest.mark.parametrize(
-    ["inputs_from_previous_layer_only", "assume_facts_same", "execution_number"],
+    ["inputs_from_previous_layer_only", "execution_number"],
     GATHER_TEST_PARAMS,
 )
 def test_gather_module(
     inputs_from_previous_layer_only: bool,
-    assume_facts_same: bool,
     execution_number: int,
 ):
     network = generate_example_network(inputs_from_previous_layer_only=inputs_from_previous_layer_only)
@@ -72,7 +64,7 @@ def test_gather_module(
 
         print("Layer", ld)
         print(gather)
-        _do_the_test(gather, network, inputs_ordinals, all_same=(assume_facts_same and ld.type == "FactLayer"))
+        _do_the_test(gather, network, inputs_ordinals)
 
 
 def _get_underlying_gather_module(gather_module):

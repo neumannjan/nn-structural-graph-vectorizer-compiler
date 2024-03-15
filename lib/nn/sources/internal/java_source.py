@@ -1,9 +1,12 @@
 from collections import defaultdict, deque
+from typing import get_args as t_get_args
+from lib.other_utils import camel_to_snake
 from typing import Any, Protocol, Sequence
 
 import numpy as np
 from neuralogic.core.builder.builder import NeuralSample
 from tqdm.auto import tqdm
+from lib.nn.definitions.ops import TransformationDef
 
 from lib.nn.sources.source import LayerDefinition, LayerDefinitions, LayerOrdinal, LayerType
 from lib.nn.topological.settings import Settings
@@ -52,13 +55,16 @@ class JavaNeuron(Protocol):
     def getOffset(self) -> JavaWeight:
         ...
 
+    def getTransformation(self) -> Any:
+        ...
+
 
 CLASS_TO_LAYER_TYPE_MAP: dict[str, LayerType] = {
     "FactNeuron": "FactLayer",
     "WeightedAtomNeuron": "WeightedAtomLayer",
     "WeightedRuleNeuron": "WeightedRuleLayer",
     "AggregationNeuron": "AggregationLayer",
-    "RuleNeuron": "RuleLayer"
+    "RuleNeuron": "RuleLayer",
 }
 
 
@@ -69,6 +75,25 @@ def _get_layer_type(java_neuron: JavaNeuron) -> LayerType:
         raise ValueError(f"Unsupported neuron class {class_name}")
 
     return CLASS_TO_LAYER_TYPE_MAP[class_name]
+
+
+_TRANSFORMATIONS: set[TransformationDef] = set(t_get_args(TransformationDef))
+
+
+def get_transformation(java_neuron: JavaNeuron) -> TransformationDef | None:
+    java_transformation = java_neuron.getTransformation()
+
+    if java_transformation is None:
+        return None
+
+    tr_class_name = str(java_transformation.getClass().getSimpleName())
+
+    out = camel_to_snake(tr_class_name).replace("re_lu", "relu")
+
+    if out not in _TRANSFORMATIONS:
+        raise NotImplementedError(f"Unsupported transformation: {out} (Java class {tr_class_name})")
+
+    return out
 
 
 def _discover_layers_from_sample(sample: NeuralSample | JavaNeuron) -> list[LayerDefinition]:

@@ -1,9 +1,11 @@
 from collections.abc import Collection
 from dataclasses import dataclass
-from typing import Iterable, Iterator, Literal, NamedTuple, OrderedDict, Protocol, runtime_checkable
+from typing import Iterable, Iterator, Literal, NamedTuple, OrderedDict, Protocol, Sequence, runtime_checkable
 
 import numpy as np
 import torch
+
+from lib.nn.definitions.ops import TransformationDef
 
 LayerType = Literal["FactLayer", "WeightedAtomLayer", "WeightedRuleLayer", "AggregationLayer", "RuleLayer"]
 
@@ -128,6 +130,12 @@ class Neurons(Protocol):
         ...
 
     def get_values_torch(self) -> Collection[torch.Tensor]:
+        ...
+
+    def get_transformations(self) -> Collection[TransformationDef | None]:
+        ...
+
+    def gather(self, ids: Sequence[int]) -> "Neurons":
         ...
 
 

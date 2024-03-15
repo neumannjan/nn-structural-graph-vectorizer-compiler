@@ -1,3 +1,6 @@
+import warnings
+from typing import Mapping
+
 import torch
 
 from lib.nn.aggregation import AggregationType, build_optimal_reshape_aggregate
@@ -30,11 +33,14 @@ class AggregationLayer(torch.nn.Module):
                 inputs_ordinals, period=reshape_agg.get_reshape().period
             )
             self.aggregate = reshape_agg.get_aggregate()
+
+            if not self.gather.is_optimal and self.gather.optimal_period == reshape_agg.get_reshape().period:
+                warnings.warn("Gather in AggregationLayer can be optimized!")
         else:
             self.gather = build_optimal_multi_layer_gather(inputs_ordinals)
             self.aggregate = reshape_agg
 
-    def forward(self, layer_values: dict[int, torch.Tensor]):
+    def forward(self, layer_values: Mapping[int, torch.Tensor]):
         x = self.gather(layer_values)
         x = self.aggregate(x)
         return x

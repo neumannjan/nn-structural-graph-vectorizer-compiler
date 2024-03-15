@@ -5,10 +5,11 @@ from typing import Sequence
 import numpy as np
 import pytest
 import torch
-from lib.nn.sources.dict_source import NeuralNetworkDefinitionDict, Neuron, WeightDefinitionImpl
+from lib.nn.sources.dict_source import NeuralNetworkDefinitionDict, WeightDefinitionImpl
 from lib.nn.sources.source import LayerDefinition
 from lib.nn.topological.settings import Settings
 from lib.nn.topological.weighted_atom_layer import WeightedAtomLayer
+from lib.tests.utils.neuron_mock import NeuronTestFactory
 from lib.tests.utils.test_params import SETTINGS_PARAMS
 from lib.utils import atleast_3d_rev
 
@@ -49,12 +50,14 @@ def build_sample_from_input_indices(indices: Sequence[int]) -> tuple[NeuralNetwo
         for i in indices
     ]
 
+    factory = NeuronTestFactory(layers=LAYERS, id_provider_starts=[0, 1000, 1000 + len(weights)])
+
     sample = NeuralNetworkDefinitionDict(
         layers=LAYERS,
         neurons={
-            16: [Neuron(0)],
-            13: [Neuron(1000 + i, inputs=[0], weights=[w]) for i, w in enumerate(weights)],
-            12: [Neuron(1000 + len(weights), inputs=[1000 + i for i in range(len(weights))])],
+            16: [factory.create(16)],
+            13: [factory.create(13, inputs=[0], weights=[w]) for i, w in enumerate(weights)],
+            12: [factory.create(12, inputs=[1000 + i for i in range(len(weights))])],
         },
     )
 

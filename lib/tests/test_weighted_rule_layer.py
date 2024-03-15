@@ -7,6 +7,7 @@ from lib.nn.sources.dict_source import NeuralNetworkDefinitionDict, Neuron, Weig
 from lib.nn.sources.source import LayerDefinition
 from lib.nn.topological.settings import Settings
 from lib.nn.topological.weighted_rule_layer import WeightedRuleLayer
+from lib.tests.utils.neuron_mock import NeuronTestFactory
 from lib.tests.utils.test_params import SETTINGS_PARAMS
 
 LAYERS = [
@@ -47,15 +48,17 @@ def build_sample(weights: list[WeightDefinitionImpl], facts_values: Sequence[np.
     n_weights = len(weights)
     n_neurons = len(facts_values) // len(weights)
 
+    factory = NeuronTestFactory(layers=LAYERS, id_provider_starts=0)
+
     return NeuralNetworkDefinitionDict(
         layers=LAYERS,
         neurons={
-            16: [Neuron(i, value=v) for i, v in enumerate(facts_values)],
+            16: [factory.create(16, value=v) for i, v in enumerate(facts_values)],
             13: [
-                Neuron(n_weights * n_neurons + i, [i * n_weights + j for j in range(n_weights)], weights)
+                factory.create(13, inputs=[i * n_weights + j for j in range(n_weights)], weights=weights)
                 for i in range(n_neurons)
             ],
-            12: [Neuron(-1, [n_weights * n_neurons + i for i in range(n_neurons)])],
+            12: [factory.create(12, inputs=[n_weights * n_neurons + i for i in range(n_neurons)])],
         },
     )
 

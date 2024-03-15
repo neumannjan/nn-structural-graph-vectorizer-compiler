@@ -4,7 +4,7 @@ from lib.nn.sources.dict_source import NeuralNetworkDefinitionDict
 from lib.nn.sources.source import LayerDefinition
 from lib.nn.topological.aggregation_layer import AggregationLayer
 from lib.nn.topological.settings import Settings
-from lib.tests.utils.network_mock import Neuron
+from lib.tests.utils.neuron_mock import NeuronTestFactory
 from lib.tests.utils.test_params import SETTINGS_PARAMS
 
 LAYERS = [
@@ -13,34 +13,42 @@ LAYERS = [
     LayerDefinition(12, "AggregationLayer"),
 ]
 
-SAMPLE1 = {
-    16: [Neuron(j) for j in range(12)],
-    13: [
-        Neuron(1000, [0, 1, 2, 3]),
-        Neuron(1001, [4, 5, 6, 7]),
-        Neuron(1002, [8, 9, 10, 11]),
-    ],
-    12: [Neuron(10000, [1000, 1001, 1002])],
-}
 
-SAMPLE2 = {
-    16: [Neuron(j) for j in range(20)],
-    13: [
-        Neuron(1000, [0, 1, 2, 3]),
-        Neuron(1001, [4, 5, 6]),
-        Neuron(1002, [7, 8, 9]),
-        Neuron(1003, [10, 11, 12, 13]),
-        Neuron(1004, [14, 15]),
-        Neuron(1005, [16, 17, 18, 19]),
-    ],
-    12: [Neuron(10000, [1000, 1001, 1002, 1003, 1004, 1005])],
-}
+def build_sample1():
+    factory = NeuronTestFactory(layers=LAYERS, id_provider_starts=[0, 1000, 10000])
+
+    return {
+        16: [factory.create(16) for j in range(12)],
+        13: [
+            factory.create(13, inputs=[0, 1, 2, 3]),
+            factory.create(13, inputs=[4, 5, 6, 7]),
+            factory.create(13, inputs=[8, 9, 10, 11]),
+        ],
+        12: [factory.create(12, inputs=[1000, 1001, 1002])],
+    }
+
+
+def build_sample2():
+    factory = NeuronTestFactory(layers=LAYERS, id_provider_starts=[0, 1000, 10000])
+
+    return {
+        16: [factory.create(16) for j in range(20)],
+        13: [
+            factory.create(13, inputs=[0, 1, 2, 3]),
+            factory.create(13, inputs=[4, 5, 6]),
+            factory.create(13, inputs=[7, 8, 9]),
+            factory.create(13, inputs=[10, 11, 12, 13]),
+            factory.create(13, inputs=[14, 15]),
+            factory.create(13, inputs=[16, 17, 18, 19]),
+        ],
+        12: [factory.create(12, inputs=[1000, 1001, 1002, 1003, 1004, 1005])],
+    }
 
 
 @pytest.mark.parametrize("settings", SETTINGS_PARAMS)
 def test_same_no_of_inputs(settings: Settings):
     inputs = {16: torch.tensor([2, 2, 2, 2, 3, 3, 3, 3, 5, 5, 5, 5])}
-    network = NeuralNetworkDefinitionDict(layers=LAYERS, neurons=SAMPLE1)
+    network = NeuralNetworkDefinitionDict(layers=LAYERS, neurons=build_sample1())
     layer = AggregationLayer(
         neurons=network[13],
         aggregation_type="sum",
@@ -56,7 +64,7 @@ def test_same_no_of_inputs(settings: Settings):
 @pytest.mark.parametrize("settings", SETTINGS_PARAMS)
 def test_variable_no_of_inputs(settings: Settings):
     inputs = {16: torch.tensor([2, 2, 2, 2, 3, 3, 3, 5, 5, 5, 7, 7, 7, 7, 11, 11, 13, 13, 13, 13])}
-    network = NeuralNetworkDefinitionDict(layers=LAYERS, neurons=SAMPLE2)
+    network = NeuralNetworkDefinitionDict(layers=LAYERS, neurons=build_sample2())
     layer = AggregationLayer(
         neurons=network[13],
         aggregation_type="sum",

@@ -1,16 +1,16 @@
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Collection, Iterable, Iterator, Mapping, Sequence
 
 import numpy as np
 import torch
 
+from lib.nn.definitions.ops import TransformationDef
 from lib.nn.sources.base_source import BaseNeuralNetworkDefinition, BaseNeurons, BaseWeightDefinition
 from lib.nn.sources.source import (
     LayerDefinition,
     LayerDefinitions,
     LayerNeurons,
     LayerOrdinal,
-    NeuralNetworkDefinition,
     Neurons,
     Ordinals,
     WeightDefinition,
@@ -67,12 +67,23 @@ class WeightDefinitionImpl(BaseWeightDefinition):
         return isinstance(value, WeightDefinition) and self.id == value.id and self.learnable == value.learnable
 
 
+_ZERO_WEIGHT = WeightDefinitionImpl(id=-2, value=np.zeros(0), learnable=False)
+
+
 @dataclass(frozen=True)
 class Neuron:
     id: int
+    transformation: TransformationDef | None
     inputs: Sequence[int] = field(default_factory=lambda: [], hash=False)
     weights: Sequence[WeightDefinition] = field(default_factory=lambda: [], hash=False)
+    bias: WeightDefinition = field(default_factory=lambda: _ZERO_WEIGHT, hash=False)
     value: np.ndarray = field(default_factory=lambda: np.zeros(0), hash=False)
+
+    @classmethod
+    def create_from(cls, other: "Neuron", **kwargs):
+        the_kwargs = asdict(other)
+        the_kwargs.update(kwargs)
+        return cls(**the_kwargs)
 
 
 class _NeuronsList(BaseNeurons):
@@ -122,6 +133,9 @@ class _NeuronsList(BaseNeurons):
     def __len__(self) -> int:
         return len(self._neurons)
 
+    def biases(self) -> Collection[WeightDefinition]:
+        return MapCollection(lambda n: n.bias, self._neurons)
+
     @property
     def input_weights(self) -> Iterable[WeightDefinition]:
         yield from (w for n in self._neurons for w in n.weights)
@@ -131,6 +145,19 @@ class _NeuronsList(BaseNeurons):
 
     def get_values_torch(self) -> Collection[torch.Tensor]:
         return MapCollection(lambda n: torch.tensor(n.value), self._neurons)
+
+    def get_transformations(self) -> Collection[TransformationDef | None]:
+        return MapCollection(lambda n: n.transformation, self._neurons)
+
+    def gather(self, ids: Sequence[int]) -> "Neurons":
+        id_set = set(ids)
+        ordinals_neurons = [(o, n) for o, n in zip(self._ordinals, self._neurons) if n.id in id_set]
+
+        return _NeuronsList(
+            network=self._network,
+            ordinals=OrdinalsDict({n.id: o for o, n in ordinals_neurons}),
+            neurons=[n for _, n in ordinals_neurons],
+        )
 
 
 class _LayerNeuronsList(_NeuronsList, LayerNeurons):
