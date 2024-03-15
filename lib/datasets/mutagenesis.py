@@ -88,8 +88,8 @@ MutagenesisSource = Literal["original", "10x"]
 
 
 SOURCE_DIRECTORY_MAP: dict[MutagenesisSource, Path] = {
-    "original": Path(".") / "dataset" / "mutagenesis",
-    "10x": Path(".") / "dataset" / "mutagenesis_multip",
+    "original": Path(".") / "datasets_preserved" / "mutagenesis",
+    "10x": Path(".") / "datasets" / "mutagenesis_multip",
 }
 
 

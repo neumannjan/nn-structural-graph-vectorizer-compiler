@@ -1,3 +1,7 @@
-imgs/
-target/
+/imgs/
+/target/
 __pycache__/
+/visualize.py
+/trace_*.json
+
+/datasets/
