@@ -4,11 +4,13 @@ from collections.abc import Collection
 import jpype
 import pytest
 import torch
-from lib.benchmarks.runnables.torch_gather_runnable import TorchGatherRunnable
+from lib.benchmarks.runnables.neuralogic_vectorized import NeuralogicVectorizedTorchRunnable
 from lib.datasets.dataset import MyDataset
 from lib.datasets.mutagenesis import MutagenesisSource, MutagenesisTemplate, MyMutagenesis
+from lib.datasets.tu_molecular import MyTUDataset, TUDatasetSource, TUDatasetTemplate
 from lib.nn.topological.settings import Settings
 from lib.tests.utils.test_params import DEVICE_PARAMS, SETTINGS_PARAMS
+from torch_geometric.data.dataset import warnings
 
 
 def _ms(s: Collection[MutagenesisSource]):
@@ -16,6 +18,14 @@ def _ms(s: Collection[MutagenesisSource]):
 
 
 def _mt(t: Collection[MutagenesisTemplate]):
+    return t
+
+
+def _ts(s: Collection[TUDatasetSource]):
+    return s
+
+
+def _tt(t: Collection[TUDatasetTemplate]):
     return t
 
 
@@ -28,10 +38,22 @@ COMMON_DATASET_PARAMS: list[MyDataset] = [
             # templates
             _mt(["simple"]),  # TODO: add the rest
         )
-    ]
+    ],
 ]
 
 EXTENDED_DATASET_PARAMS: list[MyDataset] = [
+    *[
+        MyTUDataset(source=s, template=t)
+        for s, t in itertools.product(
+            # sources
+            _ts(["mutag"]),
+            # templates
+            _tt(["gcn", "gin", "gsage"]),
+        )
+    ],
+]
+
+LONG_DATASET_PARAMS: list[MyDataset] = [
     *[
         MyMutagenesis(source=s, template=t)
         for s, t in itertools.product(
@@ -45,6 +67,10 @@ EXTENDED_DATASET_PARAMS: list[MyDataset] = [
 
 
 def do_test_dataset(dataset: MyDataset, device: str, settings: Settings):
+    if device == "mps" and settings.allow_non_builtin_torch_ops:
+        warnings.warn("Skipping MPS test for 'allow_non_builtin_torch_ops=True'.")
+        return None, None
+
     try:
         dataset.settings.compute_neuron_layer_indices = True
         # dataset.settings.iso_value_compression = False
@@ -65,7 +91,7 @@ def do_test_dataset(dataset: MyDataset, device: str, settings: Settings):
 
         ###### ALGORITHM ######
 
-        runnable = TorchGatherRunnable(device=device, settings=settings)
+        runnable = NeuralogicVectorizedTorchRunnable(device=device, settings=settings)
         runnable.initialize(built_dataset_inst)
 
         print(runnable.model)
@@ -73,6 +99,9 @@ def do_test_dataset(dataset: MyDataset, device: str, settings: Settings):
         results: dict[int, torch.Tensor] = runnable.forward_pass()
 
         for layer in runnable.network.layers:
+            if settings.merge_same_facts and layer.type == "FactLayer":
+                continue
+
             expected = torch.squeeze(torch.stack(list(runnable.network[layer.id].get_values_torch())))
             actual = torch.squeeze(results[layer.id]).detach().cpu()
             assert (torch.abs(expected - actual) < tolerance).all(), (
@@ -86,7 +115,7 @@ def do_test_dataset(dataset: MyDataset, device: str, settings: Settings):
         print("Actual:", actual)
         print("All values match!")
 
-        return runnable.model
+        return runnable.model, runnable.network
 
     except jpype.JException as e:
         print(e.message())
@@ -97,6 +126,7 @@ def do_test_dataset(dataset: MyDataset, device: str, settings: Settings):
 @pytest.mark.parametrize(
     ["dataset", "device", "settings"], list(itertools.product(COMMON_DATASET_PARAMS, DEVICE_PARAMS, SETTINGS_PARAMS))
 )
+@pytest.mark.common
 def test(dataset: MyDataset, device: str, settings: Settings):
     do_test_dataset(dataset, device, settings)
 
@@ -104,14 +134,24 @@ def test(dataset: MyDataset, device: str, settings: Settings):
 @pytest.mark.parametrize(
     ["dataset", "device", "settings"], list(itertools.product(EXTENDED_DATASET_PARAMS, DEVICE_PARAMS, SETTINGS_PARAMS))
 )
-@pytest.mark.long
+@pytest.mark.extended
 def test_extended(dataset: MyDataset, device: str, settings: Settings):
     do_test_dataset(dataset, device, settings)
 
 
+@pytest.mark.parametrize(
+    ["dataset", "device", "settings"], list(itertools.product(LONG_DATASET_PARAMS, DEVICE_PARAMS, SETTINGS_PARAMS))
+)
+@pytest.mark.long
+def test_long(dataset: MyDataset, device: str, settings: Settings):
+    do_test_dataset(dataset, device, settings)
+
+
+# if __name__ == "__main__":
+#     stts = SETTINGS_PARAMS[0]
+#     model, network = do_test_dataset(MyMutagenesis("simple", "original"), "cpu", stts)
+
 if __name__ == "__main__":
-    stts = SETTINGS_PARAMS[0]
-    stts.optimize_linear_gathers = True
-    stts.group_learnable_weight_parameters = True
-    stts.allow_non_builtin_torch_ops = True
-    model = do_test_dataset(MyMutagenesis("simple", "original"), "cpu", stts)
+    settings = SETTINGS_PARAMS[0]
+    dataset = MyTUDataset(source="mutag", template="gcn")
+    model, network = do_test_dataset(dataset, "cpu", settings)

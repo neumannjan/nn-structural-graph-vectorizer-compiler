@@ -7,7 +7,7 @@ from lib.nn.topological.network_module import NetworkModule
 from lib.nn.topological.settings import Settings
 
 
-class TorchGatherRunnable(Runnable):
+class NeuralogicVectorizedTorchRunnable(Runnable):
     def __init__(self, device: str, settings: Settings) -> None:
         self._device = device
         self.settings = settings
@@ -20,10 +20,11 @@ class TorchGatherRunnable(Runnable):
         self.network = from_java(self.samples, self.settings)
 
         self.model = NetworkModule(self.network, self.settings)
-        self.model.to(self._device)
+        self.model.to(self.device)
 
     def forward_pass(self):
         return self.model()
 
+    @property
     def device(self):
         return self._device
