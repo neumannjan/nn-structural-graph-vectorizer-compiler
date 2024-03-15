@@ -1,15 +1,15 @@
 from collections import defaultdict, deque
-from typing import get_args as t_get_args
-from lib.other_utils import camel_to_snake
 from typing import Any, Protocol, Sequence
+from typing import get_args as t_get_args
 
 import numpy as np
 from neuralogic.core.builder.builder import NeuralSample
 from tqdm.auto import tqdm
-from lib.nn.definitions.ops import TransformationDef
 
+from lib.nn.definitions.ops import TransformationDef
 from lib.nn.sources.source import LayerDefinition, LayerDefinitions, LayerOrdinal, LayerType
 from lib.nn.topological.settings import Settings
+from lib.other_utils import camel_to_snake
 
 
 class JavaValue(Protocol):
@@ -197,9 +197,6 @@ def compute_java_neurons_per_layer(samples: Sequence[NeuralSample | JavaNeuron])
 def compute_java_ordinals_for_layer(
     layer_def: LayerDefinition, neurons: list[JavaNeuron], settings: Settings
 ) -> dict[int, LayerOrdinal]:
-    if settings.assume_facts_same and layer_def.type == "FactLayer":
-        return {int(n.getIndex()): LayerOrdinal(layer_def.id, 0) for n in neurons}
-
     return {int(n.getIndex()): LayerOrdinal(layer_def.id, i) for i, n in enumerate(neurons)}
 
 

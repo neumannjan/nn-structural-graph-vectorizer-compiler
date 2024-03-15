@@ -3,11 +3,10 @@ from dataclasses import dataclass
 
 @dataclass
 class Settings:
-    # TODO: ASSUMPTION: all facts have the same value
-    assume_facts_same: bool = True
+    merge_same_facts: bool = True
 
     # TODO: ASSUMPTION: all samples have the same layer layout
-    check_same_layers_assumption: bool = True
+    check_same_layers_assumption: bool = False
 
     optimize_linear_gathers: bool = True
 

@@ -3,6 +3,7 @@ from tqdm.auto import tqdm
 
 from lib.datasets import MyMutagenesis
 from lib.nn.sources.source import NeuralNetworkDefinition
+from lib.nn.sources.views.merge_facts import MergeFactsView
 from lib.nn.topological.aggregation_layer import AggregationLayer
 from lib.nn.topological.fact_layer import FactLayer
 from lib.nn.topological.settings import Settings
@@ -21,6 +22,9 @@ class NetworkModule(torch.nn.Module):
     ) -> None:
         super().__init__()
         model = torch.nn.Sequential()
+
+        if settings.merge_same_facts:
+            network = MergeFactsView(network)
 
         for l, neurons in tqdm(network.items(), desc="Layers"):
             if l.type == "FactLayer":
