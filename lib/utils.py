@@ -514,7 +514,12 @@ class _PreferenceDelegate:
         raise RuntimeError()
 
 
-def delegate(delegate: str, *methods: str):
+class Delegate:
+    def __get__(self, instance, owner):
+        raise RuntimeError("Cannot use Delegate property without @delegate decorator on the class!")
+
+
+def delegate(delegate: str):
     def actual_decorator(cls):
         @functools.wraps(cls)
         def wrapper(*const_kargs, **const_kwargs):
@@ -524,10 +529,13 @@ def delegate(delegate: str, *methods: str):
 
             new_self = _PreferenceDelegate(instance, the_delegate)
 
-            for method_name in methods:
-                underlying_method = getattr(the_delegate, method_name)
-                new_self_method = MethodType(underlying_method.__func__, new_self)
-                object.__setattr__(instance, method_name, new_self_method)
+            methods = instance.__class__.__dict__.items()
+
+            for method_name, method in methods:
+                if isinstance(method, Delegate):
+                    underlying_method = getattr(the_delegate, method_name)
+                    new_self_method = MethodType(underlying_method.__func__, new_self)
+                    object.__setattr__(instance, method_name, new_self_method)
 
             return instance
 

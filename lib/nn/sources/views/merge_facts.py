@@ -1,30 +1,17 @@
 import hashlib
 from typing import Any, OrderedDict, Sequence, TypeVar
 
+from lib.nn.sources.base import LayerOrdinal, Network
 from lib.nn.sources.minimal_api.base import MinimalAPINetwork
 from lib.nn.sources.minimal_api.ordinals import MinimalAPIOrdinals
 from lib.nn.sources.minimal_api_bridge import NetworkImpl
 from lib.nn.sources.minimal_api_bridge_reverse import MinimalAPINetworkFromFullProxy, MinimalAPIOrdinalsFromFullProxy
-from lib.nn.sources.base import LayerOrdinal, Network
-from lib.utils import MapSequence, cache, delegate
+from lib.utils import Delegate, MapSequence, cache, delegate
 
 _TNeurons = TypeVar("_TNeurons")
 
 
-@delegate(
-    "delegate",
-    "get_layers",
-    "get_layers_map",
-    "get_inputs",
-    "get_input_weights",
-    "get_input_lengths",
-    "get_biases",
-    "get_values_numpy",
-    "get_values_torch",
-    "get_transformations",
-    "slice",
-    "select_ids",
-)
+@delegate("delegate")
 class _MinimalAPIMergeFactsView(MinimalAPINetwork[_TNeurons]):
     def __init__(self, network: MinimalAPINetwork[_TNeurons]) -> None:
         self.delegate = network
@@ -32,17 +19,17 @@ class _MinimalAPIMergeFactsView(MinimalAPINetwork[_TNeurons]):
         self._hash_to_id_mapping: dict[Any, int] = {}
         self._id_mapping: dict[int, int] = {}
 
-    get_layers = ...
-    get_layers_map = ...
-    get_inputs = ...
-    get_input_weights = ...
-    get_input_lengths = ...
-    get_biases = ...
-    get_values_numpy = ...
-    get_values_torch = ...
-    get_transformations = ...
-    slice = ...
-    select_ids = ...
+    get_layers = Delegate()
+    get_layers_map = Delegate()
+    get_inputs = Delegate()
+    get_input_weights = Delegate()
+    get_input_lengths = Delegate()
+    get_biases = Delegate()
+    get_values_numpy = Delegate()
+    get_values_torch = Delegate()
+    get_transformations = Delegate()
+    slice = Delegate()
+    select_ids = Delegate()
 
     def get_ids(self, neurons: _TNeurons) -> Sequence[int]:
         for layer in self.get_layers():
@@ -72,20 +59,15 @@ class _MinimalAPIMergeFactsView(MinimalAPINetwork[_TNeurons]):
         return self.delegate.select_ids(neurons, underlying_ids)
 
 
-@delegate(
-    "delegate",
-    "get_ordinal",
-    "get_id",
-    "get_all_ordinals",
-)
+@delegate("delegate")
 class _MinimalAPIMergeFactsViewOrdinals(MinimalAPIOrdinals):
     def __init__(self, minimal_api: _MinimalAPIMergeFactsView, ordinals: MinimalAPIOrdinals) -> None:
         self.delegate = ordinals
         self._minimal_api = minimal_api
 
-    get_ordinal = ...
-    get_all_ordinals = ...
-    get_id = ...
+    get_ordinal = Delegate()
+    get_all_ordinals = Delegate()
+    get_id = Delegate()
 
     @cache
     def get_ordinals_for_layer(self, layer_id: int) -> OrderedDict[int, LayerOrdinal]:
