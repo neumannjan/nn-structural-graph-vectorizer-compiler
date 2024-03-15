@@ -1,7 +1,7 @@
 from typing import OrderedDict, Protocol, overload
 
-from lib.nn.sources.minimal_api.base import MinimalAPINetwork
 from lib.nn.sources.base import LayerOrdinal
+from lib.nn.sources.minimal_api.base import MinimalAPINetwork
 from lib.utils import cache
 
 

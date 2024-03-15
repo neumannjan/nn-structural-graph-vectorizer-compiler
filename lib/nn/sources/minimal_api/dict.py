@@ -5,9 +5,9 @@ import numpy as np
 import torch
 
 from lib.nn.definitions.ops import AggregationDef, TransformationDef
+from lib.nn.sources.base import LayerDefinition, WeightDefinition
 from lib.nn.sources.base_impl import BaseWeightDefinition
 from lib.nn.sources.minimal_api.base import MinimalAPINetwork
-from lib.nn.sources.base import LayerDefinition, WeightDefinition
 from lib.utils import LambdaIterable, MapCollection, MapSequence, cache, value_to_tensor
 
 

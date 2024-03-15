@@ -4,10 +4,10 @@ import numpy as np
 import torch
 
 from lib.nn.definitions.ops import AggregationDef, TransformationDef
+from lib.nn.sources.base import LayerDefinition, LayerOrdinal, Ordinals, WeightDefinition, get_layer_id
 from lib.nn.sources.base_impl import BaseLayerNeurons, BaseNetwork, BaseNeurons, BaseOrdinals
 from lib.nn.sources.minimal_api.base import MinimalAPINetwork
 from lib.nn.sources.minimal_api.ordinals import MinimalAPIOrdinals, MinimalAPIOrdinalsImpl
-from lib.nn.sources.base import LayerDefinition, LayerOrdinal, Ordinals, WeightDefinition, get_layer_id
 from lib.nn.sources.utils import LayerDefinitionsImpl
 from lib.utils import MapCollection, cache
 

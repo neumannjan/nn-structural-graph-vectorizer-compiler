@@ -1,11 +1,8 @@
-import itertools
-
-import numpy as np
 import torch
 
 from lib.nn.sources.base import LayerNeurons
 from lib.nn.topological.settings import Settings
-from lib.utils import atleast_3d_rev, head_and_rest
+from lib.utils import atleast_3d_rev
 
 
 class FactLayer(torch.nn.Module):

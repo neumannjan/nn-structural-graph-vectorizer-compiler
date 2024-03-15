@@ -1,8 +1,8 @@
 from collections import defaultdict, deque
-import jpype
 from typing import Any, Protocol, Sequence
 from typing import get_args as t_get_args
 
+import jpype
 import numpy as np
 from neuralogic.core.builder.builder import NeuralSample
 from tqdm.auto import tqdm
