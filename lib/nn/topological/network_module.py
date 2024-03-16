@@ -2,13 +2,10 @@ import torch
 from torch.jit import unused
 from tqdm.auto import tqdm
 
-from lib.datasets import MyMutagenesis
 from lib.nn.sources.base import Network
 from lib.nn.sources.views.merge_facts import MergeFactsView
 from lib.nn.topological.layer import Layer
 from lib.nn.topological.settings import Settings
-
-d = MyMutagenesis()
 
 
 def _build_model(

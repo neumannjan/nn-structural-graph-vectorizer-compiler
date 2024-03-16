@@ -7,6 +7,7 @@ from torch_geometric.datasets import TUDataset
 
 from lib.datasets.dataset import BuiltDatasetInstance, MyDataset
 from lib.datasets.pyg.tu_molecular import build_pyg_module
+from lib.nn.topological.settings import Settings
 
 
 class _TemplateProtocol(Protocol):
@@ -144,7 +145,7 @@ TUDatasetSource = Literal["mutag", "enzymes", "proteins", "collab", "imdb-binary
 
 
 class MyTUDataset(MyDataset):
-    def __init__(self, source: TUDatasetSource, template: TUDatasetTemplate) -> None:
+    def __init__(self, settings: Settings, source: TUDatasetSource, template: TUDatasetTemplate) -> None:
         root = Path("./datasets")
         root.mkdir(exist_ok=True, parents=True)
 
@@ -163,7 +164,7 @@ class MyTUDataset(MyDataset):
                 activation=Transformation.SIGMOID, num_features=num_node_features, output_size=output_size, dim=dim
             )
 
-        super().__init__(f"TU_{source}", _build_template, dataset)
+        super().__init__(f"TU_{source}", _build_template, dataset, settings)
         self.pyg_dataset = pyg_dataset
         self.pyg_module_provider = lambda: build_pyg_module(
             template=template, activation="sigmoid", output_size=output_size, num_features=num_node_features, dim=dim

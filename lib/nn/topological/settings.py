@@ -1,5 +1,7 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
+
+from neuralogic.core import settings as nsettings
 
 Compilation = Literal["none", "trace", "script"]
 
@@ -19,3 +21,6 @@ class Settings:
     allow_non_builtin_torch_ops: bool = True
 
     compilation: Compilation = "none"
+    neuralogic: nsettings.Settings = field(
+        default_factory=lambda: nsettings.Settings(compute_neuron_layer_indices=True)
+    )

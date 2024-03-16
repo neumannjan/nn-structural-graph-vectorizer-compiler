@@ -75,10 +75,12 @@ if __name__ == "__main__":
     parser.add_argument("--models", "-m", action=CommaSeparatedListAction, choices=t_get_args(Model), required=True)
     parser.add_argument("--repeats", "-n", "-r", type=int, default=10)
     parser.add_argument("--compilation", "-c", choices=t_get_args(Compilation), default="none")
+    parser.add_argument("--iso", action=argparse.BooleanOptionalAction, default=True)
     args = parser.parse_args()
 
     settings = Settings()
     settings.compilation = args.compilation
+    settings.neuralogic.iso_value_compression = args.iso
 
     print("------")
     print()
@@ -115,7 +117,7 @@ if __name__ == "__main__":
     source: MutagenesisSource = args.source
     template: MutagenesisTemplate = args.template
 
-    dataset = build_dataset(dataset_info).build()
+    dataset = build_dataset(dataset_info, settings).build()
 
     with tqdm(runnables.keys(), desc="Runners") as p:
         for model, device in p:

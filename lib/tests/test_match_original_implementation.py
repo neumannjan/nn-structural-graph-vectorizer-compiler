@@ -11,6 +11,7 @@ from lib.datasets.tu_molecular import MyTUDataset, TUDatasetSource, TUDatasetTem
 from lib.nn.topological.settings import Settings
 from lib.tests.utils.test_params import DEVICE_PARAMS, SETTINGS_PARAMS
 from torch_geometric.data.dataset import warnings
+from torch_geometric.datasets.citation_full import Callable
 
 
 def _ms(s: Collection[MutagenesisSource]):
@@ -29,9 +30,12 @@ def _tt(t: Collection[TUDatasetTemplate]):
     return t
 
 
-COMMON_DATASET_PARAMS: list[MyDataset] = [
+DatasetConstructor = Callable[[Settings], MyDataset]
+
+
+COMMON_DATASET_PARAMS: list[DatasetConstructor] = [
     *[
-        MyMutagenesis(source=s, template=t)
+        lambda settings: MyMutagenesis(settings, source=s, template=t)
         for s, t in itertools.product(
             # sources
             _ms(["original"]),
@@ -41,9 +45,9 @@ COMMON_DATASET_PARAMS: list[MyDataset] = [
     ],
 ]
 
-EXTENDED_DATASET_PARAMS: list[MyDataset] = [
+EXTENDED_DATASET_PARAMS: list[DatasetConstructor] = [
     *[
-        MyTUDataset(source=s, template=t)
+        lambda settings: MyTUDataset(settings, source=s, template=t)
         for s, t in itertools.product(
             # sources
             _ts(["mutag"]),
@@ -53,9 +57,9 @@ EXTENDED_DATASET_PARAMS: list[MyDataset] = [
     ],
 ]
 
-LONG_DATASET_PARAMS: list[MyDataset] = [
+LONG_DATASET_PARAMS: list[DatasetConstructor] = [
     *[
-        MyMutagenesis(source=s, template=t)
+        lambda settings: MyMutagenesis(settings, source=s, template=t)
         for s, t in itertools.product(
             # sources
             _ms(["10x"]),
@@ -79,9 +83,6 @@ def do_test_dataset(dataset: MyDataset, device: str, settings: Settings):
         return None, None
 
     try:
-        dataset.settings.compute_neuron_layer_indices = True
-        # dataset.settings.iso_value_compression = False
-        # dataset.settings.chain_pruning = False
         print("Building dataset...")
         built_dataset_inst = dataset.build(sample_run=True)
 
@@ -112,6 +113,7 @@ def do_test_dataset(dataset: MyDataset, device: str, settings: Settings):
 
             expected = torch.squeeze(torch.stack(list(runnable.network[layer.id].get_values_torch())))
             actual = torch.squeeze(results[str(layer.id)]).detach().cpu()
+            print(layer.id, actual.shape)
             assert expected.shape == actual.shape, (
                 f"Shapes do not match at layer {layer.id} ({layer.type}).\n"
                 f"Expected: {expected.shape}\n"
@@ -140,34 +142,38 @@ def do_test_dataset(dataset: MyDataset, device: str, settings: Settings):
 
 
 @pytest.mark.parametrize(
-    ["dataset", "device", "settings"], list(itertools.product(COMMON_DATASET_PARAMS, DEVICE_PARAMS, SETTINGS_PARAMS))
+    ["dataset_constructor", "device", "settings"],
+    list(itertools.product(COMMON_DATASET_PARAMS, DEVICE_PARAMS, SETTINGS_PARAMS)),
 )
 @pytest.mark.common
-def test(dataset: MyDataset, device: str, settings: Settings):
-    do_test_dataset(dataset, device, settings)
+def test(dataset_constructor: DatasetConstructor, device: str, settings: Settings):
+    do_test_dataset(dataset_constructor(settings), device, settings)
 
 
 @pytest.mark.parametrize(
-    ["dataset", "device", "settings"], list(itertools.product(EXTENDED_DATASET_PARAMS, DEVICE_PARAMS, SETTINGS_PARAMS))
+    ["dataset_constructor", "device", "settings"],
+    list(itertools.product(EXTENDED_DATASET_PARAMS, DEVICE_PARAMS, SETTINGS_PARAMS)),
 )
 @pytest.mark.extended
-def test_extended(dataset: MyDataset, device: str, settings: Settings):
-    do_test_dataset(dataset, device, settings)
+def test_extended(dataset_constructor: DatasetConstructor, device: str, settings: Settings):
+    do_test_dataset(dataset_constructor(settings), device, settings)
 
 
 @pytest.mark.parametrize(
-    ["dataset", "device", "settings"], list(itertools.product(LONG_DATASET_PARAMS, DEVICE_PARAMS, SETTINGS_PARAMS))
+    ["dataset_constructor", "device", "settings"],
+    list(itertools.product(LONG_DATASET_PARAMS, DEVICE_PARAMS, SETTINGS_PARAMS)),
 )
 @pytest.mark.long
-def test_long(dataset: MyDataset, device: str, settings: Settings):
-    do_test_dataset(dataset, device, settings)
+def test_long(dataset_constructor: DatasetConstructor, device: str, settings: Settings):
+    do_test_dataset(dataset_constructor(settings), device, settings)
 
 
 if __name__ == "__main__":
     settings = SETTINGS_PARAMS[0]
-    settings.compilation = 'script'
-    dataset = MyTUDataset(source="mutag", template="gsage")
-    # dataset = MyMutagenesis(source="original", template="simple")
+    settings.compilation = "script"
+    settings.neuralogic.iso_value_compression = True
+    dataset = MyTUDataset(settings, source="mutag", template="gsage")
+    # dataset = MyMutagenesis(settings, source="original", template="simple")
     try:
         model, network = do_test_dataset(dataset, "cpu", settings)
     except CustomError as e:

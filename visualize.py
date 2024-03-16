@@ -7,10 +7,8 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import networkx as nx
 from lib.datasets import MyMutagenesis
+from lib.nn.topological.settings import Settings
 from neuralogic.core.builder.builder import NeuralSample
-from tqdm.auto import tqdm
-
-d = MyMutagenesis()
 
 
 class Neuron(TypedDict):
@@ -236,11 +234,11 @@ def do_sample(neural_sample: NeuralSample, reindex=True, stage: Literal[0, 1] = 
 
 if __name__ == "__main__":
     try:
-        dataset = MyMutagenesis()
-        dataset.settings.compute_neuron_layer_indices = True
-        # dataset.settings.iso_value_compression = False
-        # dataset.settings.chain_pruning = False
-        _, built_dataset = dataset.build(sample_run=True)
+        settings = Settings()
+        dataset = MyMutagenesis(settings)
+        # settings.neuralogic.iso_value_compression = False
+        # settings.neuralogic.chain_pruning = False
+        built_dataset = dataset.build(sample_run=True)
 
         out_dir = Path(f"./imgs/{dataset.name}")
         out_dir.mkdir(parents=True, exist_ok=True)

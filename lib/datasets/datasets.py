@@ -5,6 +5,7 @@ from typing import get_args as t_get_args
 
 from lib.datasets.mutagenesis import MutagenesisSource, MutagenesisTemplate, MyMutagenesis
 from lib.datasets.tu_molecular import MyTUDataset, TUDatasetSource, TUDatasetTemplate
+from lib.nn.topological.settings import Settings
 
 
 @dataclass
@@ -48,10 +49,10 @@ def get_dataset_info_from_args(args: argparse.Namespace) -> DatasetInfo:
         raise ValueError()
 
 
-def build_dataset(dataset_info: DatasetInfo):
+def build_dataset(dataset_info: DatasetInfo, settings: Settings):
     if dataset_info[0] == "mutagenesis":
-        return MyMutagenesis(template=dataset_info[1].template, source=dataset_info[1].source)
+        return MyMutagenesis(settings, template=dataset_info[1].template, source=dataset_info[1].source)
     elif dataset_info[0] == "tu_molecular":
-        return MyTUDataset(source=dataset_info[1].source, template=dataset_info[1].template)
+        return MyTUDataset(settings, source=dataset_info[1].source, template=dataset_info[1].template)
     else:
         raise ValueError()

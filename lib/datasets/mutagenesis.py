@@ -5,6 +5,8 @@ from typing import Literal
 from neuralogic.core import R, Template, V
 from neuralogic.dataset.file import FileDataset
 
+from lib.nn.topological.settings import Settings
+
 from .dataset import MyDataset
 
 
@@ -94,7 +96,9 @@ SOURCE_DIRECTORY_MAP: dict[MutagenesisSource, Path] = {
 
 
 class MyMutagenesis(MyDataset):
-    def __init__(self, template: MutagenesisTemplate = "simple", source: MutagenesisSource = "original") -> None:
+    def __init__(
+        self, settings: Settings, template: MutagenesisTemplate = "simple", source: MutagenesisSource = "original"
+    ) -> None:
         directory = SOURCE_DIRECTORY_MAP[source]
 
         dataset = FileDataset(
@@ -104,4 +108,4 @@ class MyMutagenesis(MyDataset):
 
         the_template = TEMPLATE_MAP[template]
 
-        super().__init__("mutagenesis", the_template, dataset)
+        super().__init__("mutagenesis", the_template, dataset, settings)
