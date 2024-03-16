@@ -35,6 +35,22 @@ def _assert_all_same(what_plural: str, source: Iterable[_T]) -> _T:
     return first
 
 
+def _assert_all_same_ignore_none(what_plural: str, source: Iterable[_T]) -> _T | None:
+    first = None
+
+    for v in source:
+        if v is None:
+            continue
+
+        if first is None:
+            first = v
+            continue
+
+        assert first == v, f"Assertion failed: found {what_plural} {first} and {v}"
+
+    return first
+
+
 class FactLayer(torch.nn.Module):
     def __init__(self, out_to: int, neurons: LayerNeurons, settings: Settings) -> None:
         super().__init__()
@@ -104,7 +120,7 @@ class Layer(torch.nn.Module):
             self.aggregate = Identity()
         else:
             # uneven period or period greater than 1
-            aggregation = _assert_all_same("aggregations", neurons.get_aggregations())
+            aggregation = _assert_all_same_ignore_none("aggregations", neurons.get_aggregations())
             aggregation = aggregation or "sum"
 
             if period is None:
@@ -120,7 +136,9 @@ class Layer(torch.nn.Module):
                 # must only aggregate
                 self.aggregate = build_fixed_count_aggregate(aggregation)
 
-        transformation = _assert_all_same("transformations", neurons.get_transformations())
+        transformation = _assert_all_same(
+            "transformations", (None if t == "identity" else t for t in neurons.get_transformations())
+        )
         self.transform = build_transformation(transformation)
 
         self.out_to = out_to
