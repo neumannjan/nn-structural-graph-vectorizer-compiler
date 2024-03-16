@@ -8,8 +8,8 @@ import torch
 from lib.nn import sources
 from lib.nn.sources.base import LayerDefinition, Network
 from lib.nn.sources.minimal_api.dict import WeightDefinitionImpl
+from lib.nn.topological.layer import Layer
 from lib.nn.topological.settings import Settings
-from lib.nn.topological.weighted_atom_layer import WeightedAtomLayer
 from lib.tests.utils.neuron_factory import NeuronTestFactory
 from lib.tests.utils.test_params import SETTINGS_PARAMS
 from lib.utils import atleast_3d_rev
@@ -79,16 +79,16 @@ INDICES_PARAMS = [
 @pytest.mark.parametrize(["indices", "settings"], list(itertools.product(INDICES_PARAMS, SETTINGS_PARAMS)))
 def test_weighted_atom_layer(indices: Sequence[int], settings: Settings):
     inputs = {
-        16: atleast_3d_rev(torch.tensor([1.0])),
+        "16": atleast_3d_rev(torch.tensor([1.0])),
     }
 
     network, expected = build_sample_from_input_indices(indices)
 
-    layer = WeightedAtomLayer(network, network[13], settings=settings)
+    layer = Layer(out_to=13, network=network, neurons=network[13], settings=settings)
 
     print(layer)
 
-    actual = layer(inputs)
+    actual = layer(inputs)["13"]
 
     print("expected", expected.squeeze())
     print("actual", actual.squeeze())

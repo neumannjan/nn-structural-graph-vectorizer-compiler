@@ -1,3 +1,3 @@
-from .fixed_count import build_fixed_count_aggregation
-from .scatter import build_optimal_scatter_aggregation
+from .fixed_count import build_fixed_count_aggregate
+from .scatter import build_optimal_scatter_aggregate
 from .universal import build_optimal_reshape_aggregate

@@ -24,11 +24,11 @@ def _do_the_test(
     inputs_ordinals: Sequence[LayerOrdinal],
 ):
     # input: indices of the neurons (so that for each neuron, its index is in its position)
-    layer_values = {ld.id: atleast_3d_rev(torch.tensor(list(neurons.ids))) for ld, neurons in network.items()}
+    layer_values = {str(ld.id): atleast_3d_rev(torch.tensor(list(neurons.ids))) for ld, neurons in network.items()}
 
     # expected output: list of the neuron indices that the module is supposed to gather
-    ids_per_layer = {ld.id: list(network[ld].ordinals.ids()) for ld in network.layers}
-    expected = torch.tensor([ids_per_layer[l][o] for l, o in inputs_ordinals])
+    ids_per_layer = {str(ld.id): list(network[ld].ordinals.ids()) for ld in network.layers}
+    expected = torch.tensor([ids_per_layer[str(l)][o] for l, o in inputs_ordinals])
 
     # actual output:
     actual: torch.Tensor = torch.squeeze(gather_module(layer_values))
@@ -89,7 +89,7 @@ def test_slice_gather():
     ordinals = list(range(slice_start, slice_end))
     total = 400
     inputs_ordinals = [LayerOrdinal(0, i) for i in ordinals]
-    inputs = {0: torch.tensor(list(range(total)))}
+    inputs = {"0": torch.tensor(list(range(total)))}
     expected = torch.tensor(ordinals)
 
     gather_module = build_optimal_multi_layer_gather(inputs_ordinals)
@@ -117,7 +117,7 @@ def _unsqueeze_times(tensor: torch.Tensor, times: int) -> torch.Tensor:
 def test_take(unsqueeze_times: int, idx: int, expected: torch.Tensor):
     total = 400
     inputs_ordinals = [LayerOrdinal(0, idx)]
-    inputs = {0: _unsqueeze_times(torch.arange(0, total, dtype=torch.int), times=unsqueeze_times)}
+    inputs = {"0": _unsqueeze_times(torch.arange(0, total, dtype=torch.int), times=unsqueeze_times)}
 
     gather_module = build_optimal_multi_layer_gather(inputs_ordinals)
     actual = gather_module(inputs)
@@ -143,7 +143,7 @@ def test_take_each_nth(take_idx: int, range_len: int, range_repeats: int, ordina
 
     inputs_ordinals = [LayerOrdinal(0, o) for o in ordinals_to_take]
 
-    inputs = {0: input}
+    inputs = {"0": input}
 
     gather_module = build_optimal_multi_layer_gather(inputs_ordinals)
     actual = gather_module(inputs)
@@ -167,7 +167,7 @@ def test_take_each_nth_when_total_length_not_divisible_by_width(ordinals_to_take
 
     inputs_ordinals = [LayerOrdinal(0, o) for o in ordinals_to_take]
 
-    inputs = {0: input}
+    inputs = {"0": input}
 
     gather_module = build_optimal_multi_layer_gather(inputs_ordinals)
     actual = gather_module(inputs)

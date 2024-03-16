@@ -4,6 +4,7 @@ from typing import get_args as t_get_args
 
 import jpype
 import numpy as np
+import torch
 from neuralogic.core.builder.builder import NeuralSample
 from tqdm.auto import tqdm
 
@@ -13,61 +14,72 @@ from lib.other_utils import camel_to_snake
 
 
 class JavaValue(Protocol):
-    def getAsArray(self) -> np.ndarray:
-        ...
+    def getAsArray(self) -> np.ndarray: ...
 
-    def size(self) -> Sequence[int]:
-        ...
+    def size(self) -> Sequence[int]: ...
 
 
 class JavaWeight(Protocol):
     @property
-    def value(self) -> JavaValue:
-        ...
+    def value(self) -> JavaValue: ...
 
     @property
-    def index(self) -> int:
-        ...
+    def index(self) -> int: ...
 
-    def isLearnable(self) -> bool:
-        ...
+    def isLearnable(self) -> bool: ...
 
 
 class JavaNeuron(Protocol):
-    def getIndex(self) -> int:
-        ...
+    def getIndex(self) -> int: ...
 
-    def getInputs(self) -> Sequence["JavaNeuron"]:
-        ...
+    def getInputs(self) -> Sequence["JavaNeuron"]: ...
 
-    def getRawState(self) -> Any:
-        ...
+    def getRawState(self) -> Any: ...
 
-    def getClass(self) -> Any:
-        ...
+    def getClass(self) -> Any: ...
 
-    def getLayer(self) -> int:
-        ...
+    def getLayer(self) -> int: ...
 
-    def getWeights(self) -> Sequence[JavaWeight]:
-        ...
+    def getWeights(self) -> Sequence[JavaWeight]: ...
 
-    def getOffset(self) -> JavaWeight:
-        ...
+    def getOffset(self) -> JavaWeight: ...
 
-    def getTransformation(self) -> Any:
-        ...
+    def getTransformation(self) -> Any: ...
 
-    def getCombination(self) -> Any:
-        ...
+    def getCombination(self) -> Any: ...
+
+
+DTYPE_TORCH_TO_NUMPY = {
+    torch.float32: np.float32,
+    torch.float64: np.float64,
+}
+
+
+def java_value_to_numpy(java_value, dtype: torch.dtype | None = None) -> np.ndarray:
+    if dtype is None:
+        dtype = torch.get_default_dtype()
+
+    if dtype not in DTYPE_TORCH_TO_NUMPY:
+        raise NotImplementedError(f"Conversion from {dtype} to numpy equivalent not yet implemented.")
+
+    np_dtype = DTYPE_TORCH_TO_NUMPY[dtype]
+
+    arr = np.asarray(java_value.getAsArray(), dtype=np_dtype)
+    arr = arr.reshape(java_value.size())
+    return arr
+
+
+def java_value_to_tensor(java_value, dtype: torch.dtype | None = None) -> torch.Tensor:
+    return torch.tensor(java_value_to_numpy(java_value, dtype))
 
 
 CLASS_TO_LAYER_TYPE_MAP: dict[str, LayerType] = {
     "FactNeuron": "FactLayer",
+    "AtomNeuron": "AtomLayer",
+    "RuleNeuron": "RuleLayer",
     "WeightedAtomNeuron": "WeightedAtomLayer",
     "WeightedRuleNeuron": "WeightedRuleLayer",
     "AggregationNeuron": "AggregationLayer",
-    "RuleNeuron": "RuleLayer",
 }
 
 
@@ -152,13 +164,13 @@ def _discover_layers_from_sample(sample: NeuralSample | JavaNeuron) -> list[Laye
         layer_inputs = list(neuron.getInputs())
 
         if len(layer_inputs) == 0:
-            break
+            continue
 
         for inp in layer_inputs:
             if inp.getLayer() == layer:
                 raise RuntimeError(
-                    f"Neuron in layer {layer} has an input in layer {inp.getLayer()}. This should not happen. "
-                    f"Did you do the sample run?"
+                    f"Neuron in layer {layer} has an input in layer {inp.getLayer()}. This should not happen."
+                    + (" Did you do the sample run?" if layer == 0 else "")
                 )
 
         # find closest input layer

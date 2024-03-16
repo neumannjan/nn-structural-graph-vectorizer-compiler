@@ -6,7 +6,7 @@ import torch
 from neuralogic.core.builder.builder import NeuralSample
 
 from lib.nn.definitions.ops import AggregationDef, TransformationDef
-from lib.nn.sources.base import LayerDefinition, WeightDefinition
+from lib.nn.sources.base import LayerDefinition, LayerType, WeightDefinition, is_weighted
 from lib.nn.sources.base_impl import BaseWeightDefinition
 from lib.nn.sources.minimal_api.base import MinimalAPINetwork
 from lib.nn.sources.minimal_api.internal.java import (
@@ -16,9 +16,11 @@ from lib.nn.sources.minimal_api.internal.java import (
     discover_layers,
     get_aggregation,
     get_transformation,
+    java_value_to_numpy,
+    java_value_to_tensor,
 )
 from lib.nn.topological.settings import Settings
-from lib.utils import LambdaIterable, MapCollection, MapSequence, cache, value_to_numpy, value_to_tensor
+from lib.utils import LambdaIterable, MapCollection, MapSequence, cache
 
 
 class _JavaWeightDefinition(BaseWeightDefinition):
@@ -36,10 +38,10 @@ class _JavaWeightDefinition(BaseWeightDefinition):
         return int(self._java_weight.index)
 
     def get_value_numpy(self) -> np.ndarray:
-        return value_to_numpy(self._java_weight.value)
+        return java_value_to_numpy(self._java_weight.value)
 
     def get_value_torch(self) -> torch.Tensor:
-        return value_to_tensor(self._java_weight.value)
+        return java_value_to_tensor(self._java_weight.value)
 
     def __hash__(self) -> int:
         return hash((self.learnable, self.id))
@@ -48,7 +50,15 @@ class _JavaWeightDefinition(BaseWeightDefinition):
         return isinstance(value, WeightDefinition) and self.learnable == value.learnable and self.id == value.id
 
 
-class MinimalAPIJavaNetwork(MinimalAPINetwork[Sequence[JavaNeuron]]):
+class _JavaNeuronsPointer:
+    __slots__ = ("_layer_type", "_n")
+
+    def __init__(self, layer_type: LayerType | None, neurons: Sequence[JavaNeuron]) -> None:
+        self._layer_type: LayerType | None = layer_type
+        self._n = neurons
+
+
+class MinimalAPIJavaNetwork(MinimalAPINetwork[_JavaNeuronsPointer]):
     """Minimal API for a neural network representation from NeuraLogic Java library.
 
     See documentation for `MinimalAPINetwork` for details.
@@ -70,40 +80,42 @@ class MinimalAPIJavaNetwork(MinimalAPINetwork[Sequence[JavaNeuron]]):
     def get_layers_map(self) -> Mapping[int, LayerDefinition]:
         return {l.id: l for l in self.get_layers()}
 
-    def get_layer_neurons(self, layer_id: int) -> Sequence[JavaNeuron]:
-        return self._java_neurons_per_layer[layer_id]
+    def get_layer_neurons(self, layer_id: int) -> _JavaNeuronsPointer:
+        return _JavaNeuronsPointer(self.get_layers_map()[layer_id].type, self._java_neurons_per_layer[layer_id])
 
-    def get_ids(self, neurons: Sequence[JavaNeuron]) -> Sequence[int]:
-        return MapSequence(lambda n: int(n.getIndex()), neurons)
+    def get_ids(self, neurons: _JavaNeuronsPointer) -> Sequence[int]:
+        return MapSequence(lambda n: int(n.getIndex()), neurons._n)
 
-    def get_inputs(self, neurons: Sequence[JavaNeuron]) -> Sequence[JavaNeuron]:
-        return [inp for n in neurons for inp in n.getInputs()]
+    def get_inputs(self, neurons: _JavaNeuronsPointer) -> _JavaNeuronsPointer:
+        return _JavaNeuronsPointer(None, [inp for n in neurons._n for inp in n.getInputs()])
 
-    def get_input_lengths(self, neurons: Sequence[JavaNeuron]) -> Sequence[int]:
-        return MapSequence(lambda n: int(len(n.getInputs())), neurons)
+    def get_input_lengths(self, neurons: _JavaNeuronsPointer) -> Sequence[int]:
+        return MapSequence(lambda n: int(len(n.getInputs())), neurons._n)
 
-    def get_input_weights(self, neurons: Sequence[JavaNeuron]) -> Iterable[WeightDefinition]:
-        return LambdaIterable(lambda: (_JavaWeightDefinition(w) for n in neurons for w in n.getWeights()))
+    def get_input_weights(self, neurons: _JavaNeuronsPointer) -> Iterable[WeightDefinition]:
+        if neurons._layer_type is not None and is_weighted(neurons._layer_type):
+            return LambdaIterable(lambda: (_JavaWeightDefinition(w) for n in neurons._n for w in n.getWeights()))
+        return []
 
-    def get_biases(self, neurons: Sequence[JavaNeuron]) -> Sequence[WeightDefinition]:
-        return MapSequence(lambda n: _JavaWeightDefinition(n.getOffset()), neurons)
+    def get_biases(self, neurons: _JavaNeuronsPointer) -> Sequence[WeightDefinition]:
+        return MapSequence(lambda n: _JavaWeightDefinition(n.getOffset()), neurons._n)
 
-    def get_values_numpy(self, neurons: Sequence[JavaNeuron]) -> Collection[np.ndarray]:
-        return MapCollection(lambda n: value_to_numpy(n.getRawState().getValue()), neurons)
+    def get_values_numpy(self, neurons: _JavaNeuronsPointer) -> Collection[np.ndarray]:
+        return MapCollection(lambda n: java_value_to_numpy(n.getRawState().getValue()), neurons._n)
 
-    def get_values_torch(self, neurons: Sequence[JavaNeuron]) -> Collection[torch.Tensor]:
-        return MapCollection(lambda n: value_to_tensor(n.getRawState().getValue()), neurons)
+    def get_values_torch(self, neurons: _JavaNeuronsPointer) -> Collection[torch.Tensor]:
+        return MapCollection(lambda n: java_value_to_tensor(n.getRawState().getValue()), neurons._n)
 
-    def get_transformations(self, neurons: Sequence[JavaNeuron]) -> Sequence[TransformationDef | None]:
-        return MapSequence(get_transformation, neurons)
+    def get_transformations(self, neurons: _JavaNeuronsPointer) -> Sequence[TransformationDef | None]:
+        return MapSequence(get_transformation, neurons._n)
 
-    def get_aggregations(self, neurons: Sequence[JavaNeuron]) -> Sequence[AggregationDef | None]:
-        return MapSequence(get_aggregation, neurons)
+    def get_aggregations(self, neurons: _JavaNeuronsPointer) -> Sequence[AggregationDef | None]:
+        return MapSequence(get_aggregation, neurons._n)
 
-    def slice(self, neurons: Sequence[JavaNeuron], sl: slice) -> Sequence[JavaNeuron]:
-        return neurons[sl]
+    def slice(self, neurons: _JavaNeuronsPointer, sl: slice) -> _JavaNeuronsPointer:
+        return _JavaNeuronsPointer(neurons._layer_type, neurons._n[sl])
 
-    def select_ids(self, neurons: Sequence[JavaNeuron], ids: Sequence[int]) -> Sequence[JavaNeuron]:
+    def select_ids(self, neurons: _JavaNeuronsPointer, ids: Sequence[int]) -> _JavaNeuronsPointer:
         ids_all = self.get_ids(neurons)
-        map = dict(zip(ids_all, neurons))
-        return [map[id] for id in ids]
+        map = dict(zip(ids_all, neurons._n))
+        return _JavaNeuronsPointer(neurons._layer_type, [map[id] for id in ids])

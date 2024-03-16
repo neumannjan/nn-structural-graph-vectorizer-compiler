@@ -8,7 +8,7 @@ from lib.nn.scatter import ReductionDef, build_optimal_scatter
 _REDUCE_DEFS: set[ReductionDef] = set(t_get_args(ReductionDef))
 
 
-def build_optimal_scatter_aggregation(
+def build_optimal_scatter_aggregate(
     counts: list[int] | torch.Tensor, aggregation: AggregationDef, allow_non_builtin_torch_ops: bool
 ):
     if not isinstance(counts, torch.Tensor):

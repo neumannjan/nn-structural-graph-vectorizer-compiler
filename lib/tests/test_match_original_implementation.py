@@ -66,6 +66,13 @@ LONG_DATASET_PARAMS: list[MyDataset] = [
 ]
 
 
+class CustomError(Exception):
+    def __init__(self, *args: object, network, model) -> None:
+        super().__init__(*args)
+        self.network = network
+        self.model = model
+
+
 def do_test_dataset(dataset: MyDataset, device: str, settings: Settings):
     if device == "mps" and settings.allow_non_builtin_torch_ops:
         warnings.warn("Skipping MPS test for 'allow_non_builtin_torch_ops=True'.")
@@ -94,16 +101,23 @@ def do_test_dataset(dataset: MyDataset, device: str, settings: Settings):
         runnable = NeuralogicVectorizedTorchRunnable(device=device, settings=settings)
         runnable.initialize(built_dataset_inst)
 
+        print(runnable.network)
         print(runnable.model)
 
-        results: dict[int, torch.Tensor] = runnable.forward_pass()
+        results: dict[str, torch.Tensor] = runnable.forward_pass()
 
         for layer in runnable.network.layers:
             if settings.merge_same_facts and layer.type == "FactLayer":
                 continue
 
             expected = torch.squeeze(torch.stack(list(runnable.network[layer.id].get_values_torch())))
-            actual = torch.squeeze(results[layer.id]).detach().cpu()
+            actual = torch.squeeze(results[str(layer.id)]).detach().cpu()
+            assert expected.shape == actual.shape, (
+                f"Shapes do not match at layer {layer.id} ({layer.type}).\n"
+                f"Expected: {expected.shape}\n"
+                f"Actual: {actual.shape}"
+            )
+
             assert (torch.abs(expected - actual) < tolerance).all(), (
                 f"Values do not match at layer {layer.id} ({layer.type}). "
                 f"Max difference is {torch.max(torch.abs(expected - actual))}. "
@@ -120,7 +134,9 @@ def do_test_dataset(dataset: MyDataset, device: str, settings: Settings):
     except jpype.JException as e:
         print(e.message())
         print(e.stacktrace())
-        raise e
+        raise CustomError(network=runnable.network, model=runnable.model) from e
+    except Exception as e:
+        raise CustomError(network=runnable.network, model=runnable.model) from e
 
 
 @pytest.mark.parametrize(
@@ -147,11 +163,13 @@ def test_long(dataset: MyDataset, device: str, settings: Settings):
     do_test_dataset(dataset, device, settings)
 
 
-# if __name__ == "__main__":
-#     stts = SETTINGS_PARAMS[0]
-#     model, network = do_test_dataset(MyMutagenesis("simple", "original"), "cpu", stts)
-
 if __name__ == "__main__":
     settings = SETTINGS_PARAMS[0]
-    dataset = MyTUDataset(source="mutag", template="gcn")
-    model, network = do_test_dataset(dataset, "cpu", settings)
+    settings.compilation = 'script'
+    dataset = MyTUDataset(source="mutag", template="gsage")
+    # dataset = MyMutagenesis(source="original", template="simple")
+    try:
+        model, network = do_test_dataset(dataset, "cpu", settings)
+    except CustomError as e:
+        model, network = e.model, e.network
+        raise e

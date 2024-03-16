@@ -6,8 +6,8 @@ import torch
 from lib.nn import sources
 from lib.nn.sources.base import LayerDefinition
 from lib.nn.sources.minimal_api.dict import WeightDefinitionImpl
+from lib.nn.topological.layer import Layer
 from lib.nn.topological.settings import Settings
-from lib.nn.topological.weighted_rule_layer import WeightedRuleLayer
 from lib.tests.utils.neuron_factory import NeuronTestFactory
 from lib.tests.utils.test_params import SETTINGS_PARAMS
 
@@ -95,15 +95,15 @@ def test_weighted_rule_layer(settings: Settings):
     network = build_sample(
         weights=[UNIT_WEIGHT, WEIGHTS[14], WEIGHTS[15], UNIT_WEIGHT], facts_values=list(FACTS_VALUES)
     )
-    inputs = {16: torch.tensor(FACTS_VALUES, dtype=torch.get_default_dtype()).unsqueeze(-1)}
-    layer = WeightedRuleLayer(network, neurons=network[13], settings=settings)
+    inputs = {"16": torch.tensor(FACTS_VALUES, dtype=torch.get_default_dtype()).unsqueeze(-1)}
+    layer = Layer(out_to=13, network=network, neurons=network[13], settings=settings)
 
     print(layer)
 
     expected = torch.tensor(
         [[0.85, -0.53, 0.72], [0.85, -0.53, 0.72], [0.85, -0.53, 0.72], [0.85, -0.53, 0.72], [0.85, -0.53, 0.72]]
     ).unsqueeze(-1)
-    actual = layer(inputs)
+    actual = layer(inputs)["13"]
 
     print("expected", expected)
     print("actual", actual)

@@ -21,7 +21,11 @@ if TYPE_CHECKING:
     from lib.nn.sources.minimal_api.base import MinimalAPINetwork
     from lib.nn.sources.minimal_api.ordinals import MinimalAPIOrdinals
 
-LayerType = Literal["FactLayer", "WeightedAtomLayer", "WeightedRuleLayer", "AggregationLayer", "RuleLayer"]
+LayerType = Literal["FactLayer", "WeightedAtomLayer", "WeightedRuleLayer", "AtomLayer", "RuleLayer", "AggregationLayer"]
+
+
+def is_weighted(layer_type: LayerType):
+    return layer_type in ("FactLayer", "WeightedAtomLayer", "WeightedRuleLayer")
 
 
 @dataclass(frozen=True)
@@ -78,8 +82,7 @@ class Ordinals(Protocol):
         """Get the total number of neurons in this view."""
         ...
 
-    def __contains__(self, o: object) -> bool:
-        ...
+    def __contains__(self, o: object) -> bool: ...
 
     def __getitem__(self, id: int) -> LayerOrdinal:
         """Get the `LayerOrdinal` of a given neuron ID, if present in this view."""
@@ -101,14 +104,11 @@ class LayerDefinitions(Protocol):
         """Iterate all layer definitions in order from input to output."""
         ...
 
-    def __contains__(self, ld: object) -> bool:
-        ...
+    def __contains__(self, ld: object) -> bool: ...
 
-    def as_list(self) -> list[LayerDefinition]:
-        ...
+    def as_list(self) -> list[LayerDefinition]: ...
 
-    def as_dict(self) -> OrderedDict[int, LayerDefinition]:
-        ...
+    def as_dict(self) -> OrderedDict[int, LayerDefinition]: ...
 
 
 @runtime_checkable
@@ -133,11 +133,9 @@ class WeightDefinition(Protocol):
         """Get the initial value of the weight, as a PyTorch tensor."""
         ...
 
-    def __hash__(self) -> int:
-        ...
+    def __hash__(self) -> int: ...
 
-    def __eq__(self, value: object) -> bool:
-        ...
+    def __eq__(self, value: object) -> bool: ...
 
 
 class Neurons(Protocol):
@@ -258,8 +256,7 @@ class Network(Protocol):
         """Iterate over the neurons containers in individual layers in the order from input to output."""
         ...
 
-    def __contains__(self, o: object) -> bool:
-        ...
+    def __contains__(self, o: object) -> bool: ...
 
     @property
     def minimal_api(self) -> "MinimalAPINetwork | None":

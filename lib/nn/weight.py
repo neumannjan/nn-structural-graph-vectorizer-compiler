@@ -3,6 +3,7 @@ from typing import Collection, Iterable, Protocol, Sequence
 
 import numpy as np
 import torch
+from torch.jit import unused
 
 from lib.nn.gather import (
     GatherAndView,
@@ -19,49 +20,37 @@ from lib.utils import detect_repeating_K_sequence_in_list
 
 
 class WeightLike(GatherLike, Protocol):
-    def apply_to(self, to: torch.Tensor) -> torch.Tensor:
-        ...
+    def apply_to(self, to: torch.Tensor) -> torch.Tensor: ...
 
-    def expand_to(self, shape: torch.Size | tuple[int, ...] | list[int], shape_single: bool) -> torch.Tensor:
-        ...
+    def expand_to(self, shape: torch.Size | tuple[int, ...] | list[int], shape_single: bool) -> torch.Tensor: ...
 
-    def expand_as_weight(self, shape: torch.Size | tuple[int, ...] | list[int], shape_single: bool) -> "WeightLike":
-        ...
+    def expand_as_weight(self, shape: torch.Size | tuple[int, ...] | list[int], shape_single: bool) -> "WeightLike": ...
 
     @property
-    def is_multiple(self) -> bool:
-        ...
+    def is_multiple(self) -> bool: ...
 
     @property
-    def value(self) -> torch.nn.Parameter:
-        ...
+    def value(self) -> torch.nn.Parameter: ...
 
     @property
-    def shape(self) -> torch.Size:
-        ...
+    def shape(self) -> torch.Size: ...
 
     @property
-    def learnable(self) -> bool:
-        ...
+    def learnable(self) -> bool: ...
 
-    def as_parameter(self) -> torch.nn.Parameter:
-        ...
+    def as_parameter(self) -> torch.nn.Parameter: ...
 
-    def unsqueeze0(self) -> "WeightLike":
-        ...
+    def unsqueeze0(self) -> "WeightLike": ...
 
 
 class WeightModuleLike(GatherModuleLike, Protocol):
     @property
-    def shape(self) -> torch.Size:
-        ...
+    def shape(self) -> torch.Size: ...
 
     @property
-    def is_multiple(self) -> bool:
-        ...
+    def is_multiple(self) -> bool: ...
 
-    def __call__(self) -> torch.Tensor:
-        ...
+    def __call__(self) -> torch.Tensor: ...
 
 
 def _get_single_shape(shape: torch.Size | tuple[int, ...] | list[int], shape_single: bool):
@@ -89,17 +78,25 @@ class Weight(torch.nn.Module, WeightLike, WeightModuleLike):
 
             raise ValueError(f"For weight that is {lrn}, it must hold that requires_grad == {learnable}")
 
+    @unused
+    def get_period(self) -> int | None:
+        return None
+
+    @unused
     def apply_to(self, to: torch.Tensor) -> torch.Tensor:
         return self.weight @ to
 
+    @unused
     @property
     def value(self) -> torch.nn.Parameter:
         return self.weight
 
+    @unused
     @property
     def is_multiple(self) -> bool:
         return False
 
+    @unused
     def expand_to(self, shape: torch.Size | tuple[int, ...] | list[int], shape_single: bool) -> torch.Tensor:
         shape = _get_single_shape(shape, shape_single)
 
@@ -108,6 +105,7 @@ class Weight(torch.nn.Module, WeightLike, WeightModuleLike):
 
         return self.weight.view(shape)
 
+    @unused
     def expand_as_weight(self, shape: torch.Size | tuple[int, ...] | list[int], shape_single: bool) -> "Weight":
         tensor = self.expand_to(shape, shape_single)
         return Weight(torch.nn.Parameter(tensor, requires_grad=self.learnable), learnable=self.learnable)
@@ -119,32 +117,40 @@ class Weight(torch.nn.Module, WeightLike, WeightModuleLike):
     def forward(self) -> torch.Tensor:
         return self.weight
 
+    @unused
     @property
     def total_items(self) -> int:
         return 1 if not self.is_multiple else self.shape[0]
 
+    @unused
     @property
     def optimal_period(self) -> int:
         return self.total_items
 
+    @unused
     @property
     def is_optimal(self) -> bool:
         return True
 
+    @unused
     def get_optimal(self):
         return self
 
+    @unused
     @property
     def shape(self) -> torch.Size:
         return self.weight.shape
 
+    @unused
     @property
     def learnable(self) -> bool:
         return self._learnable
 
+    @unused
     def as_parameter(self) -> torch.nn.Parameter:
         return self.weight
 
+    @unused
     def unsqueeze0(self) -> "Weights":
         return Weights(
             torch.nn.Parameter(self.weight.unsqueeze(0), requires_grad=self.learnable), learnable=self.learnable
@@ -158,10 +164,12 @@ class UnitWeight(Weight, WeightLike, WeightModuleLike):
 
         super().__init__(torch.nn.Parameter(tensor, requires_grad=False), learnable=False)
 
+    @unused
     @property
     def is_multiple(self) -> bool:
         return False
 
+    @unused
     def expand_to(self, shape: torch.Size | tuple[int, ...] | list[int], shape_single: bool) -> torch.Tensor:
         shape = _get_single_shape(shape, shape_single)
 
@@ -170,17 +178,21 @@ class UnitWeight(Weight, WeightLike, WeightModuleLike):
 
         return torch.ones(shape)
 
+    @unused
     def expand_as_weight(self, shape: torch.Size | tuple[int, ...] | list[int], shape_single: bool) -> "UnitWeight":
         tensor = self.expand_to(shape, shape_single)
         return UnitWeight(tensor)
 
+    @unused
     def apply_to(self, to: torch.Tensor) -> torch.Tensor:
         return to
 
+    @unused
     @property
     def learnable(self) -> bool:
         return False
 
+    @unused
     def unsqueeze0(self) -> "UnitWeights":
         return UnitWeights(self.weight.unsqueeze(0))
 
@@ -192,25 +204,31 @@ class ZeroWeight(Weight, WeightLike, WeightModuleLike):
 
         super().__init__(torch.nn.Parameter(tensor, requires_grad=False), learnable=False)
 
+    @unused
     @property
     def is_multiple(self) -> bool:
         return False
 
+    @unused
     def expand_to(self, shape: torch.Size | tuple[int, ...] | list[int], shape_single: bool) -> torch.Tensor:
         shape = _get_single_shape(shape, shape_single)
         return torch.zeros(shape)
 
+    @unused
     def expand_as_weight(self, shape: torch.Size | tuple[int, ...] | list[int], shape_single: bool) -> "ZeroWeight":
         tensor = self.expand_to(shape, shape_single)
         return ZeroWeight(tensor)
 
+    @unused
     def apply_to(self, to: torch.Tensor) -> torch.Tensor:
         return to
 
+    @unused
     @property
     def learnable(self) -> bool:
         return False
 
+    @unused
     def unsqueeze0(self) -> "ZeroWeights":
         return ZeroWeights(self.weight.unsqueeze(0))
 
@@ -222,10 +240,12 @@ class UnitWeights(Weight, WeightLike, WeightModuleLike):
 
         super().__init__(torch.nn.Parameter(tensor, requires_grad=False), learnable=False)
 
+    @unused
     @property
     def is_multiple(self) -> bool:
         return True
 
+    @unused
     def expand_to(self, shape: torch.Size | tuple[int, ...] | list[int], shape_single: bool) -> torch.Tensor:
         shape = _get_single_shape(shape, shape_single)
 
@@ -240,17 +260,21 @@ class UnitWeights(Weight, WeightLike, WeightModuleLike):
         out = out.view(out_shape)
         return out
 
+    @unused
     def expand_as_weight(self, shape: torch.Size | tuple[int, ...] | list[int], shape_single: bool) -> "UnitWeights":
         tensor = self.expand_to(shape, shape_single)
         return UnitWeights(tensor)
 
+    @unused
     def apply_to(self, to: torch.Tensor) -> torch.Tensor:
         return to
 
+    @unused
     @property
     def learnable(self) -> bool:
         return False
 
+    @unused
     def unsqueeze0(self) -> "UnitWeights":
         return self
 
@@ -262,10 +286,12 @@ class ZeroWeights(Weight, WeightLike, WeightModuleLike):
 
         super().__init__(torch.nn.Parameter(tensor, requires_grad=False), learnable=False)
 
+    @unused
     @property
     def is_multiple(self) -> bool:
         return True
 
+    @unused
     def expand_to(self, shape: torch.Size | tuple[int, ...] | list[int], shape_single: bool) -> torch.Tensor:
         shape = _get_single_shape(shape, shape_single)
 
@@ -277,17 +303,21 @@ class ZeroWeights(Weight, WeightLike, WeightModuleLike):
 
         return out
 
+    @unused
     def expand_as_weight(self, shape: torch.Size | tuple[int, ...] | list[int], shape_single: bool) -> "ZeroWeights":
         tensor = self.expand_to(shape, shape_single)
         return ZeroWeights(tensor)
 
+    @unused
     def apply_to(self, to: torch.Tensor) -> torch.Tensor:
         return to
 
+    @unused
     @property
     def learnable(self) -> bool:
         return False
 
+    @unused
     def unsqueeze0(self) -> "ZeroWeights":
         return self
 
@@ -296,10 +326,12 @@ class Weights(Weight, WeightLike, WeightModuleLike):
     def __init__(self, weights: torch.nn.Parameter, learnable: bool) -> None:
         super().__init__(weights, learnable)
 
+    @unused
     @property
     def is_multiple(self) -> bool:
         return True
 
+    @unused
     def expand_to(self, shape: torch.Size | tuple[int, ...] | list[int], shape_single: bool) -> torch.Tensor:
         shape = _get_single_shape(shape, shape_single)
 
@@ -311,11 +343,13 @@ class Weights(Weight, WeightLike, WeightModuleLike):
 
         return self.weight.view(shape)
 
+    @unused
     def expand_as_weight(self, shape: torch.Size | tuple[int, ...] | list[int], shape_single: bool) -> "Weights":
         tensor = self.expand_to(shape, shape_single)
 
         return Weights(torch.nn.Parameter(tensor, requires_grad=self.learnable), learnable=self.learnable)
 
+    @unused
     def unsqueeze0(self) -> "Weights":
         return self
 
@@ -335,9 +369,14 @@ class StackWeights(torch.nn.Module, WeightModuleLike):
         super().__init__()
         self.weights = torch.nn.ParameterList([w for w in weights_unsqueezed])
 
+    @unused
+    def get_period(self) -> int | None:
+        return None
+
     def forward(self) -> torch.Tensor:
         return torch.concatenate(tuple(self.weights))
 
+    @unused
     @property
     def shape(self) -> torch.Size:
         n_weights = sum((w.shape[0] for w in self.weights))
@@ -347,22 +386,27 @@ class StackWeights(torch.nn.Module, WeightModuleLike):
 
         return torch.Size(shape)
 
+    @unused
     @property
     def is_multiple(self) -> bool:
         return True
 
+    @unused
     @property
     def total_items(self) -> int:
         return self.shape[0]
 
+    @unused
     @property
     def optimal_period(self) -> int:
         return self.shape[0]
 
+    @unused
     @property
     def is_optimal(self) -> bool:
         return True
 
+    @unused
     def get_optimal(self):
         return self
 
@@ -373,9 +417,14 @@ class ExpandWeight(torch.nn.Module, WeightModuleLike):
         self.weight = weight
         self._shape = shape if shape_single else shape[1:]
 
+    @unused
+    def get_period(self) -> int | None:
+        return None
+
     def forward(self) -> torch.Tensor:
         return self.weight.expand_to(self._shape, shape_single=True)
 
+    @unused
     @property
     def shape(self) -> torch.Size:
         shape = []
@@ -387,6 +436,7 @@ class ExpandWeight(torch.nn.Module, WeightModuleLike):
 
         return torch.Size(shape)
 
+    @unused
     @property
     def is_multiple(self) -> bool:
         return self.weight.is_multiple
@@ -395,14 +445,17 @@ class ExpandWeight(torch.nn.Module, WeightModuleLike):
     def total_items(self) -> int:
         return self.shape[0]
 
+    @unused
     @property
     def optimal_period(self) -> int:
         return self.shape[0]
 
+    @unused
     @property
     def is_optimal(self) -> bool:
         return True
 
+    @unused
     def get_optimal(self):
         return self
 
@@ -423,10 +476,16 @@ class StackWeightModules(torch.nn.Module, WeightModuleLike):
 
         self.the_modules = torch.nn.ModuleList(the_modules)
 
+    @unused
+    def get_period(self) -> int | None:
+        return None
+
+    @unused
     @property
     def weight_modules(self) -> Sequence[WeightModuleLike]:
         return self.the_modules
 
+    @unused
     @property
     def shape(self) -> torch.Size:
         n_weights = sum((m.shape[0] for m in self.weight_modules))
@@ -435,22 +494,27 @@ class StackWeightModules(torch.nn.Module, WeightModuleLike):
 
         return torch.Size(shape)
 
+    @unused
     @property
     def is_multiple(self) -> bool:
         return True
 
+    @unused
     @property
     def total_items(self) -> int:
         return self.shape[0]
 
+    @unused
     @property
     def optimal_period(self) -> int:
         return self.shape[0]
 
+    @unused
     @property
     def is_optimal(self) -> bool:
         return True
 
+    @unused
     def get_optimal(self):
         return self
 
@@ -495,10 +559,11 @@ def _stack_weights_by_sum_match(
 
     ws = [w.unsqueeze0() for w in ws]
 
-    shapes = [w.shape[1:] for w in ws]
+    shapes = [list(w.shape[1:]) for w in ws]
 
     if shape_hull is None:
         shape_hull = torch.broadcast_shapes(*shapes)
+        print(shapes, shape_hull)
 
     shape_hull_sum = sum(shape_hull)
 
@@ -562,18 +627,26 @@ class WeightsGathered(torch.nn.Module, GatherLike):
         self.weight = weight
         self.gather = gather
 
+    @unused
+    def get_period(self) -> int | None:
+        return self.gather.get_period() or self.weight.get_period()
+
+    @unused
     @property
     def total_items(self) -> int:
         return self.gather.total_items
 
+    @unused
     @property
     def optimal_period(self) -> int:
         return self.gather.optimal_period
 
+    @unused
     @property
     def is_optimal(self) -> bool:
         return self.gather.is_optimal and not isinstance(self.gather, NoopGather)
 
+    @unused
     def get_optimal(self):
         gather_optimal = self.gather
 
@@ -594,7 +667,7 @@ class WeightsGathered(torch.nn.Module, GatherLike):
         return w
 
 
-def create_weights_using_packing_strategy(
+def _create_weights_using_packing_strategy(
     weight_definitions: Collection[WeightDefinition], period: int | None, group_learnable_weight_parameters=True
 ):
     idx_map: dict[int, int] = {}
@@ -664,28 +737,9 @@ def _check_is_each_learnable_weight_used_only_once(
         return False, weight_definitions
 
 
-def create_weights_and_gather(
-    weight_definitions: Collection[WeightDefinition],
-    period: int | None,
-    group_learnable_weight_parameters=True,
+def _create_weights_using_ordered_strategy(
+    weight_definitions: Collection[WeightDefinition], group_learnable_weight_parameters: bool
 ):
-    n_orig_weight_definitions = len(weight_definitions)
-    each_learnable_used_only_once, weight_definitions = _check_is_each_learnable_weight_used_only_once(
-        weight_definitions, period=period
-    )
-
-    if not each_learnable_used_only_once:
-        # must default to creating the gather and the weight independently
-
-        weight = create_weights_using_packing_strategy(
-            weight_definitions,
-            period=period,
-            group_learnable_weight_parameters=group_learnable_weight_parameters,
-        )
-
-        return weight
-
-    # can create the weights already in order (such that no gather operation is needed)
     weights: list[Weight] = [
         create_weight(wd.get_value_torch(), is_learnable=wd.learnable) for wd in weight_definitions
     ]
@@ -698,6 +752,33 @@ def create_weights_and_gather(
     weight = _stack_weights_by_sum_match(
         weights, shape_hull=shape_hull, group_learnable_weight_parameters=group_learnable_weight_parameters
     )
+    return weight
+
+
+def create_weights_and_gather(
+    weight_definitions: Collection[WeightDefinition],
+    period: int | None,
+    group_learnable_weight_parameters=True,
+):
+    n_orig_weight_definitions = len(weight_definitions)
+    each_learnable_used_only_once, weight_definitions = _check_is_each_learnable_weight_used_only_once(
+        weight_definitions, period=period
+    )
+
+    weight = None
+    if not each_learnable_used_only_once:
+        # must default to creating the gather and the weight independently
+
+        weight = _create_weights_using_packing_strategy(
+            weight_definitions,
+            period=period,
+            group_learnable_weight_parameters=group_learnable_weight_parameters,
+        )
+
+    if weight is None:
+        # can create the weights already in order (such that no gather operation is needed)
+        weight = _create_weights_using_ordered_strategy(weight_definitions, group_learnable_weight_parameters)
+
     assert weight is not None
 
     # no gather might be needed!
@@ -718,7 +799,7 @@ def create_weights_and_gather(
         else:
             gather = view
 
-    if gather is not None and not (weight.total_items == gather.total_items):
+    if gather is not None:
         weight = WeightsGathered(weight, gather)
 
     return weight

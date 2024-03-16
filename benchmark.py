@@ -10,16 +10,11 @@ from lib.benchmarks.runnables.runnable import Runnable
 from lib.benchmarks.runner import MultiRunner
 from lib.datasets.datasets import add_parser_args_for_dataset, build_dataset, get_dataset_info_from_args
 from lib.datasets.mutagenesis import MutagenesisSource, MutagenesisTemplate
-from lib.nn.topological.settings import Settings
+from lib.nn.topological.settings import Compilation, Settings
 from tqdm.auto import tqdm
 
 Device = Literal["mps", "cuda", "cpu"]
 Model = Literal["neuralogic_java", "neuralogic_torch", "torch_geometric"]
-
-
-SETTINGS = Settings(
-    check_same_layers_assumption=False,
-)
 
 
 DEVICE_SUPPORT_MTX: dict[Model, list[Device]] = defaultdict(
@@ -79,7 +74,11 @@ if __name__ == "__main__":
     parser.add_argument("--devices", "-d", action=CommaSeparatedListAction, choices=t_get_args(Device), required=True)
     parser.add_argument("--models", "-m", action=CommaSeparatedListAction, choices=t_get_args(Model), required=True)
     parser.add_argument("--repeats", "-n", "-r", type=int, default=10)
+    parser.add_argument("--compilation", "-c", choices=t_get_args(Compilation), default="none")
     args = parser.parse_args()
+
+    settings = Settings()
+    settings.compilation = args.compilation
 
     print("------")
     print()
@@ -109,7 +108,7 @@ if __name__ == "__main__":
                 elif model == "torch_geometric":
                     runnables[model, device] = PytorchGeometricRunnable(device=device)
                 elif model == "neuralogic_torch":
-                    runnables[model, device] = NeuralogicVectorizedTorchRunnable(device=device, settings=SETTINGS)
+                    runnables[model, device] = NeuralogicVectorizedTorchRunnable(device=device, settings=settings)
 
     runner = MultiRunner(n_repeats=args.repeats)
 

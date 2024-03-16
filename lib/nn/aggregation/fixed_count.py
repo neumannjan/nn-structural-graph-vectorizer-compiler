@@ -67,7 +67,7 @@ _FIXED_COUNT: dict[AggregationDef, Type[FixedCountAggregation]] = {
 }
 
 
-def build_fixed_count_aggregation(aggregation: AggregationDef, dim: int = 1):
+def build_fixed_count_aggregate(aggregation: AggregationDef, dim: int = 1):
     try:
         return _FIXED_COUNT[aggregation](dim=dim)
     except KeyError:

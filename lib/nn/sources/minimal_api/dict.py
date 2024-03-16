@@ -8,7 +8,7 @@ from lib.nn.definitions.ops import AggregationDef, TransformationDef
 from lib.nn.sources.base import LayerDefinition, WeightDefinition
 from lib.nn.sources.base_impl import BaseWeightDefinition
 from lib.nn.sources.minimal_api.base import MinimalAPINetwork
-from lib.utils import LambdaIterable, MapCollection, MapSequence, cache, value_to_tensor
+from lib.utils import LambdaIterable, MapCollection, MapSequence, cache
 
 
 class _Value:
@@ -139,7 +139,7 @@ class MinimalAPIDictNetwork(MinimalAPINetwork[Sequence[Neuron]]):
         return MapCollection(lambda n: n.value, neurons)
 
     def get_values_torch(self, neurons: Sequence[Neuron]) -> Collection[torch.Tensor]:
-        return MapCollection(lambda n: value_to_tensor(n.value), neurons)
+        return MapCollection(lambda n: torch.tensor(n.value, dtype=torch.get_default_dtype()), neurons)
 
     def get_transformations(self, neurons: Sequence[Neuron]) -> Sequence[TransformationDef | None]:
         return MapSequence(lambda n: n.transformation, neurons)

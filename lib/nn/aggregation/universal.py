@@ -2,8 +2,8 @@ from typing import List, Protocol, Union
 
 import torch
 
-from lib.nn.aggregation.fixed_count import FixedCountAggregation, build_fixed_count_aggregation
-from lib.nn.aggregation.scatter import build_optimal_scatter_aggregation
+from lib.nn.aggregation.fixed_count import FixedCountAggregation, build_fixed_count_aggregate
+from lib.nn.aggregation.scatter import build_optimal_scatter_aggregate
 from lib.nn.definitions.ops import AggregationDef
 from lib.nn.gather import ViewWithPeriod
 
@@ -90,11 +90,11 @@ def build_optimal_reshape_aggregate(
         period = int(counts[0].item())
         return ViewAndAggregate(
             view=ViewWithPeriod(input_length=period * counts.shape[0], period=period),
-            aggregate=build_fixed_count_aggregation(aggregation=aggregation, dim=1),
+            aggregate=build_fixed_count_aggregate(aggregation=aggregation, dim=1),
         )
 
     return ScatterAggregate(
-        build_optimal_scatter_aggregation(
+        build_optimal_scatter_aggregate(
             counts, aggregation=aggregation, allow_non_builtin_torch_ops=allow_non_builtin_torch_ops
         )
     )
