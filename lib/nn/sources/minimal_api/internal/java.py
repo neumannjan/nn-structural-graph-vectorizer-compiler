@@ -6,6 +6,7 @@ import jpype
 import numpy as np
 import torch
 from neuralogic.core.builder.builder import NeuralSample
+from neuralogic.core.template import Iterable
 from tqdm.auto import tqdm
 
 from lib.nn.definitions.ops import AggregationDef, TransformationDef
@@ -137,62 +138,61 @@ def get_aggregation(java_neuron: JavaNeuron) -> AggregationDef | None:
     return out
 
 
-def _discover_layers_from_sample(sample: NeuralSample | JavaNeuron) -> list[LayerDefinition]:
-    out: list[LayerDefinition] = []
-
+def _get_neuron(sample: NeuralSample | JavaNeuron) -> JavaNeuron:
     if isinstance(sample, NeuralSample):
         neuron = sample.java_sample.query.neuron
     else:
         neuron = sample
-    initial_layer: int = neuron.getLayer()
-    neighbor_layers: dict[int, int] = {}
-    layer_types: dict[int, LayerType] = {}
+    return neuron
 
-    queue = deque([neuron])
 
-    while len(queue) > 0:
-        neuron = queue.popleft()
-        layer = neuron.getLayer()
-        layer_type = _get_layer_type(neuron)
-        if layer in layer_types:
-            assert (
-                layer_types[layer] == layer_type
-            ), f"Layer {layer} found of types {layer_types[layer]} and {layer_type}"
-        else:
-            layer_types[layer] = layer_type
+def _iter_neuron_pairs_from_neuron(neuron: JavaNeuron) -> Iterable[tuple[JavaNeuron, JavaNeuron]]:
+    for n in neuron.getInputs():
+        yield from _iter_neuron_pairs_from_neuron(n)
+        yield n, neuron
 
-        layer_inputs = list(neuron.getInputs())
 
-        if len(layer_inputs) == 0:
-            continue
+def _iter_neuron_pairs_from_sample(sample: NeuralSample | JavaNeuron):
+    yield from _iter_neuron_pairs_from_neuron(_get_neuron(sample))
 
-        for inp in layer_inputs:
-            if inp.getLayer() == layer:
-                raise RuntimeError(
-                    f"Neuron in layer {layer} has an input in layer {inp.getLayer()}. This should not happen."
-                    + (" Did you do the sample run?" if layer == 0 else "")
-                )
 
-        # find closest input layer
-        if layer in neighbor_layers:
-            neighbor_layers[layer] = min(min((inp.getLayer() for inp in layer_inputs)), neighbor_layers[layer])
-        else:
-            neighbor_layers[layer] = min((inp.getLayer() for inp in layer_inputs))
+def _iter_neurons(neuron: JavaNeuron) -> Iterable[JavaNeuron]:
+    yield neuron
+    for n in neuron.getInputs():
+        yield from _iter_neurons(n)
 
-        # continue with all closest
-        queue.extend((inp for inp in layer_inputs if inp.getLayer() == neighbor_layers[layer]))
 
-    # output result
-    layer = initial_layer
-    out += [LayerDefinition(layer, layer_types[layer])]
-    while True:
-        if layer not in neighbor_layers:
+def _iter_neurons_from_sample(sample: NeuralSample | JavaNeuron):
+    yield from _iter_neurons(_get_neuron(sample))
+
+
+def _discover_layers_from_sample(sample: NeuralSample | JavaNeuron) -> list[LayerDefinition]:
+    layer_id_pairs = list(((int(a.getLayer()), int(b.getLayer())) for a, b in _iter_neuron_pairs_from_sample(sample)))
+    arr = np.array(layer_id_pairs)
+    arr = np.unique(arr, axis=0)
+    uniq = np.unique(arr).tolist()
+
+    predecessors: dict[int, int] = {}
+    for k in uniq:
+        mask = arr[:, 1] == k
+        if np.any(mask):
+            predecessors[k] = int(np.min(arr[mask][:, 0]))
+
+    types: dict[int, LayerType] = {}
+    for n in _iter_neurons_from_sample(sample):
+        l = int(n.getLayer())
+        if l not in types:
+            types[l] = _get_layer_type(n)
+
+        if len(types) == len(uniq):
             break
 
-        layer = neighbor_layers[layer]
-        out += [LayerDefinition(layer, layer_types[layer])]
+    order = [int(_get_neuron(sample).getLayer())]
+    while len(order) < len(uniq):
+        order.append(predecessors[order[-1]])
+    order.reverse()
 
-    out.reverse()
+    out = [LayerDefinition(id=id, type=types[id]) for id in order]
     return out
 
 
