@@ -1,8 +1,9 @@
 import functools
 import heapq
+import inspect
 from collections.abc import Collection
 from types import MethodType
-from typing import Callable, Generic, Iterable, Iterator, Sequence, TypeVar
+from typing import Callable, Generic, Iterable, Iterator, Sequence, Type, TypeVar
 
 import numpy as np
 import torch
@@ -479,46 +480,106 @@ def print_with_ellipsis(it: Iterator[str], after=5) -> str:
     return ", ".join(vals)
 
 
-class _PreferenceDelegate:
-    def __init__(self, *delegates) -> None:
-        self._delegates = delegates
+class DelegatedMethod:
+    """
+    Mark class property as a delegated method.
 
-    def __getattr__(self, name: str):
-        for d in self._delegates:
-            if hasattr(d, name):
-                return getattr(d, name)
+    Should be used with `@delegate` decorator. Please see its documentation.
+    """
 
-        raise RuntimeError()
+    def __init__(self, delegate: str) -> None:
+        self.delegate = delegate
+
+    def __get__(self, obj, objtype=None):
+        cls_name = obj.__class__.__name__ or (objtype.__name__ if objtype is not None else "??")
+        this_name = self.__class__.__name__
+        decorator_name = delegate.__name__
+        raise RuntimeError(
+            f"Class {cls_name}: Cannot use {this_name} without @{decorator_name} decorator on the class!"
+        )
 
 
-class Delegate:
-    def __get__(self, instance, owner):
-        raise RuntimeError("Cannot use Delegate property without @delegate decorator on the class!")
+class _MagicSelf:
+    def __init__(self, the_self, delegate_self, delegate_property_name: str) -> None:
+        self.__the_self = the_self
+        self.__delegate_self = delegate_self
+        self.__delegate_property_name = delegate_property_name
+
+    def __getattr__(self, key: str):
+        if not hasattr(self.__the_self, key) or key == self.__delegate_property_name:
+            return getattr(self.__delegate_self, key)
+
+        return getattr(self.__the_self, key)
 
 
-def delegate(delegate: str):
-    def actual_decorator(cls):
-        @functools.wraps(cls)
-        def wrapper(*const_kargs, **const_kwargs):
-            instance = cls(*const_kargs, **const_kwargs)
+def delegate(cls: Type):
+    """
+    Decorate class as delegate, where each DelegatedMethod is replaced with the exact implementation from the delegate.
 
-            the_delegate = getattr(instance, delegate)
+    Example:
+    ```
+    class Container:
+        def get_a(self):
+            return "a"
 
-            new_self = _PreferenceDelegate(instance, the_delegate)
+        def get_b(self):
+            return "b"
 
-            methods = instance.__class__.__dict__.items()
+        def get_ab(self):
+            return self.get_a() + self.get_b()
 
-            for method_name, method in methods:
-                if isinstance(method, Delegate):
-                    underlying_method = getattr(the_delegate, method_name)
-                    new_self_method = MethodType(underlying_method.__func__, new_self)
-                    object.__setattr__(instance, method_name, new_self_method)
+    @delegate
+    class ContainerWrapper(Container):
+        def __init__(self, delegate: Container):
+            self.delegate = delegate
 
-            return instance
+        get_b = DelegatedMethod("delegate")
+        get_ab = DelegatedMethod("delegate")
 
-        return wrapper
+        def get_a(self):
+            return "A"
+    ```
 
-    return actual_decorator
+    Calling `get_ab()` on `ContainerWrapper` returns `"Ab"`. It calls the original `self.delegate.get_ab()` method,
+    but with a modified `self`, such that `self.get_a()` resolves to the modified `get_a()` in the `ContainerWrapper`.
+
+    Calling `delegate.get_ab()` on `ContainerWrapper` returns `"ab"` still (the delegate property itself isn't modified).
+
+    WARNING: This is really hard to debug sometimes.
+    """
+    methods = []
+
+    # find all DelegatedMethod properties in all bases
+    for ccls in inspect.getmro(cls):
+        for method_name, method in ccls.__dict__.items():
+            if isinstance(method, DelegatedMethod):
+                # found one
+                # do not replace if the main class already overrides it
+                if isinstance(cls.__dict__.get(method_name, method), DelegatedMethod):
+                    methods.append((method_name, method))
+
+    if len(methods) == 0:
+        cls_name = cls.__name__
+        decorator_name = delegate.__name__
+        prop_name = DelegatedMethod.__name__
+        raise ValueError(
+            f"Class {cls_name} uses the @{decorator_name} decorator, but has no properties of type {prop_name}."
+        )
+
+    orig_init = cls.__init__
+
+    def __init__(self, *kargs, **kwargs):
+        orig_init(self, *kargs, **kwargs)
+
+        for method_name, method in methods:
+            the_delegate = getattr(self, method.delegate)
+            underlying_func = getattr(the_delegate.__class__, method_name)
+            bound_func = MethodType(underlying_func, _MagicSelf(self, the_delegate, method.delegate))
+            object.__setattr__(self, method_name, bound_func)
+
+    cls.__init__ = __init__
+
+    return cls
 
 
 def addindent(s_, numSpaces):

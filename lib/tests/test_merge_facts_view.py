@@ -120,4 +120,4 @@ def test_gather_merged_single():
 
 
 if __name__ == "__main__":
-    test_merge_facts_view_all_ordinals()
+    test_merge_facts_view_inputs_ordinals()
