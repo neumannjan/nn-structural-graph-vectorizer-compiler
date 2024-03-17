@@ -76,9 +76,11 @@ if __name__ == "__main__":
     parser.add_argument("--repeats", "-n", "-r", type=int, default=10)
     parser.add_argument("--compilation", "-c", choices=t_get_args(Compilation), default="none")
     parser.add_argument("--iso", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--tail", action=argparse.BooleanOptionalAction, default=True)
     args = parser.parse_args()
 
     settings = Settings()
+    settings.optimize_tail_gathers = args.tail
     settings.compilation = args.compilation
     settings.neuralogic.iso_value_compression = args.iso
 
