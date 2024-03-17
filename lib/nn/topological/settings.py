@@ -20,6 +20,8 @@ class Settings:
 
     allow_non_builtin_torch_ops: bool = True
 
+    optimize_tail_gathers: bool = True
+
     compilation: Compilation = "none"
     neuralogic: nsettings.Settings = field(
         default_factory=lambda: nsettings.Settings(compute_neuron_layer_indices=True)

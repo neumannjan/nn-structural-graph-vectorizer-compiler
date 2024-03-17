@@ -96,7 +96,7 @@ def test_weighted_rule_layer(settings: Settings):
         weights=[UNIT_WEIGHT, WEIGHTS[14], WEIGHTS[15], UNIT_WEIGHT], facts_values=list(FACTS_VALUES)
     )
     inputs = {"16": torch.tensor(FACTS_VALUES, dtype=torch.get_default_dtype()).unsqueeze(-1)}
-    layer = Layer(out_to=13, network=network, neurons=network[13], settings=settings)
+    layer = Layer.from_network(out_to=13, network=network, neurons=network[13], settings=settings)
 
     print(layer)
 

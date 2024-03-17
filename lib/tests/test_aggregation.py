@@ -49,7 +49,7 @@ def build_sample2():
 def test_same_no_of_inputs(settings: Settings):
     inputs = {"16": torch.tensor([2, 2, 2, 2, 3, 3, 3, 3, 5, 5, 5, 5])}
     network = sources.from_dict(layers=LAYERS, neurons=build_sample1())
-    layer = Layer(
+    layer = Layer.from_network(
         out_to=13,
         network=network,
         neurons=network[13],
@@ -66,7 +66,7 @@ def test_same_no_of_inputs(settings: Settings):
 def test_variable_no_of_inputs(settings: Settings):
     inputs = {"16": torch.tensor([2, 2, 2, 2, 3, 3, 3, 5, 5, 5, 7, 7, 7, 7, 11, 11, 13, 13, 13, 13])}
     network = sources.from_dict(layers=LAYERS, neurons=build_sample2())
-    layer = Layer(
+    layer = Layer.from_network(
         out_to=13,
         network=network,
         neurons=network[13],

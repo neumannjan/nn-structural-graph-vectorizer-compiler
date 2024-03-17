@@ -1,9 +1,10 @@
 from collections import defaultdict
-from typing import Protocol, Sequence, runtime_checkable
+from typing import Protocol, Sequence, Union, runtime_checkable
 
 import numpy as np
 import torch
 from torch.jit import unused
+from torch.nn import Identity
 
 from lib.nn.sources.base import LayerOrdinal
 from lib.nn.utils import broadcast_shapes_compiled
@@ -17,29 +18,26 @@ class Periodic(Protocol):
 
 class GatherLike(Periodic, Protocol):
     @property
-    def total_items(self) -> int:
-        ...
+    def total_items(self) -> int: ...
 
     @property
-    def optimal_period(self) -> int:
-        ...
+    def optimal_period(self) -> int: ...
 
     @property
-    def is_optimal(self) -> bool:
-        ...
+    def is_optimal(self) -> bool: ...
 
 
 @runtime_checkable
 class GatherModuleLike(GatherLike, Protocol):
-    def get_optimal(self) -> "GatherModuleLike":
-        ...
+    def get_optimal(self) -> "GatherModuleLike": ...
 
-    def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        ...
+    def unwrap_final_gather(self) -> tuple["GatherModuleLike", dict[int, int]] | None: ...
+
+    def __call__(self, x: torch.Tensor) -> torch.Tensor: ...
 
 
 class NoopGather(torch.nn.Module, GatherModuleLike):
-    def __init__(self, input_length: int) -> None:
+    def __init__(self, input_length: int | None) -> None:
         super().__init__()
         self._input_length = input_length
 
@@ -50,12 +48,15 @@ class NoopGather(torch.nn.Module, GatherModuleLike):
     @unused
     @property
     def total_items(self) -> int:
+        if self._input_length is None:
+            raise ValueError("Cannot infer NoopGather total_items")
+
         return self._input_length
 
     @unused
     @property
     def optimal_period(self) -> int:
-        return self._input_length
+        return self.total_items
 
     @unused
     @property
@@ -65,6 +66,10 @@ class NoopGather(torch.nn.Module, GatherModuleLike):
     @unused
     def get_optimal(self) -> "NoopGather":
         return self
+
+    @unused
+    def unwrap_final_gather(self) -> tuple[GatherModuleLike, dict[int, int]] | None:
+        return None
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x
@@ -101,6 +106,13 @@ class TakeValue(torch.nn.Module, GatherModuleLike):
     def get_optimal(self) -> "TakeValue":
         return self
 
+    @unused
+    def unwrap_final_gather(self) -> tuple[GatherModuleLike, dict[int, int]] | None:
+        if self.ordinal == 0:
+            return NoopGather(None), {}
+
+        return NoopGather(None), {0: self.ordinal}
+
     def forward(self, layer_input: torch.Tensor):
         return layer_input[self.ordinal].unsqueeze(0)
 
@@ -136,6 +148,11 @@ class SliceValues(torch.nn.Module, GatherModuleLike):
     @unused
     def get_optimal(self) -> "SliceValues":
         return self
+
+    @unused
+    def unwrap_final_gather(self) -> tuple[GatherModuleLike, dict[int, int]] | None:
+        ord_map = {i: j for i, j in enumerate(range(self.start, self.end)) if i != j}
+        return NoopGather(None), ord_map
 
     def forward(self, layer_input: torch.Tensor):
         return layer_input[self.start : self.end]
@@ -175,6 +192,11 @@ class TakeEachNth(torch.nn.Module, GatherModuleLike):
     def get_optimal(self) -> "TakeEachNth":
         return self
 
+    @unused
+    def unwrap_final_gather(self) -> tuple[GatherModuleLike, dict[int, int]] | None:
+        ord_map = {i: j for i, j in enumerate(range(self.start, self.end, self.step)) if i != j}
+        return NoopGather(None), ord_map
+
     def forward(self, layer_input: torch.Tensor):
         return layer_input[self.start : self.end : self.step]
 
@@ -209,6 +231,11 @@ class GenericGather(torch.nn.Module, GatherModuleLike):
     @unused
     def get_optimal(self) -> "GatherModuleLike":
         return self
+
+    @unused
+    def unwrap_final_gather(self) -> tuple[GatherModuleLike, dict[int, int]] | None:
+        ord_map = {i: j for i, j in enumerate(self.ordinals.cpu().tolist()) if i != j}
+        return NoopGather(None), ord_map
 
     def forward(self, layer_input: torch.Tensor):
         return torch.index_select(layer_input, 0, self.ordinals)
@@ -247,10 +274,130 @@ class Repeat(torch.nn.Module, GatherModuleLike):
     def get_optimal(self) -> "GatherModuleLike":
         return NoopGather(input_length=self._input_length)
 
+    @unused
+    def unwrap_final_gather(self) -> tuple[GatherModuleLike, dict[int, int]] | None:
+        ord_map = {}
+        i = 0
+        for _ in range(self.repeats):
+            for j in range(self._input_length):
+                if i != j:
+                    ord_map[i] = j
+                i += 1
+                if i >= self.total_length:
+                    return Identity(), ord_map
+        return Identity(), ord_map
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x.repeat(self.repeats, *([1] * (x.dim() - 1)))
         x = x[: self.total_length]
         return x
+
+
+class _GatherWrapper(torch.nn.Module, GatherModuleLike):
+    def __init__(self, gather: torch.nn.Module) -> None:
+        super().__init__()
+        self._GatherWrapper__delegate = gather
+
+    @unused
+    def get_period(self) -> int | None:
+        raise ValueError(f"Cannot infer get_period of {repr(self)}")
+
+    @unused
+    @property
+    def total_items(self) -> int:
+        raise ValueError(f"Cannot infer total_items of {repr(self)}")
+
+    @unused
+    @property
+    def optimal_period(self) -> int:
+        raise ValueError(f"Cannot infer optimal_period of {repr(self)}")
+
+    @unused
+    @property
+    def is_optimal(self) -> bool:
+        raise ValueError(f"Cannot infer is_optimal of {repr(self)}")
+
+    @unused
+    def get_optimal(self) -> "GatherModuleLike":
+        raise ValueError(f"Cannot infer get_optimal of {repr(self)}")
+
+    @unused
+    def unwrap_final_gather(self) -> tuple["GatherModuleLike", dict[int, int]] | None:
+        raise ValueError(f"Cannot infer unwrap_final_gather of {repr(self)}")
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self._GatherWrapper__delegate(x)
+
+    def repr(self) -> str:
+        return f"{self.__class__.__name__}({self._GatherWrapper__delegate})"
+
+    def __getattr__(self, name: str) -> Union[torch.Tensor, torch.nn.Module]:
+        delegate = super().__getattr__("_GatherWrapper__delegate")
+
+        if name == "_GatherWrapper__delegate":
+            return delegate
+
+        return self.delegate.__getattr__(name)
+
+
+@unused
+def _unwrap_gathers_sequential(
+    *modules: "GatherModuleLike | LayerGatherModuleLike",
+) -> tuple[torch.nn.Module, dict[int, int]] | None:
+    out_modules, out_idx_map = [], {}
+
+    for module in modules:
+        tpl = module.unwrap_final_gather()
+        if tpl is None:
+            continue
+
+        module, idx_map = tpl
+
+        # combine out_modules and module
+        out_modules.append(module)
+
+        # combine out_idx_map and idx_map
+        for a, b in out_idx_map.items():
+            c = idx_map.get(b, b)
+            if a == c:
+                if a in out_idx_map:
+                    del out_idx_map[a]
+            else:
+                out_idx_map[a] = c
+
+    if len(out_modules) == 0:
+        return None
+
+    out_modules = [m for m in out_modules if not isinstance(m, NoopGather)]
+
+    if len(out_modules) == 0:
+        return Identity(), out_idx_map
+    elif len(out_modules) == 1:
+        return out_modules[0], out_idx_map
+    else:
+        return torch.nn.Sequential(*out_modules), out_idx_map
+
+
+@unused
+def unwrap_gathers_sequential(*modules: GatherModuleLike) -> tuple[GatherModuleLike, dict[int, int]] | None:
+    tpl = _unwrap_gathers_sequential(*modules)
+    if tpl is None:
+        return None
+    a, b = tpl
+    if isinstance(a, torch.nn.Sequential):
+        return _GatherWrapper(a), b
+
+
+@unused
+def unwrap_layer_gathers_sequential(
+    first_module: "LayerGatherModuleLike", *modules: "LayerGatherModuleLike | GatherModuleLike"
+) -> tuple["LayerGatherModuleLike", dict[int, int]] | None:
+    tpl = _unwrap_gathers_sequential(first_module, *modules)
+    if tpl is None:
+        return None
+    a, b = tpl
+    if isinstance(a, torch.nn.Sequential):
+        return _LayerGatherWrapper(a), b
 
 
 class GatherAndRepeat(torch.nn.Module, GatherModuleLike):
@@ -283,6 +430,10 @@ class GatherAndRepeat(torch.nn.Module, GatherModuleLike):
     def get_optimal(self) -> "GatherModuleLike":
         return self.gather.get_optimal()
 
+    @unused
+    def unwrap_final_gather(self) -> tuple[GatherModuleLike, dict[int, int]] | None:
+        return unwrap_gathers_sequential(self.gather, self.repeat)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.gather(x)
         x = self.repeat(x)
@@ -293,7 +444,56 @@ class GatherAndRepeat(torch.nn.Module, GatherModuleLike):
 class LayerGatherModuleLike(GatherLike, Protocol):
     def get_optimal(self) -> "LayerGatherModuleLike": ...
 
+    def unwrap_final_gather(self) -> tuple["LayerGatherModuleLike", dict[int, int]] | None: ...
+
     def __call__(self, layer_values: dict[str, torch.Tensor]) -> torch.Tensor: ...
+
+
+class _LayerGatherWrapper(torch.nn.Module, LayerGatherModuleLike):
+    def __init__(self, gather: torch.nn.Module) -> None:
+        super().__init__()
+        self._GatherWrapper__delegate = gather
+
+    @unused
+    def get_period(self) -> int | None:
+        raise ValueError(f"Cannot infer get_period of {repr(self)}")
+
+    @unused
+    @property
+    def total_items(self) -> int:
+        raise ValueError(f"Cannot infer total_items of {repr(self)}")
+
+    @unused
+    @property
+    def optimal_period(self) -> int:
+        raise ValueError(f"Cannot infer optimal_period of {repr(self)}")
+
+    @unused
+    @property
+    def is_optimal(self) -> bool:
+        raise ValueError(f"Cannot infer is_optimal of {repr(self)}")
+
+    @unused
+    def get_optimal(self) -> "LayerGatherModuleLike":
+        raise ValueError(f"Cannot infer get_optimal of {repr(self)}")
+
+    @unused
+    def unwrap_final_gather(self) -> tuple["LayerGatherModuleLike", dict[int, int]] | None:
+        raise ValueError(f"Cannot infer unwrap_final_gather of {repr(self)}")
+
+    def forward(self, layer_values: dict[str, torch.Tensor]) -> torch.Tensor:
+        return self._GatherWrapper__delegate(layer_values)
+
+    def repr(self) -> str:
+        return f"{self.__class__.__name__}({self._GatherWrapper__delegate})"
+
+    def __getattr__(self, name: str) -> Union[torch.Tensor, torch.nn.Module]:
+        delegate = super().__getattr__("_GatherWrapper__delegate")
+
+        if name == "_GatherWrapper__delegate":
+            return delegate
+
+        return self.delegate.__getattr__(name)
 
 
 class LayerGatherAndRepeat(torch.nn.Module, LayerGatherModuleLike):
@@ -325,6 +525,10 @@ class LayerGatherAndRepeat(torch.nn.Module, LayerGatherModuleLike):
     @unused
     def get_optimal(self) -> "LayerGatherModuleLike":
         return self.gather.get_optimal()
+
+    @unused
+    def unwrap_final_gather(self) -> tuple[LayerGatherModuleLike, dict[int, int]] | None:
+        return unwrap_layer_gathers_sequential(self.gather, self.repeat)
 
     def forward(self, layer_values: dict[str, torch.Tensor]) -> torch.Tensor:
         x = self.gather(layer_values)
@@ -414,6 +618,15 @@ class SingleLayerGather(torch.nn.Module, LayerGatherModuleLike):
         optimal_delegate = self.delegate.get_optimal()
         return SingleLayerGather(input_layer=self.input_layer, the_gather_module=optimal_delegate)
 
+    @unused
+    def unwrap_final_gather(self) -> tuple[LayerGatherModuleLike, dict[int, int]] | None:
+        tpl = self.delegate.unwrap_final_gather()
+        if tpl is None:
+            return None
+
+        mdl, idx_map = tpl
+        return SingleLayerGather(self.input_layer, mdl), idx_map
+
     def __repr__(self):
         name = self.__class__.__name__
         return f"{name}[{self.input_layer}]({repr(self.delegate)})"
@@ -502,6 +715,11 @@ class LayersGatherConcat(torch.nn.Module, LayerGatherModuleLike):
     def get_optimal(self) -> "LayersGatherConcat":
         return self
 
+    @unused
+    def unwrap_final_gather(self) -> tuple[LayerGatherModuleLike, dict[int, int]] | None:
+        # cannot unwrap a concat of multiple layers! :(
+        return None
+
     def forward(self, layer_values: dict[str, torch.Tensor]):
         xs = []
 
@@ -560,6 +778,20 @@ class MultiLayerGather(torch.nn.Module, LayerGatherModuleLike):
 
         final_optimal = self.final_gather.get_optimal()
         return MultiLayerGather(self.multi_layer_set_gather, final_optimal)
+
+    @unused
+    def unwrap_final_gather(self) -> tuple[LayerGatherModuleLike, dict[int, int]] | None:
+        tpl = self.final_gather.unwrap_final_gather()
+        if tpl is None:
+            return None
+
+        mdl, idx_map = tpl
+        if isinstance(mdl, NoopGather):
+            out_mdl = self.multi_layer_set_gather
+        else:
+            out_mdl = MultiLayerGather(self.multi_layer_set_gather, mdl)
+
+        return out_mdl, idx_map
 
     def forward(self, layer_values: dict[str, torch.Tensor]) -> torch.Tensor:
         x = self.multi_layer_set_gather(layer_values)
@@ -624,6 +856,10 @@ class ViewWithPeriod(torch.nn.Module, GatherModuleLike):
     def get_optimal(self) -> "GatherModuleLike":
         return self
 
+    @unused
+    def unwrap_final_gather(self) -> tuple[GatherModuleLike, dict[int, int]] | None:
+        return None
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         shape = [-1, self.period]
         shape.extend(x.shape[1:])
@@ -667,6 +903,10 @@ class GatherAndView(torch.nn.Module, GatherModuleLike):
         )
 
     @unused
+    def unwrap_final_gather(self) -> tuple[GatherModuleLike, dict[int, int]] | None:
+        return None
+
+    @unused
     def get_period(self) -> int | None:
         return self.view.get_period()
 
@@ -708,6 +948,10 @@ class LayerGatherAndView(torch.nn.Module, LayerGatherModuleLike):
             gather=gather_optimal,
             view=self.view,
         )
+
+    @unused
+    def unwrap_final_gather(self) -> tuple[LayerGatherModuleLike, dict[int, int]] | None:
+        return None
 
     @unused
     def get_period(self) -> int | None:

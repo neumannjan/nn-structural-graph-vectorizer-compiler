@@ -45,6 +45,9 @@ class Linear(torch.nn.Module, Periodic):
 
         return None
 
+    def unwrap_final_gather(self) -> None:
+        return None
+
     def forward(self, layer_values: dict[str, torch.Tensor]):
         input_values = self.gather(layer_values)
         w = self.weight()
@@ -142,14 +145,22 @@ class LinearAndGather(torch.nn.Module, LayerGatherModuleLike):
 
         return LinearAndGather(self.linear, gather)
 
+    @unused
+    def unwrap_final_gather(self) -> tuple[torch.nn.Module, dict[int, int]] | None:
+        tpl = self.gather.unwrap_final_gather()
+        if tpl is None:
+            return None
+
+        gather2, idx_map = tpl
+        if isinstance(gather2, NoopGather):
+            return self.linear, idx_map
+        else:
+            return LinearAndGather(self.linear, self.gather2), idx_map
+
     def forward(self, layer_values: dict[str, torch.Tensor]):
         y = self.linear(layer_values)
         y = self.gather(y)
         return y
-
-
-def _is_significantly_smaller_than(total_unique: int, total: int):
-    return (total_unique / total) < 0.5
 
 
 def _count_unique(inputs_ordinals: list[LayerOrdinal], weight_definitions: Collection[WeightDefinition]):
@@ -173,7 +184,7 @@ def _build_optimal_linear_unique_and_gather(
     n_total = len(inputs_ordinals)
 
     # check if it is worth it to do it like this
-    if not _is_significantly_smaller_than(n_unique, n_total):
+    if n_unique == n_total:
         return _build_optimal_linear(
             inputs_ordinals, weight_definitions, period, group_learnable_weight_parameters, optimize_linear_gathers
         )

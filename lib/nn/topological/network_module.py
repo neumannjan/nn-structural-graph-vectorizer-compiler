@@ -3,25 +3,10 @@ from torch.jit import unused
 from tqdm.auto import tqdm
 
 from lib.nn.sources.base import Network
+from lib.nn.sources.views.map_ordinals import MapOrdinalsView
 from lib.nn.sources.views.merge_facts import MergeFactsView
 from lib.nn.topological.layer import Layer
 from lib.nn.topological.settings import Settings
-
-
-def _build_model(
-    network: Network,
-    settings: Settings,
-):
-    model = torch.nn.ModuleList()
-
-    if settings.merge_same_facts:
-        network = MergeFactsView(network)
-
-    for l, neurons in tqdm(network.items(), desc="Layers"):
-        layer_module = Layer(l.id, network, neurons, settings)
-        model.append(layer_module)
-
-    return model
 
 
 class NetworkModule(torch.nn.Module):
@@ -43,7 +28,28 @@ class NetworkModule(torch.nn.Module):
         debug_layers: bool = False,
     ) -> None:
         super().__init__()
-        self.model = _build_model(network, settings)
+        model = torch.nn.ModuleList()
+
+        if settings.merge_same_facts:
+            network = MergeFactsView(network)
+
+        layers = network.layers.as_list()
+
+        for l in tqdm(layers):
+            neurons = network[l]
+            layer_module = Layer.from_network(l.id, network, neurons, settings)
+
+            if settings.optimize_tail_gathers and l != layers[-1]:
+                tpl = layer_module.unwrap_final_gather()
+
+                if tpl is not None:
+                    layer_module2, ord_map = tpl
+                    layer_module = layer_module2
+                    network = MapOrdinalsView(network, ord_map)
+
+            model.append(layer_module)
+
+        self.model = model
 
     def forward(self):
         layer_values: dict[str, torch.Tensor] = {}
@@ -63,12 +69,13 @@ class _NetworkModuleWithTryBlocks(NetworkModule):
         settings: Settings,
     ) -> None:
         super().__init__(network, settings, debug_layers=True)
+        self.layer_ids = [l.id for l in network.layers]
 
     def forward(self):
         try:
             layer_values: dict[str, torch.Tensor] = {}
-            for module in self.model:
+            for l, module in zip(self.layer_ids, self.model):
                 layer_values = module(layer_values)
             return layer_values
         except Exception as e:
-            raise Exception(f"Exception in layer {l.id}") from e
+            raise Exception(f"Exception in layer {l}") from e

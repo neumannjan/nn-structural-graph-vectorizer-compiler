@@ -84,7 +84,7 @@ def test_weighted_atom_layer(indices: Sequence[int], settings: Settings):
 
     network, expected = build_sample_from_input_indices(indices)
 
-    layer = Layer(out_to=13, network=network, neurons=network[13], settings=settings)
+    layer = Layer.from_network(out_to=13, network=network, neurons=network[13], settings=settings)
 
     print(layer)
 

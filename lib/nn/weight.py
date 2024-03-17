@@ -15,7 +15,7 @@ from lib.nn.gather import (
     build_optimal_gather,
     build_optimal_gather_and_reshape,
 )
-from lib.nn.sources.base import WeightDefinition
+from lib.nn.sources.base import LayerOrdinal, WeightDefinition
 from lib.utils import detect_repeating_K_sequence_in_list
 
 
@@ -135,6 +135,10 @@ class Weight(torch.nn.Module, WeightLike, WeightModuleLike):
     @unused
     def get_optimal(self):
         return self
+
+    @unused
+    def unwrap_final_gather(self) -> tuple[torch.nn.Module, dict[int, int]] | None:
+        return None
 
     @unused
     @property
@@ -410,6 +414,10 @@ class StackWeights(torch.nn.Module, WeightModuleLike):
     def get_optimal(self):
         return self
 
+    @unused
+    def unwrap_final_gather(self) -> tuple[torch.nn.Module, dict[int, int]] | None:
+        return None
+
 
 class ExpandWeight(torch.nn.Module, WeightModuleLike):
     def __init__(self, weight: Weight, shape: torch.Size | tuple[int, ...] | list[int], shape_single: bool) -> None:
@@ -458,6 +466,10 @@ class ExpandWeight(torch.nn.Module, WeightModuleLike):
     @unused
     def get_optimal(self):
         return self
+
+    @unused
+    def unwrap_final_gather(self) -> tuple[torch.nn.Module, dict[int, int]] | None:
+        return None
 
 
 class StackWeightModules(torch.nn.Module, WeightModuleLike):
@@ -517,6 +529,10 @@ class StackWeightModules(torch.nn.Module, WeightModuleLike):
     @unused
     def get_optimal(self):
         return self
+
+    @unused
+    def unwrap_final_gather(self) -> tuple[torch.nn.Module, dict[int, int]] | None:
+        return None
 
     def forward(self) -> torch.Tensor:
         modules = [m() for m in self.the_modules]
@@ -659,6 +675,18 @@ class WeightsGathered(torch.nn.Module, GatherLike):
             return self
 
         return WeightsGathered(weight=self.weight, gather=gather_optimal)
+
+    @unused
+    def unwrap_final_gather(self) -> tuple[torch.nn.Module, dict[int, int]] | None:
+        tpl = self.gather.unwrap_final_gather()
+        if tpl is None:
+            return None
+
+        gather2, idx_map = tpl
+        if isinstance(gather2, NoopGather):
+            return self.weight, idx_map
+        else:
+            return WeightsGathered(self.weight, gather2), idx_map
 
     def forward(self):
         w = self.weight()

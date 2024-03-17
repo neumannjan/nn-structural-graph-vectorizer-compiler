@@ -4,10 +4,11 @@ from typing import Collection, TypeVar
 import torch
 from torch.nn import Identity
 
-from lib.nn.aggregation.fixed_count import build_fixed_count_aggregate
-from lib.nn.aggregation.universal import build_optimal_reshape_aggregate
-from lib.nn.sources.base import LayerNeurons, Network
-from lib.nn.topological.linear import build_optimal_linear
+from lib.nn.aggregation.fixed_count import FixedCountAggregation, build_fixed_count_aggregate
+from lib.nn.aggregation.universal import ScatterAggregate, ViewAndAggregate, build_optimal_reshape_aggregate
+from lib.nn.gather import LayerGatherModuleLike
+from lib.nn.sources.base import LayerNeurons, LayerOrdinal, Network
+from lib.nn.topological.linear import Linear, build_optimal_linear
 from lib.nn.topological.settings import Settings
 from lib.nn.transformation import build_transformation
 from lib.utils import addindent, atleast_3d_rev, head_and_rest
@@ -77,10 +78,13 @@ class FactLayer(torch.nn.Module):
         layer_values[str(self.out_to)] = self.value
         return layer_values
 
+    def unwrap_final_gather(self) -> None:
+        return None
+
 
 class Layer(torch.nn.Module):
-    def __new__(
-        cls,
+    @staticmethod
+    def from_network(
         out_to: int,
         network: Network,
         neurons: LayerNeurons,
@@ -89,17 +93,6 @@ class Layer(torch.nn.Module):
         if neurons.layer.type == "FactLayer":
             return FactLayer(out_to, neurons, settings)
 
-        return super().__new__(cls)
-
-    def __init__(
-        self,
-        out_to: int,
-        network: Network,
-        neurons: LayerNeurons,
-        settings: Settings,
-    ) -> None:
-        super().__init__()
-
         period_or_counts = _get_single_if_all_same(neurons.input_lengths)
 
         if isinstance(period_or_counts, int):
@@ -107,7 +100,7 @@ class Layer(torch.nn.Module):
         else:
             period = None
 
-        self.linear = build_optimal_linear(
+        linear = build_optimal_linear(
             network,
             neurons,
             period=period if period != 1 else None,  # do not reshape if period == 1
@@ -117,7 +110,7 @@ class Layer(torch.nn.Module):
 
         if period == 1:
             # no need to aggregate, already aggregated (no reshape needed either)
-            self.aggregate = Identity()
+            aggregate = Identity()
         else:
             # uneven period or period greater than 1
             aggregation = _assert_all_same_ignore_none("aggregations", neurons.get_aggregations())
@@ -125,23 +118,62 @@ class Layer(torch.nn.Module):
 
             if period is None:
                 # uneven period
-                assert self.linear.get_period() is None
+                assert linear.get_period() is None
                 counts = torch.tensor(list(neurons.input_lengths), dtype=torch.int32)
 
-                self.aggregate = build_optimal_reshape_aggregate(
+                aggregate = build_optimal_reshape_aggregate(
                     aggregation, counts, allow_non_builtin_torch_ops=settings.allow_non_builtin_torch_ops
                 )
             else:
                 # even period, already reshaped by linear layer
                 # must only aggregate
-                self.aggregate = build_fixed_count_aggregate(aggregation)
+                aggregate = build_fixed_count_aggregate(aggregation)
 
         transformation = _assert_all_same(
             "transformations", (None if t == "identity" else t for t in neurons.get_transformations())
         )
-        self.transform = build_transformation(transformation)
+        transform = build_transformation(transformation)
 
+        return Layer(
+            out_to=out_to,
+            linear=linear,
+            aggregate=aggregate,
+            transform=transform,
+        )
+
+    def __init__(
+        self,
+        out_to: int,
+        linear: LayerGatherModuleLike | Linear,
+        aggregate: Identity | ViewAndAggregate | ScatterAggregate | FixedCountAggregation,
+        transform: torch.nn.Module,
+    ):
+        super().__init__()
         self.out_to = out_to
+        self.linear = linear
+        self.aggregate = aggregate
+        self.transform = transform
+
+    def unwrap_final_gather(self) -> tuple["Layer", dict[LayerOrdinal, LayerOrdinal]] | None:
+        if not isinstance(self.aggregate, Identity):
+            return None
+
+        tpl = self.linear.unwrap_final_gather()
+        if tpl is None:
+            return None
+
+        mdl, idx_map = tpl
+        new_layer = Layer(
+            out_to=self.out_to,
+            linear=mdl,
+            aggregate=self.aggregate,
+            transform=self.transform,
+        )
+
+        l = self.out_to
+        ord_map = {LayerOrdinal(l, a): LayerOrdinal(l, b) for a, b in idx_map.items()}
+
+        return new_layer, ord_map
 
     def extra_repr(self) -> str:
         return f"out_to={self.out_to},"

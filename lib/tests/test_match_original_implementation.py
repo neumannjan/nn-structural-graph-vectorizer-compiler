@@ -68,7 +68,14 @@ def do_test_dataset(dataset: MyDataset, device: str, settings: Settings):
 
         results: dict[str, torch.Tensor] = runnable.forward_pass()
 
-        for layer in runnable.network.layers:
+        if settings.optimize_tail_gathers:
+            # with this optimization, intermediate layers won't match anymore.
+            layers_to_check = [runnable.network.layers.as_list()[-1]]
+        else:
+            # can safely check all layers
+            layers_to_check = runnable.network.layers
+
+        for layer in layers_to_check:
             if settings.merge_same_facts and layer.type == "FactLayer":
                 continue
 
@@ -130,9 +137,10 @@ def test_long(dataset_constructor: DatasetConstructor, device: str, settings: Se
 
 if __name__ == "__main__":
     settings = SETTINGS_PARAMS[0]
-    settings.compilation = "script"
+    settings.optimize_tail_gathers = True
+    settings.compilation = "none"
     settings.neuralogic.iso_value_compression = True
-    dataset = MyTUDataset(settings, source="mutag", template="gsage")
+    dataset = MyTUDataset(settings, source="mutag", template="gcn")
     # dataset = MyMutagenesis(settings, source="original", template="simple")
     try:
         model, network = do_test_dataset(dataset, "cpu", settings)
