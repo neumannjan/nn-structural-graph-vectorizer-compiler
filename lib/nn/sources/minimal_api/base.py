@@ -7,10 +7,10 @@ import torch
 from lib.nn.definitions.ops import AggregationDef, TransformationDef
 from lib.nn.sources.base import LayerDefinition, WeightDefinition
 
-_TNeurons = TypeVar("_TNeurons")
+TNeurons = TypeVar("TNeurons")
 
 
-class MinimalAPINetwork(Generic[_TNeurons], Protocol):
+class MinimalAPINetwork(Generic[TNeurons], Protocol):
     """
     Minimal (i.e. easy to implement) API for a neural network definition.
 
@@ -44,50 +44,50 @@ class MinimalAPINetwork(Generic[_TNeurons], Protocol):
         """Return a mapping from layer IDs to layer definitions."""
         ...
 
-    def get_layer_neurons(self, layer_id: int) -> _TNeurons:
+    def get_layer_neurons(self, layer_id: int) -> TNeurons:
         """Return a representation of all neurons from a particular layer."""
         ...
 
-    def get_ids(self, neurons: _TNeurons) -> Sequence[int]:
+    def get_ids(self, neurons: TNeurons) -> Sequence[int]:
         """Return neuron IDs for a given representation of neurons."""
         ...
 
-    def get_inputs(self, neurons: _TNeurons) -> _TNeurons:
+    def get_inputs(self, neurons: TNeurons) -> TNeurons:
         """Return a representation of all inputs of a given representation of neurons."""
         ...
 
-    def get_input_lengths(self, neurons: _TNeurons) -> Sequence[int]:
+    def get_input_lengths(self, neurons: TNeurons) -> Sequence[int]:
         """Return input lengths for a given representation of neurons."""
         ...
 
-    def get_input_weights(self, neurons: _TNeurons) -> Iterable[WeightDefinition]:
+    def get_input_weights(self, neurons: TNeurons) -> Iterable[WeightDefinition]:
         """Return input weights for a given representation of neurons."""
         ...
 
-    def get_biases(self, neurons: _TNeurons) -> Sequence[WeightDefinition]:
+    def get_biases(self, neurons: TNeurons) -> Sequence[WeightDefinition]:
         """Return bias (offset) weights for a given representation of neurons."""
         ...
 
-    def get_values_numpy(self, neurons: _TNeurons) -> Collection[np.ndarray]:
+    def get_values_numpy(self, neurons: TNeurons) -> Collection[np.ndarray]:
         """Return values for a given representation of neurons as numpy arrays."""
         ...
 
-    def get_values_torch(self, neurons: _TNeurons) -> Collection[torch.Tensor]:
+    def get_values_torch(self, neurons: TNeurons) -> Collection[torch.Tensor]:
         """Return values for a given representation of neurons as torch tensors."""
         ...
 
-    def get_transformations(self, neurons: _TNeurons) -> Sequence[TransformationDef | None]:
+    def get_transformations(self, neurons: TNeurons) -> Sequence[TransformationDef | None]:
         """Return transformation function defitions from a given representation of neurons."""
         ...
 
-    def get_aggregations(self, neurons: _TNeurons) -> Sequence[AggregationDef | None]:
+    def get_aggregations(self, neurons: TNeurons) -> Sequence[AggregationDef | None]:
         """Return aggregation function definitions from a given representation of neurons."""
         ...
 
-    def slice(self, neurons: _TNeurons, sl: slice) -> _TNeurons:
+    def slice(self, neurons: TNeurons, sl: slice) -> TNeurons:
         """Return a slice of a given representation of neurons."""
         ...
 
-    def select_ids(self, neurons: _TNeurons, ids: Sequence[int]) -> _TNeurons:
+    def select_ids(self, neurons: TNeurons, ids: Sequence[int]) -> TNeurons:
         """Return a representation of an arbitrary subset of given neurons based on requested IDs."""
         ...

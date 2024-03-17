@@ -113,7 +113,6 @@ def do_test_dataset(dataset: MyDataset, device: str, settings: Settings):
 
             expected = torch.squeeze(torch.stack(list(runnable.network[layer.id].get_values_torch())))
             actual = torch.squeeze(results[str(layer.id)]).detach().cpu()
-            print(layer.id, actual.shape)
             assert expected.shape == actual.shape, (
                 f"Shapes do not match at layer {layer.id} ({layer.type}).\n"
                 f"Expected: {expected.shape}\n"

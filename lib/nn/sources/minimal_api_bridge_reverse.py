@@ -11,7 +11,7 @@ from lib.nn.sources.minimal_api.ordinals import MinimalAPIOrdinals
 from lib.utils import cache
 
 
-class MinimalAPINetworkFromFullProxy(MinimalAPINetwork[Neurons]):
+class MinimalAPINetworkFromNetwork(MinimalAPINetwork[Neurons]):
     """A minimal API network proxy for an underlying full API `Network` implementation."""
 
     def __new__(cls, network: Network):
@@ -66,7 +66,7 @@ class MinimalAPINetworkFromFullProxy(MinimalAPINetwork[Neurons]):
         return neurons.select_ids(ids)
 
 
-class MinimalAPIOrdinalsFromFullProxy(MinimalAPIOrdinals):
+class MinimalAPIOrdinalsFromNetwork(MinimalAPIOrdinals):
     """A minimal API ordinals proxy for an underlying full API `Network` implementation."""
 
     def __new__(cls, network: Network):

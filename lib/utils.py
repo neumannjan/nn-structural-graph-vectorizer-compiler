@@ -480,41 +480,31 @@ def print_with_ellipsis(it: Iterator[str], after=5) -> str:
     return ", ".join(vals)
 
 
-class DelegatedMethod:
-    """
-    Mark class property as a delegated method.
+class ExtendsDynamicError(Exception):
+    pass
 
-    Should be used with `@delegate` decorator. Please see its documentation.
-    """
 
-    def __init__(self, delegate: str) -> None:
-        self.delegate = delegate
+class InheritDynamic:
+    """
+    Mark class property as a dynamically inherited method.
+
+    Should be used with `@extends_dynamic` decorator. Please see its documentation.
+    """
 
     def __get__(self, obj, objtype=None):
-        cls_name = obj.__class__.__name__ or (objtype.__name__ if objtype is not None else "??")
+        cls_name = obj.__class__.__name__
         this_name = self.__class__.__name__
-        decorator_name = delegate.__name__
-        raise RuntimeError(
+        decorator_name = extends_dynamic.__name__
+        raise ExtendsDynamicError(
             f"Class {cls_name}: Cannot use {this_name} without @{decorator_name} decorator on the class!"
         )
 
 
-class _MagicSelf:
-    def __init__(self, the_self, delegate_self, delegate_property_name: str) -> None:
-        self.__the_self = the_self
-        self.__delegate_self = delegate_self
-        self.__delegate_property_name = delegate_property_name
-
-    def __getattr__(self, key: str):
-        if not hasattr(self.__the_self, key) or key == self.__delegate_property_name:
-            return getattr(self.__delegate_self, key)
-
-        return getattr(self.__the_self, key)
-
-
-def delegate(cls: Type):
+def extends_dynamic(origin_property: str):
     """
-    Decorate class as delegate, where each DelegatedMethod is replaced with the exact implementation from the delegate.
+    Decorate class to modify it to act as if it extends the instance passed in constructor.
+
+    Each InheritDynamic method is replaced with the exact implementation from the origin.
 
     Example:
     ```
@@ -528,58 +518,82 @@ def delegate(cls: Type):
         def get_ab(self):
             return self.get_a() + self.get_b()
 
-    @delegate
+    @extends_dynamic("origin")
     class ContainerWrapper(Container):
-        def __init__(self, delegate: Container):
-            self.delegate = delegate
+        def __init__(self, origin: Container):
+            self.origin = origin
 
-        get_b = DelegatedMethod("delegate")
-        get_ab = DelegatedMethod("delegate")
+        get_b = InheritDynamic()
+        get_ab = InheritDynamic()
 
         def get_a(self):
             return "A"
     ```
 
-    Calling `get_ab()` on `ContainerWrapper` returns `"Ab"`. It calls the original `self.delegate.get_ab()` method,
+    Calling `get_ab()` on `ContainerWrapper` returns `"Ab"`. It calls the original `self.origin.get_ab()` method,
     but with a modified `self`, such that `self.get_a()` resolves to the modified `get_a()` in the `ContainerWrapper`.
 
-    Calling `delegate.get_ab()` on `ContainerWrapper` returns `"ab"` still (the delegate property itself isn't modified).
+    Calling `origin.get_ab()` on `ContainerWrapper` returns `"ab"` still (the origin property itself isn't modified).
 
     WARNING: This is really hard to debug sometimes.
     """
-    methods = []
 
-    # find all DelegatedMethod properties in all bases
-    for ccls in inspect.getmro(cls):
-        for method_name, method in ccls.__dict__.items():
-            if isinstance(method, DelegatedMethod):
-                # found one
-                # do not replace if the main class already overrides it
-                if isinstance(cls.__dict__.get(method_name, method), DelegatedMethod):
-                    methods.append((method_name, method))
+    def the_decorator(cls: Type):
+        methods = []
 
-    if len(methods) == 0:
-        cls_name = cls.__name__
-        decorator_name = delegate.__name__
-        prop_name = DelegatedMethod.__name__
-        raise ValueError(
-            f"Class {cls_name} uses the @{decorator_name} decorator, but has no properties of type {prop_name}."
-        )
+        # find all InheritDynamic properties in all bases
+        for ccls in inspect.getmro(cls):
+            for method_name, method in ccls.__dict__.items():
+                if isinstance(method, InheritDynamic):
+                    # found one
+                    # do not replace if the main class already overrides it
+                    if isinstance(cls.__dict__.get(method_name, method), InheritDynamic):
+                        methods.append((method_name, method))
 
-    orig_init = cls.__init__
+        if len(methods) == 0:
+            cls_name = cls.__name__
+            decorator_name = extends_dynamic.__name__
+            prop_name = InheritDynamic.__name__
+            raise ExtendsDynamicError(
+                f"Class {cls_name} uses the @{decorator_name} decorator, but has no properties of type {prop_name}."
+            )
 
-    def __init__(self, *kargs, **kwargs):
-        orig_init(self, *kargs, **kwargs)
+        orig_init = cls.__init__
 
-        for method_name, method in methods:
-            the_delegate = getattr(self, method.delegate)
-            underlying_func = getattr(the_delegate.__class__, method_name)
-            bound_func = MethodType(underlying_func, _MagicSelf(self, the_delegate, method.delegate))
-            object.__setattr__(self, method_name, bound_func)
+        def __init__(self, *kargs, **kwargs):
+            orig_init(self, *kargs, **kwargs)
 
-    cls.__init__ = __init__
+            the_origin = getattr(self, origin_property)
+            for method_name, _ in methods:
+                underlying_func = getattr(the_origin, method_name)
+                if isinstance(underlying_func, MethodType):
+                    underlying_func = underlying_func.__func__
+                bound_func = MethodType(underlying_func, self)
+                object.__setattr__(self, method_name, bound_func)
 
-    return cls
+        if hasattr(cls, "__getattr__"):
+            orig_getattr = cls.__getattr__
+        else:
+            orig_getattr = None
+
+        def __getattr__(self, key: str):
+            # try finding the attribute in the origin
+            the_origin = getattr(self, origin_property)
+            if hasattr(the_origin, key):
+                return getattr(the_origin, key)
+
+            # use the default getattr
+            if orig_getattr is not None:
+                return orig_getattr(self, key)
+
+            raise KeyError(f"{self.__class__.__name__}: Failed to locate property {key}.")
+
+        cls.__init__ = __init__
+        cls.__getattr__ = __getattr__
+
+        return cls
+
+    return the_decorator
 
 
 def addindent(s_, numSpaces):

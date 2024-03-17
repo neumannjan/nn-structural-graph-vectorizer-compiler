@@ -1,4 +1,4 @@
-from typing import Collection, Generic, Iterable, Iterator, Sequence, TypeVar
+from typing import Collection, Generic, Iterable, Iterator, Sequence
 
 import numpy as np
 import torch
@@ -6,12 +6,10 @@ import torch
 from lib.nn.definitions.ops import AggregationDef, TransformationDef
 from lib.nn.sources.base import LayerDefinition, LayerOrdinal, Ordinals, WeightDefinition, get_layer_id
 from lib.nn.sources.base_impl import BaseLayerNeurons, BaseNetwork, BaseNeurons, BaseOrdinals
-from lib.nn.sources.minimal_api.base import MinimalAPINetwork
+from lib.nn.sources.minimal_api.base import MinimalAPINetwork, TNeurons
 from lib.nn.sources.minimal_api.ordinals import MinimalAPIOrdinals, MinimalAPIOrdinalsImpl
 from lib.nn.sources.utils import LayerDefinitionsImpl
 from lib.utils import MapCollection, cache
-
-_TNeurons = TypeVar("_TNeurons")
 
 
 class _Ordinals(BaseOrdinals):
@@ -53,12 +51,12 @@ class _Ordinals(BaseOrdinals):
         raise ValueError(f"Cannot check if value is in ordinals for value {o} of type {type(o)}.")
 
 
-class _Neurons(BaseNeurons, Generic[_TNeurons]):
+class _Neurons(BaseNeurons, Generic[TNeurons]):
     def __init__(
         self,
-        minimal_api: MinimalAPINetwork[_TNeurons],
+        minimal_api: MinimalAPINetwork[TNeurons],
         minimal_ordinals: MinimalAPIOrdinals,
-        neurons: _TNeurons,
+        neurons: TNeurons,
         layer_id: int | None,
     ) -> None:
         self._minimal_api = minimal_api
@@ -66,7 +64,7 @@ class _Neurons(BaseNeurons, Generic[_TNeurons]):
         self._neurons = neurons
         self._layer_id = layer_id
 
-    def _map_neurons(self, new_neurons: _TNeurons) -> "_Neurons":
+    def _map_neurons(self, new_neurons: TNeurons) -> "_Neurons":
         return _Neurons(self._minimal_api, self._minimal_ordinals, neurons=new_neurons, layer_id=None)
 
     @property
@@ -126,9 +124,9 @@ class _Neurons(BaseNeurons, Generic[_TNeurons]):
 class _LayerNeurons(_Neurons, BaseLayerNeurons):
     def __init__(
         self,
-        minimal_api: MinimalAPINetwork[_TNeurons],
+        minimal_api: MinimalAPINetwork[TNeurons],
         minimal_ordinals: MinimalAPIOrdinals,
-        neurons: _TNeurons,
+        neurons: TNeurons,
         layer_id: int,
     ) -> None:
         super().__init__(minimal_api, minimal_ordinals, neurons, layer_id)

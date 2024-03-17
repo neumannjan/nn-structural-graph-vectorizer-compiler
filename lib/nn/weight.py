@@ -563,7 +563,6 @@ def _stack_weights_by_sum_match(
 
     if shape_hull is None:
         shape_hull = torch.broadcast_shapes(*shapes)
-        print(shapes, shape_hull)
 
     shape_hull_sum = sum(shape_hull)
 
