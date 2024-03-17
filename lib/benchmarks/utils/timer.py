@@ -1,34 +1,36 @@
-import math
 import time
 
+import numpy as np
 import torch
 
 
 class TimerResult:
-    def __init__(self, count: int, mean_ns: float, m2: float) -> None:
-        self._count = count
-        self._mean_ns = mean_ns
-        self._m2_ns2 = m2
+    def __init__(self, times: list[int]) -> None:
+        self._times = np.array(times)
 
     @property
     def result_mean_ns(self) -> float:
-        return self._mean_ns
+        return self._times.mean()
 
     @property
     def result_mean_s(self) -> float:
-        return self._mean_ns * 1e-9
-
-    @property
-    def result_variance_ns2(self) -> float:
-        return self._m2_ns2 / (self._count - 1)
+        return self.result_mean_ns * 1e-9
 
     @property
     def result_std_ns(self) -> float:
-        return math.sqrt(self.result_variance_ns2)
+        return self._times.std()
 
     @property
     def result_std_s(self) -> float:
         return self.result_std_ns * 1e-9
+
+    @property
+    def times_ns(self):
+        return self._times
+
+    @property
+    def times_s(self):
+        return self._times * 1e-9
 
     def __repr__(self) -> str:
         return "TimerResult<<%.04fs ± %.04fs>>" % (
@@ -41,7 +43,7 @@ class Timer:
     def __init__(self, device) -> None:
         self._start_time: int | None = None
         self._device = device
-        self._result: TimerResult | None = None
+        self._times: list[int] = []
 
     def _get_time_ns(self):
         return time.perf_counter_ns()
@@ -62,16 +64,7 @@ class Timer:
         return self
 
     def _register_run_time(self, time_ns: int):
-        if self._result is None:
-            self._result = TimerResult(count=1, mean_ns=float(time_ns), m2=0.0)
-            return
-
-        # Welford's online algorithm
-        self._result._count += 1
-        delta = time_ns - self._result._mean_ns
-        self._result._mean_ns += delta / self._result._count
-        delta2 = time_ns - self._result._mean_ns
-        self._result._m2_ns2 += delta * delta2
+        self._times.append(time_ns)
 
     def __exit__(self, exc_type, exc_value, traceback):
         assert self._start_time is not None
@@ -81,5 +74,4 @@ class Timer:
         self._start_time = None
 
     def get_result(self) -> TimerResult:
-        assert self._result is not None
-        return self._result
+        return TimerResult(self._times)

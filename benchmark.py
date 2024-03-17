@@ -127,4 +127,10 @@ if __name__ == "__main__":
             runnable = runnables[model, device]
             runner.measure(f"{model}--{device}", runnable, dataset)
 
-    print(runner.get_result())
+    for k, v in runner.get_result().items():
+        print(f"{k}:", v)
+    print()
+    print("------")
+    print()
+    for k, v in runner.get_result().items():
+        print(f"{k}:", v.times_s)
