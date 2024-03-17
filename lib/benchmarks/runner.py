@@ -1,4 +1,5 @@
 import copy
+from typing import OrderedDict
 
 from tqdm.auto import tqdm
 
@@ -26,7 +27,7 @@ class Runner:
 class MultiRunner:
     def __init__(self, n_repeats: int) -> None:
         self.n_repeats = n_repeats
-        self._result: dict[str, TimerResult] = {}
+        self._result: OrderedDict[str, TimerResult] = OrderedDict()
 
     def measure(self, name: str, runnable: Runnable, dataset: BuiltDatasetInstance):
         runner = Runner(self.n_repeats)

@@ -17,9 +17,9 @@ Device = Literal["mps", "cuda", "cpu"]
 Model = Literal["neuralogic_java", "neuralogic_torch", "torch_geometric"]
 
 
-DEVICE_SUPPORT_MTX: dict[Model, list[Device]] = defaultdict(
-    lambda: ["cpu", "cuda", "mps"],
-    {"neuralogic_java": ["cpu"]},
+DEVICE_SUPPORT_MTX: dict[Device, list[Model]] = defaultdict(
+    lambda: ["neuralogic_torch", "torch_geometric"],
+    {"cpu": ["neuralogic_java", "neuralogic_torch", "torch_geometric"]},
 )
 
 
@@ -98,14 +98,14 @@ if __name__ == "__main__":
 
     dataset_info = get_dataset_info_from_args(args)
 
-    runnables: dict[tuple[Model, Device], Runnable] = {}
+    runnables: dict[tuple[Model, Device], Runnable] = OrderedDict()
 
     models: list[Model] = list(args.models)
     devices: set[Device] = set(args.devices)
 
-    for model in models:
-        for device in DEVICE_SUPPORT_MTX[model]:
-            if device in devices:
+    for device in devices:
+        for model in DEVICE_SUPPORT_MTX[device]:
+            if model in models:
                 if model == "neuralogic_java":
                     assert device == "cpu"
                     runnables[model, device] = NeuraLogicCPURunnable()
