@@ -1,5 +1,5 @@
 import hashlib
-from typing import Any, OrderedDict, Sequence
+from typing import Any, Mapping, OrderedDict, Sequence
 
 from lib.nn.sources.base import LayerOrdinal
 from lib.nn.sources.views.view import (
@@ -48,7 +48,7 @@ class MergeFactsViewBasis(ViewBasis):
         return self.network.select_ids(neurons, underlying_ids)
 
     @cache
-    def get_ordinals_for_layer(self, layer_id: int) -> OrderedDict[int, LayerOrdinal]:
+    def get_ordinals_for_layer(self, layer_id: int) -> Mapping[int, LayerOrdinal]:
         layer = self.get_layers_map()[layer_id]
         if layer.type != "FactLayer":
             return self.ordinals.get_ordinals_for_layer(layer_id)

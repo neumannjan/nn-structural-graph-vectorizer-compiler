@@ -3,7 +3,7 @@ import heapq
 import inspect
 from collections.abc import Collection
 from types import MethodType
-from typing import Callable, Generic, Iterable, Iterator, Sequence, Type, TypeVar
+from typing import Callable, Generic, Iterable, Iterator, Mapping, Sequence, Type, TypeVar
 
 import numpy as np
 import torch
@@ -59,6 +59,7 @@ def cache(func):
 
 _T = TypeVar("_T")
 _S = TypeVar("_S")
+_R = TypeVar("_R")
 
 
 class KeySortable(Generic[_T, _S]):
@@ -448,6 +449,21 @@ class MapSequence(Sequence[_T]):
 
     def __getitem__(self, key: int) -> _T:
         return self._mapping(self._orig[key])
+
+    def __len__(self) -> int:
+        return len(self._orig)
+
+
+class MapMapping(Mapping[_T, _S]):
+    def __init__(self, mapping: Callable[[_R], _S], orig: Mapping[_T, _R]) -> None:
+        self._orig = orig
+        self._mapping = mapping
+
+    def __getitem__(self, key: _T) -> _S:
+        return self._mapping(self._orig[key])
+
+    def __iter__(self) -> Iterator[_T]:
+        return iter(self._orig)
 
     def __len__(self) -> int:
         return len(self._orig)

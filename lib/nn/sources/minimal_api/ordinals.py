@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from typing import OrderedDict, Protocol, overload
 
 from lib.nn.sources.base import LayerOrdinal
@@ -18,21 +19,30 @@ class MinimalAPIOrdinals(Protocol):
     """
 
     @overload
-    def get_ordinal(self, layer: int | None, id: int, /) -> LayerOrdinal:
-        ...
+    def get_ordinal(self, layer: int | None, id: int, /) -> LayerOrdinal: ...
 
     @overload
-    def get_ordinal(self, id: int, /) -> LayerOrdinal:
-        ...
+    def get_ordinal(self, id: int, /) -> LayerOrdinal: ...
 
-    def get_id(self, o: LayerOrdinal) -> int:
-        ...
+    def get_ordinal(self, *kargs: int | None) -> LayerOrdinal: ...
 
-    def get_ordinals_for_layer(self, layer_id: int) -> OrderedDict[int, LayerOrdinal]:
-        ...
+    def get_id(self, o: LayerOrdinal) -> int: ...
 
-    def get_all_ordinals(self) -> dict[int, LayerOrdinal]:
-        ...
+    def get_ordinals_for_layer(self, layer_id: int) -> Mapping[int, LayerOrdinal]: ...
+
+    def get_all_ordinals(self) -> dict[int, LayerOrdinal]: ...
+
+
+def get_ordinal_args(*kargs: int | None) -> tuple[int | None, int]:
+    if len(kargs) == 1:
+        layer = None
+        (id,) = kargs
+    elif len(kargs) == 2:
+        layer, id = kargs
+    else:
+        raise RuntimeError()
+    assert id is not None
+    return layer, id
 
 
 class MinimalAPIOrdinalsImpl(MinimalAPIOrdinals):
@@ -42,15 +52,13 @@ class MinimalAPIOrdinalsImpl(MinimalAPIOrdinals):
         self._minimal_api = minimal_api
 
     @overload
-    def get_ordinal(self, layer: int | None, id: int, /) -> LayerOrdinal:
-        ...
+    def get_ordinal(self, layer: int | None, id: int, /) -> LayerOrdinal: ...
 
     @overload
-    def get_ordinal(self, id: int, /) -> LayerOrdinal:
-        ...
+    def get_ordinal(self, id: int, /) -> LayerOrdinal: ...
 
     @cache
-    def get_ordinals_for_layer(self, layer_id: int) -> OrderedDict[int, LayerOrdinal]:
+    def get_ordinals_for_layer(self, layer_id: int) -> Mapping[int, LayerOrdinal]:
         neurons = self._minimal_api.get_layer_neurons(layer_id)
         ids = self._minimal_api.get_ids(neurons)
         return OrderedDict(((id, LayerOrdinal(layer=layer_id, ordinal=o)) for o, id in enumerate(ids)))
@@ -65,15 +73,8 @@ class MinimalAPIOrdinalsImpl(MinimalAPIOrdinals):
         return out
 
     def get_ordinal(self, *kargs: int | None) -> LayerOrdinal:
-        if len(kargs) == 1:
-            layer = None
-            (id,) = kargs
-        elif len(kargs) == 2:
-            layer, id = kargs
-        else:
-            raise RuntimeError()
+        layer, id = get_ordinal_args(*kargs)
 
-        assert id is not None
         if layer is not None:
             return self.get_ordinals_for_layer(layer)[id]
         else:

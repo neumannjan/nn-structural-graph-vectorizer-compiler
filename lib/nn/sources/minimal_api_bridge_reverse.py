@@ -105,7 +105,7 @@ class MinimalAPIOrdinalsFromNetwork(MinimalAPIOrdinals):
         return self.delegate[o.layer].ids[o.ordinal]
 
     @cache
-    def get_ordinals_for_layer(self, layer_id: int) -> OrderedDict[int, LayerOrdinal]:
+    def get_ordinals_for_layer(self, layer_id: int) -> Mapping[int, LayerOrdinal]:
         return OrderedDict(self.delegate[layer_id].ordinals.items())
 
     @cache
