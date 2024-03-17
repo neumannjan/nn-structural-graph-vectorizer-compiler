@@ -74,6 +74,7 @@ if __name__ == "__main__":
     parser.add_argument("--devices", "-d", action=CommaSeparatedListAction, choices=t_get_args(Device), required=True)
     parser.add_argument("--models", "-m", action=CommaSeparatedListAction, choices=t_get_args(Model), required=True)
     parser.add_argument("--repeats", "-n", "-r", type=int, default=10)
+    parser.add_argument("--results-dict", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--compilation", "-c", choices=t_get_args(Compilation), default="none")
     parser.add_argument("--iso", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--tail", action=argparse.BooleanOptionalAction, default=True)
@@ -132,5 +133,10 @@ if __name__ == "__main__":
     print()
     print("------")
     print()
+    results = {}
     for k, v in runner.get_result().items():
         print(f"{k}:", v.times_s)
+        results[k] = v.times_ns
+
+    if args.results_dict:
+        print(repr(results))
