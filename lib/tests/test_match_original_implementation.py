@@ -1,72 +1,33 @@
 import itertools
-from collections.abc import Collection
 
 import jpype
 import pytest
 import torch
 from lib.benchmarks.runnables.neuralogic_vectorized import NeuralogicVectorizedTorchRunnable
 from lib.datasets.dataset import MyDataset
-from lib.datasets.mutagenesis import MutagenesisSource, MutagenesisTemplate, MyMutagenesis
-from lib.datasets.tu_molecular import MyTUDataset, TUDatasetSource, TUDatasetTemplate
+from lib.datasets.mutagenesis import MyMutagenesis
+from lib.datasets.tu_molecular import MyTUDataset
 from lib.nn.topological.settings import Settings
 from lib.tests.utils.test_params import DEVICE_PARAMS, SETTINGS_PARAMS
 from torch_geometric.data.dataset import warnings
 from torch_geometric.datasets.citation_full import Callable
 
-
-def _ms(s: Collection[MutagenesisSource]):
-    return s
-
-
-def _mt(t: Collection[MutagenesisTemplate]):
-    return t
-
-
-def _ts(s: Collection[TUDatasetSource]):
-    return s
-
-
-def _tt(t: Collection[TUDatasetTemplate]):
-    return t
-
-
 DatasetConstructor = Callable[[Settings], MyDataset]
 
 
 COMMON_DATASET_PARAMS: list[DatasetConstructor] = [
-    *[
-        lambda settings: MyMutagenesis(settings, source=s, template=t)
-        for s, t in itertools.product(
-            # sources
-            _ms(["original"]),
-            # templates
-            _mt(["simple"]),  # TODO: add the rest
-        )
-    ],
+    lambda settings: MyTUDataset(settings, "mutag", "gcn"),
+    lambda settings: MyTUDataset(settings, "mutag", "gsage"),
 ]
 
 EXTENDED_DATASET_PARAMS: list[DatasetConstructor] = [
-    *[
-        lambda settings: MyTUDataset(settings, source=s, template=t)
-        for s, t in itertools.product(
-            # sources
-            _ts(["mutag"]),
-            # templates
-            _tt(["gcn", "gin", "gsage"]),
-        )
-    ],
+    lambda settings: MyMutagenesis(settings, "simple", "original"),
+    lambda settings: MyMutagenesis(settings, "simple_nobond", "original"),
 ]
 
 LONG_DATASET_PARAMS: list[DatasetConstructor] = [
-    *[
-        lambda settings: MyMutagenesis(settings, source=s, template=t)
-        for s, t in itertools.product(
-            # sources
-            _ms(["10x"]),
-            # templates
-            _mt(["simple"]),  # TODO: add the rest
-        )
-    ]
+    lambda settings: MyMutagenesis(settings, "simple", "10x"),
+    lambda settings: MyMutagenesis(settings, "simple_nobond", "10x"),
 ]
 
 
