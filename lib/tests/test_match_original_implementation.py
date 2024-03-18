@@ -33,10 +33,11 @@ LONG_DATASET_PARAMS: list[DatasetConstructor] = [
 
 
 class CustomError(Exception):
-    def __init__(self, *args: object, network, model) -> None:
+    def __init__(self, *args: object, orig_err: Exception, network, model) -> None:
         super().__init__(*args)
         self.network = network
         self.model = model
+        self.orig_err = orig_err
 
 
 def do_test_dataset(dataset: MyDataset, device: str, settings: Settings):
@@ -77,7 +78,7 @@ def do_test_dataset(dataset: MyDataset, device: str, settings: Settings):
         results: dict[str, torch.Tensor] = runnable.forward_pass()
     except Exception as e:
         results = runnable.model.layer_values
-        raise e
+        raise CustomError(orig_err=e, network=runnable.network, model=runnable.model)
     finally:
         if settings.optimize_tail_gathers:
             # with this optimization, intermediate layers won't match anymore.
@@ -88,6 +89,10 @@ def do_test_dataset(dataset: MyDataset, device: str, settings: Settings):
 
         for layer in layers_to_check:
             if settings.merge_same_facts and layer.type == "FactLayer":
+                continue
+
+            if str(layer.id) not in results:
+                warnings.warn("Results are missing for layer " + str(layer.id))
                 continue
 
             expected = torch.squeeze(torch.stack(list(runnable.network[layer.id].get_values_torch())))
@@ -151,4 +156,4 @@ if __name__ == "__main__":
         model, network = do_test_dataset(dataset, "cpu", settings)
     except CustomError as e:
         model, network = e.model, e.network
-        raise e
+        raise e.orig_err

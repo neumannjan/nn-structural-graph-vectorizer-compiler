@@ -585,9 +585,9 @@ class ConcatLayers(torch.nn.Module, GatherModuleLike):
         return None
 
     def forward(self, layer_values: dict[str, torch.Tensor]) -> torch.Tensor:
-        the_layer_values = [layer_values[l] for l in self.layers]
-        out = torch.concatenate(the_layer_values)
-        return out
+        xs = [layer_values[l] for l in self.layers]
+        x = _expand_concat_tensors(xs)
+        return x
 
     def extra_repr(self) -> str:
         return "[" + ", ".join(self.layers) + "]"

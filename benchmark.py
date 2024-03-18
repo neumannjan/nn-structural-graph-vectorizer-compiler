@@ -72,7 +72,7 @@ DEFAULT_SETTINGS = Settings()
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     add_parser_args_for_dataset(parser)
     parser.add_argument("--devices", "-d", action=CommaSeparatedListAction, choices=t_get_args(Device), required=True)
     parser.add_argument("--models", "-m", action=CommaSeparatedListAction, choices=t_get_args(Model), required=True)
