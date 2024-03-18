@@ -8,16 +8,17 @@ from lib.nn.sources.views.merge_facts import MergeFactsView
 from lib.nn.topological.layer import Layer
 from lib.nn.topological.settings import Settings
 
+DEBUG_LAYERS = False
+
 
 class NetworkModule(torch.nn.Module):
     def __new__(
         cls,
         network: Network,
         settings: Settings,
-        debug_layers: bool = False,
     ):
-        if debug_layers:
-            return _NetworkModuleWithTryBlocks(network, settings)
+        if DEBUG_LAYERS:
+            return super().__new__(_NetworkModuleWithTryBlocks)
 
         return super().__new__(cls)
 
@@ -34,10 +35,11 @@ class NetworkModule(torch.nn.Module):
             network = MergeFactsView(network)
 
         layers = network.layers.as_list()
+        layer_sizes: dict[int, int] = {}
 
         for l in tqdm(layers):
             neurons = network[l]
-            layer_module = Layer.from_network(l.id, network, neurons, settings)
+            layer_module = Layer.from_network(l.id, network, neurons, layer_sizes, settings)
 
             if settings.optimize_tail_gathers and l != layers[-1]:
                 tpl = layer_module.unwrap_final_gather()
@@ -47,6 +49,7 @@ class NetworkModule(torch.nn.Module):
                     layer_module = layer_module2
                     network = MapOrdinalsView(network, ord_map)
 
+            layer_sizes[l.id] = layer_module.total_items
             model.append(layer_module)
 
         self.model = model
@@ -70,12 +73,13 @@ class _NetworkModuleWithTryBlocks(NetworkModule):
     ) -> None:
         super().__init__(network, settings, debug_layers=True)
         self.layer_ids = [l.id for l in network.layers]
+        self.layer_values: dict[str, torch.Tensor] = {}
 
     def forward(self):
         try:
-            layer_values: dict[str, torch.Tensor] = {}
+            self.layer_values = {}
             for l, module in zip(self.layer_ids, self.model):
-                layer_values = module(layer_values)
-            return layer_values
+                self.layer_values = module(self.layer_values)
+            return self.layer_values
         except Exception as e:
             raise Exception(f"Exception in layer {l}") from e

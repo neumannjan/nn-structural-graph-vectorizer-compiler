@@ -2,6 +2,7 @@ import random
 from typing import Literal
 
 import numpy as np
+import pytest
 from lib.nn import sources
 from lib.nn.gather import SingleLayerGather, TakeValue, build_optimal_multi_layer_gather
 from lib.nn.sources.base import LayerDefinition, LayerOrdinal
@@ -82,36 +83,54 @@ def test_merge_facts_view_inputs_ordinals():
     assert all((a == e for a, e in zip(actual, expected)))
 
 
-def test_gather_not_merged():
+@pytest.mark.parametrize(["use_unique_pre_gathers"], [[False], [True]])
+def test_gather_not_merged(use_unique_pre_gathers: bool):
     n_values = len(VALUES)
     network = build_network(n_layers=2, n_values=n_values)
+    layer_sizes = {l.id: len(ns) for l, ns in network.items()}
 
-    gather = build_optimal_multi_layer_gather(inputs_ordinals=list(network[LAYERS[1].id].inputs.ordinals))
+    gather = build_optimal_multi_layer_gather(
+        inputs_ordinals=list(network[LAYERS[1].id].inputs.ordinals),
+        layer_sizes=layer_sizes,
+        use_unique_pre_gathers=use_unique_pre_gathers,
+    )
 
     assert gather.total_items == TOTAL_NEURONS * n_values
     assert gather.optimal_period == TOTAL_NEURONS * n_values
 
 
-def test_gather_merged():
+@pytest.mark.parametrize(["use_unique_pre_gathers"], [[False], [True]])
+def test_gather_merged(use_unique_pre_gathers: bool):
     n_values = len(VALUES)
     network = build_network(n_layers=2, n_values=n_values)
 
     view = MergeFactsView(network)
+    layer_sizes = {l.id: len(ns) for l, ns in view.items()}
 
-    gather = build_optimal_multi_layer_gather(inputs_ordinals=list(view[LAYERS[1].id].inputs.ordinals))
+    gather = build_optimal_multi_layer_gather(
+        inputs_ordinals=list(view[LAYERS[1].id].inputs.ordinals),
+        layer_sizes=layer_sizes,
+        use_unique_pre_gathers=use_unique_pre_gathers,
+    )
 
     assert gather.total_items == TOTAL_NEURONS * n_values
     assert gather.optimal_period == n_values
     assert gather.get_optimal().total_items == n_values
 
 
-def test_gather_merged_single():
+@pytest.mark.parametrize(["use_unique_pre_gathers"], [[False], [True]])
+def test_gather_merged_single(use_unique_pre_gathers: bool):
     n_values = 1
     network = build_network(n_layers=2, n_values=n_values)
 
     view = MergeFactsView(network)
+    layer_sizes = {l.id: len(ns) for l, ns in view.items()}
 
-    gather = build_optimal_multi_layer_gather(inputs_ordinals=list(view[LAYERS[1].id].inputs.ordinals))
+    gather = build_optimal_multi_layer_gather(
+        inputs_ordinals=list(view[LAYERS[1].id].inputs.ordinals),
+        layer_sizes=layer_sizes,
+        use_unique_pre_gathers=use_unique_pre_gathers,
+    )
 
     assert gather.total_items == 1
     assert gather.optimal_period == 1

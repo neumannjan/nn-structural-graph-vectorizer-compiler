@@ -8,10 +8,14 @@ Compilation = Literal["none", "trace", "script"]
 
 @dataclass
 class Settings:
-    merge_same_facts: bool = True
+    # checks (to be removed):
 
     # TODO: ASSUMPTION: all samples have the same layer layout
     check_same_layers_assumption: bool = False
+
+    # optimizations:
+
+    merge_same_facts: bool = True
 
     optimize_linear_gathers: bool = True
 
@@ -22,7 +26,12 @@ class Settings:
 
     optimize_tail_gathers: bool = True
 
+    use_unique_pre_gathers: bool = False
+
+    # additional configuration options:
+
     compilation: Compilation = "none"
+
     neuralogic: nsettings.Settings = field(
         default_factory=lambda: nsettings.Settings(compute_neuron_layer_indices=True)
     )

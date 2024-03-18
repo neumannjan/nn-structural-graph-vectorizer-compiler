@@ -68,6 +68,9 @@ class CommaSeparatedListAction(argparse.Action):
         setattr(namespace, self.dest, out)
 
 
+DEFAULT_SETTINGS = Settings()
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     add_parser_args_for_dataset(parser)
@@ -75,13 +78,19 @@ if __name__ == "__main__":
     parser.add_argument("--models", "-m", action=CommaSeparatedListAction, choices=t_get_args(Model), required=True)
     parser.add_argument("--repeats", "-n", "-r", type=int, default=10)
     parser.add_argument("--results-dict", action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument("--compilation", "-c", choices=t_get_args(Compilation), default="none")
-    parser.add_argument("--iso", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--tail", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--compilation", "-c", choices=t_get_args(Compilation), default=DEFAULT_SETTINGS.compilation)
+    parser.add_argument(
+        "--iso", action=argparse.BooleanOptionalAction, default=DEFAULT_SETTINGS.neuralogic.iso_value_compression
+    )
+    parser.add_argument("--tail", action=argparse.BooleanOptionalAction, default=DEFAULT_SETTINGS.optimize_tail_gathers)
+    parser.add_argument(
+        "--uniq", action=argparse.BooleanOptionalAction, default=DEFAULT_SETTINGS.use_unique_pre_gathers
+    )
     args = parser.parse_args()
 
     settings = Settings()
     settings.optimize_tail_gathers = args.tail
+    settings.use_unique_pre_gathers = args.uniq
     settings.compilation = args.compilation
     settings.neuralogic.iso_value_compression = args.iso
 

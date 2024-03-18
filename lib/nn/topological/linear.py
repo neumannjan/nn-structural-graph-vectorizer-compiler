@@ -1,5 +1,5 @@
 import warnings
-from typing import Collection, OrderedDict
+from typing import Collection, Mapping, OrderedDict
 
 import numpy as np
 import torch
@@ -7,25 +7,21 @@ from torch.jit import unused
 
 from lib.nn.gather import (
     GatherModuleLike,
-    LayerGatherModuleLike,
     NoopGather,
     Periodic,
-    build_optimal_gather,
     build_optimal_gather_and_reshape,
-    build_optimal_multi_layer_gather,
     build_optimal_multi_layer_gather_and_reshape,
     get_optimal_gather_for_period,
-    get_optimal_layer_gather_for_period,
 )
 from lib.nn.sources.base import LayerOrdinal, Network, Neurons, WeightDefinition
-from lib.nn.weight import create_weights_and_gather
+from lib.nn.weight import WeightModuleLike, create_weights_and_gather
 
 
 class Linear(torch.nn.Module, Periodic):
     def __init__(
         self,
-        inputs_gather: LayerGatherModuleLike,
-        weight: torch.nn.Module,
+        inputs_gather: GatherModuleLike,
+        weight: GatherModuleLike | WeightModuleLike,
     ) -> None:
         super().__init__()
         self.gather = inputs_gather
@@ -44,6 +40,11 @@ class Linear(torch.nn.Module, Periodic):
                 )
 
         return None
+
+    @unused
+    @property
+    def total_items(self) -> int:
+        return max(self.gather.total_items, self.weight.total_items)
 
     def unwrap_final_gather(self) -> None:
         return None
@@ -66,15 +67,20 @@ class ReturnWeights(torch.nn.Module):
 
 def _build_optimal_linear(
     inputs_ordinals: list[LayerOrdinal],
+    layer_sizes: Mapping[int, int],
     weight_definitions: Collection[WeightDefinition],
     period: int | None,
-    group_learnable_weight_parameters=True,
-    optimize_linear_gathers=True,
+    group_learnable_weight_parameters: bool,
+    optimize_linear_gathers: bool,
+    use_unique_pre_gathers: bool,
 ):
-    if period is None:
-        gather = build_optimal_multi_layer_gather(inputs_ordinals)
-    else:
-        gather = build_optimal_multi_layer_gather_and_reshape(inputs_ordinals, period=period)
+    # will not reshape if period is None
+    gather = build_optimal_multi_layer_gather_and_reshape(
+        inputs_ordinals,
+        layer_sizes,
+        use_unique_pre_gathers=use_unique_pre_gathers,
+        period=period,
+    )
 
     weight = create_weights_and_gather(
         weight_definitions,
@@ -84,7 +90,7 @@ def _build_optimal_linear(
 
     if period is not None and optimize_linear_gathers:
         # can we simplify?
-        gather_optimal = get_optimal_layer_gather_for_period(gather, period=period)
+        gather_optimal = get_optimal_gather_for_period(gather, period=period)
         weight_optimal = get_optimal_gather_for_period(weight, period=period)
 
         can_simplify_inputs = gather_optimal != gather
@@ -104,7 +110,7 @@ def _build_optimal_linear(
     return Linear(gather, weight)
 
 
-class LinearAndGather(torch.nn.Module, LayerGatherModuleLike):
+class LinearAndGather(torch.nn.Module, GatherModuleLike):
     def __init__(
         self,
         linear: Linear,
@@ -155,7 +161,7 @@ class LinearAndGather(torch.nn.Module, LayerGatherModuleLike):
         if isinstance(gather2, NoopGather):
             return self.linear, idx_map
         else:
-            return LinearAndGather(self.linear, self.gather2), idx_map
+            return LinearAndGather(self.linear, gather2), idx_map
 
     def forward(self, layer_values: dict[str, torch.Tensor]):
         y = self.linear(layer_values)
@@ -174,10 +180,12 @@ def _count_unique(inputs_ordinals: list[LayerOrdinal], weight_definitions: Colle
 
 def _build_optimal_linear_unique_and_gather(
     inputs_ordinals: list[LayerOrdinal],
+    layer_sizes: Mapping[int, int],
     weight_definitions: Collection[WeightDefinition],
     period: int | None,
-    group_learnable_weight_parameters=True,
-    optimize_linear_gathers=True,
+    group_learnable_weight_parameters: bool,
+    optimize_linear_gathers: bool,
+    use_unique_pre_gathers: bool,
 ):
     n_unique = _count_unique(inputs_ordinals, weight_definitions)
     inputs_weights_pairs = list(zip(inputs_ordinals, weight_definitions))
@@ -186,7 +194,13 @@ def _build_optimal_linear_unique_and_gather(
     # check if it is worth it to do it like this
     if n_unique == n_total:
         return _build_optimal_linear(
-            inputs_ordinals, weight_definitions, period, group_learnable_weight_parameters, optimize_linear_gathers
+            inputs_ordinals=inputs_ordinals,
+            layer_sizes=layer_sizes,
+            weight_definitions=weight_definitions,
+            period=period,
+            group_learnable_weight_parameters=group_learnable_weight_parameters,
+            optimize_linear_gathers=optimize_linear_gathers,
+            use_unique_pre_gathers=use_unique_pre_gathers,
         )
 
     inputs_weights_pairs = list(zip(inputs_ordinals, weight_definitions))
@@ -197,19 +211,19 @@ def _build_optimal_linear_unique_and_gather(
     weight_definitions_unique = [wd for _, wd in inputs_weights_pairs_unique]
 
     linear_unique = _build_optimal_linear(
-        inputs_ordinals_unique,
-        weight_definitions_unique,
+        inputs_ordinals=inputs_ordinals_unique,
+        layer_sizes=layer_sizes,
+        weight_definitions=weight_definitions_unique,
         period=None,
         group_learnable_weight_parameters=group_learnable_weight_parameters,
         optimize_linear_gathers=optimize_linear_gathers,
+        use_unique_pre_gathers=use_unique_pre_gathers,
     )
 
     to_order_idxs = [inputs_weights_pairs_unique.index(key) for key in inputs_weights_pairs]
 
-    if period is None:
-        post_linear_gather = build_optimal_gather(to_order_idxs)
-    else:
-        post_linear_gather = build_optimal_gather_and_reshape(to_order_idxs, period=period)
+    # will not reshape if period is None
+    post_linear_gather = build_optimal_gather_and_reshape(to_order_idxs, period=period)
 
     return LinearAndGather(linear_unique, post_linear_gather)
 
@@ -217,9 +231,11 @@ def _build_optimal_linear_unique_and_gather(
 def build_optimal_linear(
     network: Network,
     neurons: Neurons,
+    layer_sizes: Mapping[int, int],
     period: int | None,
     group_learnable_weight_parameters: bool,
     optimize_linear_gathers: bool,
+    use_unique_pre_gathers: bool,
 ):
     inputs_ordinals = list(neurons.inputs.ordinals)
 
@@ -227,10 +243,13 @@ def build_optimal_linear(
 
     if len(weight_definitions) == 0:
         # skip a linear layer and just build a gather layer
-        if period is None:
-            return build_optimal_multi_layer_gather(inputs_ordinals)
-        else:
-            return build_optimal_multi_layer_gather_and_reshape(inputs_ordinals, period=period)
+        # will not reshape if period is None
+        return build_optimal_multi_layer_gather_and_reshape(
+            inputs_ordinals,
+            layer_sizes,
+            use_unique_pre_gathers=use_unique_pre_gathers,
+            period=period,
+        )
 
     assert len(weight_definitions) == len(inputs_ordinals)
 
@@ -254,8 +273,10 @@ def build_optimal_linear(
 
     return _build_optimal_linear_unique_and_gather(
         inputs_ordinals=inputs_ordinals,
+        layer_sizes=layer_sizes,
         weight_definitions=weight_definitions,
         period=period,
         group_learnable_weight_parameters=group_learnable_weight_parameters,
         optimize_linear_gathers=optimize_linear_gathers,
+        use_unique_pre_gathers=use_unique_pre_gathers,
     )

@@ -15,7 +15,7 @@ from lib.nn.gather import (
     build_optimal_gather,
     build_optimal_gather_and_reshape,
 )
-from lib.nn.sources.base import LayerOrdinal, WeightDefinition
+from lib.nn.sources.base import WeightDefinition
 from lib.utils import detect_repeating_K_sequence_in_list
 
 
@@ -636,7 +636,7 @@ def _create_weights_set(weights: Iterable[WeightDefinition], out_map: dict[int, 
             weights_out.append(weight)
 
 
-class WeightsGathered(torch.nn.Module, GatherLike):
+class WeightsGathered(torch.nn.Module, GatherModuleLike):
     def __init__(self, weight: WeightModuleLike, gather: GatherModuleLike) -> None:
         super().__init__()
         self.weight = weight
@@ -677,7 +677,7 @@ class WeightsGathered(torch.nn.Module, GatherLike):
         return WeightsGathered(weight=self.weight, gather=gather_optimal)
 
     @unused
-    def unwrap_final_gather(self) -> tuple[torch.nn.Module, dict[int, int]] | None:
+    def unwrap_final_gather(self) -> tuple[GatherModuleLike, dict[int, int]] | None:
         tpl = self.gather.unwrap_final_gather()
         if tpl is None:
             return None
@@ -812,6 +812,7 @@ def create_weights_and_gather(
     gather = None
 
     if n_orig_weight_definitions > len(weight_definitions):
+        # TODO weight might already be gathered. We don't want two consecutive gathers due to unpacking, though.
         gather = Repeat(
             input_length=weight.total_items,
             repeats=-(-n_orig_weight_definitions // len(weight_definitions)),
@@ -819,6 +820,7 @@ def create_weights_and_gather(
         )
 
     if period is not None:
+        # TODO weight might already be gathered. We don't want two consecutive gathers due to unpacking, though.
         view = ViewWithPeriod(input_length=weight.total_items, period=period)
 
         if gather is not None:

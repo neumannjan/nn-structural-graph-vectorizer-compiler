@@ -99,6 +99,8 @@ class MyMutagenesis(MyDataset):
     def __init__(
         self, settings: Settings, template: MutagenesisTemplate = "simple", source: MutagenesisSource = "original"
     ) -> None:
+        self.source_name = source
+        self.template_name = template
         directory = SOURCE_DIRECTORY_MAP[source]
 
         dataset = FileDataset(
@@ -109,3 +111,6 @@ class MyMutagenesis(MyDataset):
         the_template = TEMPLATE_MAP[template]
 
         super().__init__("mutagenesis", the_template, dataset, settings)
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(source={self.source_name}, template={self.template_name})"

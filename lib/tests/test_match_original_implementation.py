@@ -7,6 +7,7 @@ from lib.benchmarks.runnables.neuralogic_vectorized import NeuralogicVectorizedT
 from lib.datasets.dataset import MyDataset
 from lib.datasets.mutagenesis import MyMutagenesis
 from lib.datasets.tu_molecular import MyTUDataset
+from lib.nn.topological import network_module
 from lib.nn.topological.settings import Settings
 from lib.tests.utils.test_params import DEVICE_PARAMS, SETTINGS_PARAMS
 from torch_geometric.data.dataset import warnings
@@ -43,31 +44,41 @@ def do_test_dataset(dataset: MyDataset, device: str, settings: Settings):
         warnings.warn("Skipping MPS test for 'allow_non_builtin_torch_ops=True'.")
         return None, None
 
+    network_module.DEBUG_LAYERS = settings.compilation == "none"
+
+    print("Dataset:", dataset)
+    print("Device:", device)
+    print("Settings:", settings)
+
+    print("Building dataset...")
+    built_dataset_inst = dataset.build(sample_run=True)
+
+    ###### CONFIG ######
+
+    if device == "mps":
+        # MPS doesn't support float64
+        # we lower the requirement on value tolerance because of this
+        tolerance = 1e-3
+        torch.set_default_dtype(torch.float32)
+    else:
+        tolerance = 1e-8
+        torch.set_default_dtype(torch.float64)
+
+    ###### ALGORITHM ######
+
+    runnable = NeuralogicVectorizedTorchRunnable(device=device, settings=settings)
+    runnable.initialize(built_dataset_inst)
+
+    print(runnable.network)
+    print(runnable.model)
+
+    e = None
     try:
-        print("Building dataset...")
-        built_dataset_inst = dataset.build(sample_run=True)
-
-        ###### CONFIG ######
-
-        if device == "mps":
-            # MPS doesn't support float64
-            # we lower the requirement on value tolerance because of this
-            tolerance = 1e-3
-            torch.set_default_dtype(torch.float32)
-        else:
-            tolerance = 1e-8
-            torch.set_default_dtype(torch.float64)
-
-        ###### ALGORITHM ######
-
-        runnable = NeuralogicVectorizedTorchRunnable(device=device, settings=settings)
-        runnable.initialize(built_dataset_inst)
-
-        print(runnable.network)
-        print(runnable.model)
-
         results: dict[str, torch.Tensor] = runnable.forward_pass()
-
+    except Exception as e:
+        results = runnable.model.layer_values
+        raise e
+    finally:
         if settings.optimize_tail_gathers:
             # with this optimization, intermediate layers won't match anymore.
             layers_to_check = [runnable.network.layers.as_list()[-1]]
@@ -94,18 +105,11 @@ def do_test_dataset(dataset: MyDataset, device: str, settings: Settings):
                 f"Actual: {actual}"
             )
 
-        print("Expected:", expected)
-        print("Actual:", actual)
-        print("All values match!")
+    print("Expected:", expected)
+    print("Actual:", actual)
+    print("All values match!")
 
-        return runnable.model, runnable.network
-
-    except jpype.JException as e:
-        print(e.message())
-        print(e.stacktrace())
-        raise CustomError(network=runnable.network, model=runnable.model) from e
-    except Exception as e:
-        raise CustomError(network=runnable.network, model=runnable.model) from e
+    return runnable.model, runnable.network
 
 
 @pytest.mark.parametrize(
@@ -140,7 +144,8 @@ if __name__ == "__main__":
     settings.optimize_tail_gathers = True
     settings.compilation = "none"
     settings.neuralogic.iso_value_compression = True
-    dataset = MyTUDataset(settings, source="mutag", template="gcn")
+    settings.use_unique_pre_gathers = False
+    dataset = MyTUDataset(settings, source="mutag", template="gsage")
     # dataset = MyMutagenesis(settings, source="original", template="simple")
     try:
         model, network = do_test_dataset(dataset, "cpu", settings)

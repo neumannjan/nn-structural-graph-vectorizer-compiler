@@ -146,6 +146,8 @@ TUDatasetSource = Literal["mutag", "enzymes", "proteins", "collab", "imdb-binary
 
 class MyTUDataset(MyDataset):
     def __init__(self, settings: Settings, source: TUDatasetSource, template: TUDatasetTemplate) -> None:
+        self.source_name = source
+        self.template_name = template
         root = Path("./datasets")
         root.mkdir(exist_ok=True, parents=True)
 
@@ -169,6 +171,9 @@ class MyTUDataset(MyDataset):
         self.pyg_module_provider = lambda: build_pyg_module(
             template=template, activation="sigmoid", output_size=output_size, num_features=num_node_features, dim=dim
         )
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(source={self.source_name}, template={self.template_name})"
 
     def build(self, sample_run=False) -> BuiltDatasetInstance:
         out = super().build(sample_run)

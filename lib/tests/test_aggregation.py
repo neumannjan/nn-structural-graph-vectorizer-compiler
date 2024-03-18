@@ -53,6 +53,7 @@ def test_same_no_of_inputs(settings: Settings):
         out_to=13,
         network=network,
         neurons=network[13],
+        layer_sizes={16: len(inputs["16"])},
         settings=settings,
     )
     expected = torch.tensor([8, 12, 20])
@@ -70,6 +71,7 @@ def test_variable_no_of_inputs(settings: Settings):
         out_to=13,
         network=network,
         neurons=network[13],
+        layer_sizes={16: len(inputs["16"])},
         settings=settings,
     )
     expected = torch.tensor([8, 9, 15, 28, 22, 52])

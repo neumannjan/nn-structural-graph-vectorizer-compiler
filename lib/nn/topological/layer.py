@@ -1,12 +1,13 @@
 from collections.abc import Iterable
-from typing import Collection, TypeVar
+from typing import Collection, Mapping, TypeVar
 
 import torch
+from torch.jit import unused
 from torch.nn import Identity
 
 from lib.nn.aggregation.fixed_count import FixedCountAggregation, build_fixed_count_aggregate
 from lib.nn.aggregation.universal import ScatterAggregate, ViewAndAggregate, build_optimal_reshape_aggregate
-from lib.nn.gather import LayerGatherModuleLike
+from lib.nn.gather import GatherModuleLike
 from lib.nn.sources.base import LayerNeurons, LayerOrdinal, Network
 from lib.nn.topological.linear import Linear, build_optimal_linear
 from lib.nn.topological.settings import Settings
@@ -78,6 +79,12 @@ class FactLayer(torch.nn.Module):
         layer_values[str(self.out_to)] = self.value
         return layer_values
 
+    @unused
+    @property
+    def total_items(self) -> int:
+        return self.value.shape[0]
+
+    @unused
     def unwrap_final_gather(self) -> None:
         return None
 
@@ -88,6 +95,7 @@ class Layer(torch.nn.Module):
         out_to: int,
         network: Network,
         neurons: LayerNeurons,
+        layer_sizes: Mapping[int, int],
         settings: Settings,
     ):
         if neurons.layer.type == "FactLayer":
@@ -103,9 +111,11 @@ class Layer(torch.nn.Module):
         linear = build_optimal_linear(
             network,
             neurons,
+            layer_sizes=layer_sizes,
             period=period if period != 1 else None,  # do not reshape if period == 1
             group_learnable_weight_parameters=settings.group_learnable_weight_parameters,
             optimize_linear_gathers=settings.optimize_linear_gathers,
+            use_unique_pre_gathers=settings.use_unique_pre_gathers,
         )
 
         if period == 1:
@@ -144,7 +154,7 @@ class Layer(torch.nn.Module):
     def __init__(
         self,
         out_to: int,
-        linear: LayerGatherModuleLike | Linear,
+        linear: GatherModuleLike | Linear,
         aggregate: Identity | ViewAndAggregate | ScatterAggregate | FixedCountAggregation,
         transform: torch.nn.Module,
     ):
@@ -154,6 +164,12 @@ class Layer(torch.nn.Module):
         self.aggregate = aggregate
         self.transform = transform
 
+    @unused
+    @property
+    def total_items(self) -> int:
+        return self.linear.total_items
+
+    @unused
     def unwrap_final_gather(self) -> tuple["Layer", dict[LayerOrdinal, LayerOrdinal]] | None:
         if not isinstance(self.aggregate, Identity):
             return None

@@ -61,13 +61,15 @@ def build_sample(
 class Flags:
     group_learnable_weight_parameters: bool
     optimize_linear_gathers: bool
+    use_unique_pre_gathers: bool
 
 
-FLAGS_PARAMETERS = [Flags(a, b) for a, b in itertools.product([False, True], [False, True])]
+FLAGS_PARAMETERS = [Flags(a, b, c) for a, b, c in itertools.product([False, True], [False, True], [False, True])]
 
 
 def build_linear(sample: Network, period: int | None, flags: Flags):
-    return build_optimal_linear(network=sample, neurons=sample[13], period=period, **asdict(flags))
+    layer_sizes = {l.id: len(ns) for l, ns in sample.items()}
+    return build_optimal_linear(network=sample, neurons=sample[13], layer_sizes=layer_sizes, period=period, **asdict(flags))
 
 
 @dataclass
