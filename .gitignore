@@ -1,4 +1,5 @@
 /imgs/
+.ipynb_checkpoints/
 /target/
 __pycache__/
 /visualize.py

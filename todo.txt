@@ -1,0 +1,21 @@
+1. Replace total_items with compute_out_shape because that will be WAY easier to debug !
+2. Change layer IDs to strings by default
+3. Get rid of expand in gathers (can remove it entirely for now if I implement step 4. first)
+4. Pre-expand facts beforehand
+    1. Teach network API to give you shapes of Neurons (or None if not the same) -> for neurons from the same layer
+    should always give the same shape probably, so the network API can assume that
+    2. If you are building a layer, you know what its input layers are. You can teach your network API to give you that
+    info directly.
+    3. If you know the input layers AND the shapes, you know: 
+        a. when you have a problem: you plan to concat two non-fact layers of different output shapes -> can't do that !
+        b. when you can pre-expand a fact: your fact layer has a different dimension than the rest -> expand and add a new fact
+        c. do not make a network view! you'd go crazy. You can remap the ordinals after you've taken them from the
+        network based on what layer you're creating. You know the input layers and the shapes, so you know which fact
+        layers to remap to the new ones, so just remap the input layers using a MapSequence.
+    4. Remove FactLayer, instead just place the facts in the starting input already beforehand
+5. do I actually still need expand in gathers?
+    - what about the "you have a problem" situation from step 4.3. ?
+    - I think if I expand it in the forward pass, I will be computing expanded_w @ expanded_inputs, and I feel like that
+      will give me incorrect results!
+    - instead I think I'm going to need something that will just do these computations separately based on what those 
+    actually are, which SUCKS
