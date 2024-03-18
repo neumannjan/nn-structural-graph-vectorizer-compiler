@@ -5,12 +5,13 @@ import torch
 
 
 class TimerResult:
-    def __init__(self, times: list[int]) -> None:
+    def __init__(self, times: list[int], agg_skip_first=2) -> None:
         self._times = np.array(times)
+        self._agg_skip_first = 2
 
     @property
     def result_mean_ns(self) -> float:
-        return self._times.mean()
+        return self._times[self._agg_skip_first :].mean()
 
     @property
     def result_mean_s(self) -> float:
@@ -18,7 +19,7 @@ class TimerResult:
 
     @property
     def result_std_ns(self) -> float:
-        return self._times.std()
+        return self._times[self._agg_skip_first :].std()
 
     @property
     def result_std_s(self) -> float:
