@@ -10,7 +10,7 @@ from lib.benchmarks.runnables.runnable import Runnable
 from lib.benchmarks.runner import MultiRunner
 from lib.datasets.datasets import add_parser_args_for_dataset, build_dataset, get_dataset_info_from_args
 from lib.datasets.mutagenesis import MutagenesisSource, MutagenesisTemplate
-from lib.nn.topological.settings import Compilation, Settings
+from lib.nn.definitions.settings import Compilation, Settings
 from tqdm.auto import tqdm
 
 Device = Literal["mps", "cuda", "cpu"]

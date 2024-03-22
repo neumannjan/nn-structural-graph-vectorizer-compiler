@@ -5,9 +5,9 @@ from typing import Literal
 import numpy as np
 import pytest
 import torch
-from lib.nn import sources
-from lib.nn.sources.base import LayerDefinition, Network
-from lib.nn.sources.minimal_api.dict import WeightDefinitionImpl
+from lib import sources
+from lib.sources.base import LayerDefinition, Network
+from lib.sources.minimal_api.dict import WeightDefinitionImpl
 from lib.nn.topological.linear import build_optimal_linear
 from lib.tests.utils.neuron_factory import NeuronTestFactory
 from lib.utils import atleast_3d_rev

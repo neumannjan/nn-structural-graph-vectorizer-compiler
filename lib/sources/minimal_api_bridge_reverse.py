@@ -5,9 +5,9 @@ import numpy as np
 import torch
 
 from lib.nn.definitions.ops import AggregationDef, TransformationDef
-from lib.nn.sources.base import LayerDefinition, LayerOrdinal, Network, Neurons, WeightDefinition
-from lib.nn.sources.minimal_api.base import MinimalAPINetwork
-from lib.nn.sources.minimal_api.ordinals import MinimalAPIOrdinals
+from lib.sources.base import LayerDefinition, LayerOrdinal, Network, Neurons, WeightDefinition
+from lib.sources.minimal_api.base import MinimalAPINetwork
+from lib.sources.minimal_api.ordinals import MinimalAPIOrdinals
 from lib.utils import cache
 
 

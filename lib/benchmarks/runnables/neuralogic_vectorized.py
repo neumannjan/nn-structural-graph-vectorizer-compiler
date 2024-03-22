@@ -3,9 +3,9 @@ from neuralogic.core.builder.builder import NeuralSample
 
 from lib.benchmarks.runnables.runnable import Runnable
 from lib.datasets.dataset import BuiltDatasetInstance
-from lib.nn.sources import from_java
+from lib.sources import from_java
 from lib.nn.topological.network_module import NetworkModule
-from lib.nn.topological.settings import Settings
+from lib.nn.definitions.settings import Settings
 
 
 class NeuralogicVectorizedTorchRunnable(Runnable):

@@ -3,10 +3,10 @@ from typing import Literal
 
 import numpy as np
 import pytest
-from lib.nn import sources
+from lib import sources
 from lib.nn.gather import SingleLayerGather, TakeValue, build_optimal_multi_layer_gather
-from lib.nn.sources.base import LayerDefinition, LayerOrdinal
-from lib.nn.sources.views.merge_facts import MergeFactsView
+from lib.sources.base import LayerDefinition, LayerOrdinal
+from lib.sources.views.merge_facts import MergeFactsView
 from lib.tests.utils.neuron_factory import NeuronTestFactory
 
 VALUES = [np.array([1.0]), np.array([2.0]), np.array([3.0])]

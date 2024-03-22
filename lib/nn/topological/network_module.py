@@ -2,11 +2,11 @@ import torch
 from torch.jit import unused
 from tqdm.auto import tqdm
 
-from lib.nn.sources.base import Network
-from lib.nn.sources.views.map_ordinals import MapOrdinalsView
-from lib.nn.sources.views.merge_facts import MergeFactsView
+from lib.sources.base import Network
+from lib.sources.views.map_ordinals import MapOrdinalsView
+from lib.sources.views.merge_facts import MergeFactsView
 from lib.nn.topological.layer import Layer
-from lib.nn.topological.settings import Settings
+from lib.nn.definitions.settings import Settings
 
 DEBUG_LAYERS = False
 

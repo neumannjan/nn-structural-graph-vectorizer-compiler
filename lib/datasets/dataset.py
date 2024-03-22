@@ -7,7 +7,7 @@ from neuralogic.dataset import BaseDataset
 from neuralogic.nn.java import NeuraLogic
 from torch_geometric.data.dataset import Dataset
 
-from lib.nn.topological.settings import Settings
+from lib.nn.definitions.settings import Settings
 
 
 @dataclass

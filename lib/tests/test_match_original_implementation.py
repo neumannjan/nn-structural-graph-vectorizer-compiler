@@ -7,7 +7,7 @@ from lib.datasets.dataset import MyDataset
 from lib.datasets.mutagenesis import MyMutagenesis
 from lib.datasets.tu_molecular import MyTUDataset
 from lib.nn.topological import network_module
-from lib.nn.topological.settings import Settings
+from lib.nn.definitions.settings import Settings
 from lib.tests.utils.test_params import DEVICE_PARAMS, SETTINGS_PARAMS
 from torch_geometric.data.dataset import warnings
 from torch_geometric.datasets.citation_full import Callable

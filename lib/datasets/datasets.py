@@ -5,7 +5,7 @@ from typing import get_args as t_get_args
 
 from lib.datasets.mutagenesis import MutagenesisSource, MutagenesisTemplate, MyMutagenesis
 from lib.datasets.tu_molecular import MyTUDataset, TUDatasetSource, TUDatasetTemplate
-from lib.nn.topological.settings import Settings
+from lib.nn.definitions.settings import Settings
 
 
 @dataclass

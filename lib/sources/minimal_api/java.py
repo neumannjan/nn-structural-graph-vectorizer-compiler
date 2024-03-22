@@ -6,10 +6,10 @@ import torch
 from neuralogic.core.builder.builder import NeuralSample
 
 from lib.nn.definitions.ops import AggregationDef, TransformationDef
-from lib.nn.sources.base import LayerDefinition, LayerType, WeightDefinition, is_weighted
-from lib.nn.sources.base_impl import BaseWeightDefinition
-from lib.nn.sources.minimal_api.base import MinimalAPINetwork
-from lib.nn.sources.minimal_api.internal.java import (
+from lib.sources.base import LayerDefinition, LayerType, WeightDefinition, is_weighted
+from lib.sources.base_impl import BaseWeightDefinition
+from lib.sources.minimal_api.base import MinimalAPINetwork
+from lib.sources.minimal_api.internal.java import (
     JavaNeuron,
     JavaWeight,
     compute_java_neurons_per_layer,
@@ -19,7 +19,7 @@ from lib.nn.sources.minimal_api.internal.java import (
     java_value_to_numpy,
     java_value_to_tensor,
 )
-from lib.nn.topological.settings import Settings
+from lib.nn.definitions.settings import Settings
 from lib.utils import LambdaIterable, MapCollection, MapSequence, cache
 
 

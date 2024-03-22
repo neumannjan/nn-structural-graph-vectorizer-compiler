@@ -15,7 +15,7 @@ from lib.nn.gather import (
     build_optimal_gather,
     build_optimal_gather_and_reshape,
 )
-from lib.nn.sources.base import WeightDefinition
+from lib.sources.base import WeightDefinition
 from lib.nn.utils import ShapeTransformable
 from lib.utils import detect_repeating_K_sequence_in_list
 

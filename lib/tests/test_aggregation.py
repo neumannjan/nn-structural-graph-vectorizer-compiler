@@ -1,9 +1,9 @@
 import pytest
 import torch
-from lib.nn import sources
-from lib.nn.sources.base import LayerDefinition
+from lib import sources
+from lib.sources.base import LayerDefinition
 from lib.nn.topological.layer import Layer
-from lib.nn.topological.settings import Settings
+from lib.nn.definitions.settings import Settings
 from lib.tests.utils.neuron_factory import NeuronTestFactory
 from lib.tests.utils.test_params import SETTINGS_PARAMS
 

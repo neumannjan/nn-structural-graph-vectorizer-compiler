@@ -10,7 +10,7 @@ from neuralogic.core.template import Iterable
 from tqdm.auto import tqdm
 
 from lib.nn.definitions.ops import AggregationDef, TransformationDef
-from lib.nn.sources.base import LayerDefinition, LayerType
+from lib.sources.base import LayerDefinition, LayerType
 from lib.other_utils import camel_to_snake
 
 

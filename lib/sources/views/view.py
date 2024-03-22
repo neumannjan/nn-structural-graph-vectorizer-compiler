@@ -1,12 +1,12 @@
 import functools
 from typing import Type
 
-from lib.nn.sources.base import Network
-from lib.nn.sources.minimal_api.base import MinimalAPINetwork
-from lib.nn.sources.minimal_api.network_and_ordinals import MinimalAPINetworkAndOrdinals
-from lib.nn.sources.minimal_api.ordinals import MinimalAPIOrdinals
-from lib.nn.sources.minimal_api_bridge import NetworkImpl
-from lib.nn.sources.minimal_api_bridge_reverse import MinimalAPINetworkFromNetwork, MinimalAPIOrdinalsFromNetwork
+from lib.sources.base import Network
+from lib.sources.minimal_api.base import MinimalAPINetwork
+from lib.sources.minimal_api.network_and_ordinals import MinimalAPINetworkAndOrdinals
+from lib.sources.minimal_api.ordinals import MinimalAPIOrdinals
+from lib.sources.minimal_api_bridge import NetworkImpl
+from lib.sources.minimal_api_bridge_reverse import MinimalAPINetworkFromNetwork, MinimalAPIOrdinalsFromNetwork
 from lib.utils import ExtendsDynamicError, InheritDynamic, extends_dynamic
 
 

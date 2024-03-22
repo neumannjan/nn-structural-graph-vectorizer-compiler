@@ -7,7 +7,7 @@ from torch_geometric.datasets import TUDataset
 
 from lib.datasets.dataset import BuiltDatasetInstance, MyDataset
 from lib.datasets.pyg.tu_molecular import build_pyg_module
-from lib.nn.topological.settings import Settings
+from lib.nn.definitions.settings import Settings
 
 
 class _TemplateProtocol(Protocol):

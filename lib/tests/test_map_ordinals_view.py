@@ -1,5 +1,5 @@
-from lib.nn.sources.base import LayerDefinition, LayerOrdinal, Network
-from lib.nn.sources.views.map_ordinals import MapOrdinalsView
+from lib.sources.base import LayerDefinition, LayerOrdinal, Network
+from lib.sources.views.map_ordinals import MapOrdinalsView
 from lib.tests.utils.network_mock import generate_example_network
 
 

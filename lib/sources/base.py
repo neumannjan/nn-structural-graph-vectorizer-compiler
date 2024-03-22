@@ -18,8 +18,8 @@ import torch
 from lib.nn.definitions.ops import AggregationDef, TransformationDef
 
 if TYPE_CHECKING:
-    from lib.nn.sources.minimal_api.base import MinimalAPINetwork
-    from lib.nn.sources.minimal_api.ordinals import MinimalAPIOrdinals
+    from lib.sources.minimal_api.base import MinimalAPINetwork
+    from lib.sources.minimal_api.ordinals import MinimalAPIOrdinals
 
 LayerType = Literal["FactLayer", "WeightedAtomLayer", "WeightedRuleLayer", "AtomLayer", "RuleLayer", "AggregationLayer"]
 

@@ -2,8 +2,8 @@ import itertools
 from abc import abstractmethod
 from typing import Iterator, Protocol, Sequence
 
-from lib.nn.sources.base import LayerDefinition, LayerType, get_layer_id
-from lib.nn.sources.minimal_api.dict import Neuron
+from lib.sources.base import LayerDefinition, LayerType, get_layer_id
+from lib.sources.minimal_api.dict import Neuron
 
 
 class _BaseTestNeuronFactory:

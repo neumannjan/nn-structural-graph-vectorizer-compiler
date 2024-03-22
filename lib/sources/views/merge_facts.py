@@ -1,8 +1,8 @@
 import hashlib
 from typing import Any, Mapping, OrderedDict, Sequence
 
-from lib.nn.sources.base import LayerOrdinal
-from lib.nn.sources.views.view import (
+from lib.sources.base import LayerOrdinal
+from lib.sources.views.view import (
     View,
     ViewBasis,
     view,

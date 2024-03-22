@@ -1,4 +1,5 @@
 /imgs/
+.idea/
 .ipynb_checkpoints/
 /target/
 __pycache__/

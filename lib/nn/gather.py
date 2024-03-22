@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from torch.jit import unused
 
-from lib.nn.sources.base import LayerOrdinal
+from lib.sources.base import LayerOrdinal
 from lib.nn.utils import Sequential, ShapeTransformable, SingleLayerOperation, broadcast_shapes_compiled
 from lib.utils import detect_repeating_K_sequence_in_list, detect_repeating_sequence_in_list
 

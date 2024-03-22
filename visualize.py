@@ -7,7 +7,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import networkx as nx
 from lib.datasets import MyMutagenesis
-from lib.nn.topological.settings import Settings
+from lib.nn.definitions.settings import Settings
 from neuralogic.core.builder.builder import NeuralSample
 
 

@@ -2,14 +2,14 @@ from typing import Mapping, Sequence
 
 from neuralogic.core.builder.builder import NeuralSample
 
-from lib.nn.sources.base import LayerDefinition
-from lib.nn.sources.minimal_api.base import MinimalAPINetwork
-from lib.nn.sources.minimal_api.dict import MinimalAPIDictNetwork, Neuron
-from lib.nn.sources.minimal_api.internal.java import JavaNeuron
-from lib.nn.sources.minimal_api.java import MinimalAPIJavaNetwork
-from lib.nn.sources.minimal_api.ordinals import MinimalAPIOrdinals
-from lib.nn.sources.minimal_api_bridge import NetworkImpl
-from lib.nn.topological.settings import Settings
+from lib.sources.base import LayerDefinition
+from lib.sources.minimal_api.base import MinimalAPINetwork
+from lib.sources.minimal_api.dict import MinimalAPIDictNetwork, Neuron
+from lib.sources.minimal_api.internal.java import JavaNeuron
+from lib.sources.minimal_api.java import MinimalAPIJavaNetwork
+from lib.sources.minimal_api.ordinals import MinimalAPIOrdinals
+from lib.sources.minimal_api_bridge import NetworkImpl
+from lib.nn.definitions.settings import Settings
 
 
 def from_minimal_api(minimal_api: MinimalAPINetwork, custom_ordinals: MinimalAPIOrdinals | None = None):

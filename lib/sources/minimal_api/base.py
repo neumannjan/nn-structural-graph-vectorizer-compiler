@@ -5,7 +5,7 @@ import numpy as np
 import torch
 
 from lib.nn.definitions.ops import AggregationDef, TransformationDef
-from lib.nn.sources.base import LayerDefinition, WeightDefinition
+from lib.sources.base import LayerDefinition, WeightDefinition
 
 TNeurons = TypeVar("TNeurons")
 

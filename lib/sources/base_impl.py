@@ -1,4 +1,4 @@
-from lib.nn.sources.base import (
+from lib.sources.base import (
     LayerDefinitions,
     LayerNeurons,
     Network,

@@ -1,8 +1,8 @@
 from typing import Mapping
 
-from lib.nn.sources.base import LayerOrdinal, Network
-from lib.nn.sources.minimal_api.ordinals import MinimalAPIOrdinals
-from lib.nn.sources.views.view import OrdinalsViewBasis, View, ordinals_view_basis, view
+from lib.sources.base import LayerOrdinal, Network
+from lib.sources.minimal_api.ordinals import MinimalAPIOrdinals
+from lib.sources.views.view import OrdinalsViewBasis, View, ordinals_view_basis, view
 from lib.utils import MapMapping
 
 

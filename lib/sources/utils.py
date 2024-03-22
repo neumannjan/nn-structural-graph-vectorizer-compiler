@@ -1,7 +1,7 @@
 from typing import Iterable, Iterator, OrderedDict
 
-from lib.nn.sources.base import LayerDefinition
-from lib.nn.sources.base_impl import BaseLayerDefinitions
+from lib.sources.base import LayerDefinition
+from lib.sources.base_impl import BaseLayerDefinitions
 
 
 class LayerDefinitionsImpl(BaseLayerDefinitions):

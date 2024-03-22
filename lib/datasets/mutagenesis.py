@@ -5,7 +5,7 @@ from typing import Literal
 from neuralogic.core import R, Template, V
 from neuralogic.dataset.file import FileDataset
 
-from lib.nn.topological.settings import Settings
+from lib.nn.definitions.settings import Settings
 
 from .dataset import MyDataset
 

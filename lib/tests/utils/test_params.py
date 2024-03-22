@@ -1,6 +1,6 @@
 import os
 
-from lib.nn.topological.settings import Settings
+from lib.nn.definitions.settings import Settings
 from torch.backends.mps import is_available as is_mps_available
 from torch.cuda import is_available as is_cuda_available
 

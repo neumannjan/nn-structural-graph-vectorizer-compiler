@@ -14,7 +14,7 @@ from lib.nn.gather import (
     build_optimal_gather,
     build_optimal_multi_layer_gather,
 )
-from lib.nn.sources.base import LayerOrdinal, Network
+from lib.sources.base import LayerOrdinal, Network
 from lib.tests.utils.network_mock import generate_example_network
 from lib.utils import atleast_3d_rev
 
