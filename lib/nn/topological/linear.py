@@ -8,16 +8,16 @@ from torch.jit import unused
 from lib.nn.gather import (
     GatherModuleLike,
     NoopGather,
-    Periodic,
     build_optimal_gather_and_reshape,
     build_optimal_multi_layer_gather_and_reshape,
-    get_optimal_gather_for_period,
+    get_optimal_gather_for_periodic_gather,
 )
 from lib.nn.sources.base import LayerOrdinal, Network, Neurons, WeightDefinition
+from lib.nn.utils import Sequential, ShapeTransformable
 from lib.nn.weight import WeightModuleLike, create_weights_and_gather
 
 
-class Linear(torch.nn.Module, Periodic):
+class Linear(torch.nn.Module, ShapeTransformable):
     def __init__(
         self,
         inputs_gather: GatherModuleLike,
@@ -28,26 +28,16 @@ class Linear(torch.nn.Module, Periodic):
         self.weight = weight
 
     @unused
-    def get_period(self) -> int | None:
-        if isinstance(self.gather, Periodic) and isinstance(self.weight, Periodic):
-            p1, p2 = self.gather.get_period(), self.weight.get_period()
-            if p1 == p2:
-                return p1
-            else:
-                warnings.warn(
-                    f"Unexpected situation in linear layer: Gather has period {p1} and Weight has period {p2}.\n"
-                    f"Gather:\n{self.gather}\n\nWeight:\n{self.weight}\n"
-                )
+    def compute_output_shape(self, layer_shapes: dict[str, list[int]]) -> list[int]:
+        weight_shape = self.weight.compute_output_shape()
+        gather_shape = self.gather.compute_output_shape(layer_shapes)
+        assert weight_shape[-1] == gather_shape[-2]
 
-        return None
+        begin_shape = [max(a, b) for a, b in zip(weight_shape[:-2], gather_shape[:-2])]
+        return [*begin_shape, weight_shape[-2], gather_shape[-1]]
 
-    @unused
-    @property
-    def total_items(self) -> int:
-        return max(self.gather.total_items, self.weight.total_items)
-
-    def unwrap_final_gather(self) -> None:
-        return None
+    def unwrap_final_gather(self, shape_like) -> tuple["Linear", dict[int, int]]:
+        return self, {}
 
     def forward(self, layer_values: dict[str, torch.Tensor]):
         input_values = self.gather(layer_values)
@@ -56,18 +46,9 @@ class Linear(torch.nn.Module, Periodic):
         return y
 
 
-class ReturnWeights(torch.nn.Module):
-    def __init__(self, weight: torch.nn.Module) -> None:
-        super().__init__()
-        self.weight = weight
-
-    def forward(self, layer_values: dict[str, torch.Tensor]):
-        return self.weight()
-
-
 def _build_optimal_linear(
     inputs_ordinals: list[LayerOrdinal],
-    layer_sizes: Mapping[int, int],
+    layer_shapes: Mapping[str, list[int]],
     weight_definitions: Collection[WeightDefinition],
     period: int | None,
     group_learnable_weight_parameters: bool,
@@ -77,7 +58,7 @@ def _build_optimal_linear(
     # will not reshape if period is None
     gather = build_optimal_multi_layer_gather_and_reshape(
         inputs_ordinals,
-        layer_sizes,
+        layer_shapes,
         use_unique_pre_gathers=use_unique_pre_gathers,
         period=period,
     )
@@ -90,8 +71,8 @@ def _build_optimal_linear(
 
     if period is not None and optimize_linear_gathers:
         # can we simplify?
-        gather_optimal = get_optimal_gather_for_period(gather, period=period)
-        weight_optimal = get_optimal_gather_for_period(weight, period=period)
+        gather_optimal = get_optimal_gather_for_periodic_gather(gather, period=period, input_shape_like=layer_shapes)
+        weight_optimal = get_optimal_gather_for_periodic_gather(weight, period=period, input_shape_like=None)
 
         can_simplify_inputs = gather_optimal != gather
         can_simplify_weight = weight_optimal != weight
@@ -121,14 +102,16 @@ class LinearAndGather(torch.nn.Module, GatherModuleLike):
         self.gather = gather
 
     @unused
-    @property
-    def total_items(self) -> int:
-        return self.gather.total_items
+    def compute_output_shape(self, layer_shapes: dict[str, list[int]]) -> list[int]:
+        shape = self.linear.compute_output_shape(layer_shapes)
+        shape = self.gather.compute_output_shape(shape)
+        return shape
 
     @unused
-    @property
-    def optimal_period(self) -> int:
-        return self.gather.optimal_period
+    def compute_optimal_shape(self, layer_shapes: dict[str, list[int]]) -> list[int]:
+        shape = self.linear.compute_output_shape(layer_shapes)
+        shape = self.gather.compute_optimal_shape(shape)
+        return shape
 
     @unused
     @property
@@ -136,15 +119,8 @@ class LinearAndGather(torch.nn.Module, GatherModuleLike):
         return self.gather.is_optimal
 
     @unused
-    def get_period(self) -> int | None:
-        return self.gather.get_period() or self.linear.get_period()
-
-    @unused
     def get_optimal(self):
         gather = self.gather.get_optimal()
-
-        if isinstance(gather, NoopGather):
-            return self.linear
 
         if gather == self.gather:
             return self
@@ -152,16 +128,15 @@ class LinearAndGather(torch.nn.Module, GatherModuleLike):
         return LinearAndGather(self.linear, gather)
 
     @unused
-    def unwrap_final_gather(self) -> tuple[torch.nn.Module, dict[int, int]] | None:
-        tpl = self.gather.unwrap_final_gather()
-        if tpl is None:
-            return None
-
-        gather2, idx_map = tpl
+    def unwrap_final_gather(self, shape) -> tuple[ShapeTransformable, dict[int, int]]:
+        gather2, idx_map = self.gather.unwrap_final_gather(shape)
         if isinstance(gather2, NoopGather):
             return self.linear, idx_map
-        else:
-            return LinearAndGather(self.linear, gather2), idx_map
+
+        if gather2 == self.gather:
+            return self, {}
+
+        return Sequential([self.linear, gather2]), idx_map
 
     def forward(self, layer_values: dict[str, torch.Tensor]):
         y = self.linear(layer_values)
@@ -180,7 +155,7 @@ def _count_unique(inputs_ordinals: list[LayerOrdinal], weight_definitions: Colle
 
 def _build_optimal_linear_unique_and_gather(
     inputs_ordinals: list[LayerOrdinal],
-    layer_sizes: Mapping[int, int],
+    layer_shapes: Mapping[str, list[int]],
     weight_definitions: Collection[WeightDefinition],
     period: int | None,
     group_learnable_weight_parameters: bool,
@@ -195,7 +170,7 @@ def _build_optimal_linear_unique_and_gather(
     if n_unique == n_total:
         return _build_optimal_linear(
             inputs_ordinals=inputs_ordinals,
-            layer_sizes=layer_sizes,
+            layer_shapes=layer_shapes,
             weight_definitions=weight_definitions,
             period=period,
             group_learnable_weight_parameters=group_learnable_weight_parameters,
@@ -212,7 +187,7 @@ def _build_optimal_linear_unique_and_gather(
 
     linear_unique = _build_optimal_linear(
         inputs_ordinals=inputs_ordinals_unique,
-        layer_sizes=layer_sizes,
+        layer_shapes=layer_shapes,
         weight_definitions=weight_definitions_unique,
         period=None,
         group_learnable_weight_parameters=group_learnable_weight_parameters,
@@ -231,7 +206,7 @@ def _build_optimal_linear_unique_and_gather(
 def build_optimal_linear(
     network: Network,
     neurons: Neurons,
-    layer_sizes: Mapping[int, int],
+    layer_shapes: Mapping[str, list[int]],
     period: int | None,
     group_learnable_weight_parameters: bool,
     optimize_linear_gathers: bool,
@@ -246,7 +221,7 @@ def build_optimal_linear(
         # will not reshape if period is None
         return build_optimal_multi_layer_gather_and_reshape(
             inputs_ordinals,
-            layer_sizes,
+            layer_shapes,
             use_unique_pre_gathers=use_unique_pre_gathers,
             period=period,
         )
@@ -273,7 +248,7 @@ def build_optimal_linear(
 
     return _build_optimal_linear_unique_and_gather(
         inputs_ordinals=inputs_ordinals,
-        layer_sizes=layer_sizes,
+        layer_shapes=layer_shapes,
         weight_definitions=weight_definitions,
         period=period,
         group_learnable_weight_parameters=group_learnable_weight_parameters,

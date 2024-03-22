@@ -1,9 +1,8 @@
 from collections.abc import Iterable
-from typing import Collection, Mapping, TypeVar
+from typing import Collection, Mapping, TypeGuard, TypeVar
 
 import torch
 from torch.jit import unused
-from torch.nn import Identity
 
 from lib.nn.aggregation.fixed_count import FixedCountAggregation, build_fixed_count_aggregate
 from lib.nn.aggregation.universal import ScatterAggregate, ViewAndAggregate, build_optimal_reshape_aggregate
@@ -12,6 +11,7 @@ from lib.nn.sources.base import LayerNeurons, LayerOrdinal, Network
 from lib.nn.topological.linear import Linear, build_optimal_linear
 from lib.nn.topological.settings import Settings
 from lib.nn.transformation import build_transformation
+from lib.nn.utils import Identity, ShapeTransformable
 from lib.utils import addindent, atleast_3d_rev, head_and_rest
 
 _T = TypeVar("_T")
@@ -80,22 +80,25 @@ class FactLayer(torch.nn.Module):
         return layer_values
 
     @unused
-    @property
-    def total_items(self) -> int:
-        return self.value.shape[0]
+    def compute_output_shape(self, layer_shapes: dict[str, list[int]]) -> list[int]:
+        return list(self.value.shape)
 
     @unused
-    def unwrap_final_gather(self) -> None:
-        return None
+    def unwrap_final_gather(self, shape) -> tuple["FactLayer", dict[LayerOrdinal, LayerOrdinal]]:
+        return self, {}
 
 
-class Layer(torch.nn.Module):
+def _is_gather_like(x) -> TypeGuard[GatherModuleLike]:
+    return hasattr(x, "unwrap_final_gather")
+
+
+class Layer(torch.nn.Module, ShapeTransformable):
     @staticmethod
     def from_network(
         out_to: int,
         network: Network,
         neurons: LayerNeurons,
-        layer_sizes: Mapping[int, int],
+        layer_shapes: Mapping[str, list[int]],
         settings: Settings,
     ):
         if neurons.layer.type == "FactLayer":
@@ -111,7 +114,7 @@ class Layer(torch.nn.Module):
         linear = build_optimal_linear(
             network,
             neurons,
-            layer_sizes=layer_sizes,
+            layer_shapes=layer_shapes,
             period=period if period != 1 else None,  # do not reshape if period == 1
             group_learnable_weight_parameters=settings.group_learnable_weight_parameters,
             optimize_linear_gathers=settings.optimize_linear_gathers,
@@ -128,7 +131,6 @@ class Layer(torch.nn.Module):
 
             if period is None:
                 # uneven period
-                assert linear.get_period() is None
                 counts = torch.tensor(list(neurons.input_lengths), dtype=torch.int32)
 
                 aggregate = build_optimal_reshape_aggregate(
@@ -154,7 +156,7 @@ class Layer(torch.nn.Module):
     def __init__(
         self,
         out_to: int,
-        linear: GatherModuleLike | Linear,
+        linear: ShapeTransformable | Linear,
         aggregate: Identity | ViewAndAggregate | ScatterAggregate | FixedCountAggregation,
         transform: torch.nn.Module,
     ):
@@ -165,20 +167,26 @@ class Layer(torch.nn.Module):
         self.transform = transform
 
     @unused
-    @property
-    def total_items(self) -> int:
-        return self.linear.total_items
+    def compute_output_shape(self, layer_shapes: dict[str, list[int]]) -> list[int]:
+        shape = self.linear.compute_output_shape(layer_shapes)
+        shape = self.aggregate.compute_output_shape(shape)
+        return shape
 
     @unused
-    def unwrap_final_gather(self) -> tuple["Layer", dict[LayerOrdinal, LayerOrdinal]] | None:
+    def unwrap_final_gather(
+        self, layer_shapes: dict[str, list[int]]
+    ) -> tuple["Layer", dict[LayerOrdinal, LayerOrdinal]]:
         if not isinstance(self.aggregate, Identity):
-            return None
+            return self, {}
 
-        tpl = self.linear.unwrap_final_gather()
-        if tpl is None:
-            return None
+        if not _is_gather_like(self.linear):
+            return self, {}
 
-        mdl, idx_map = tpl
+        mdl, idx_map = self.linear.unwrap_final_gather(layer_shapes)
+        if mdl == self.linear:
+            assert len(idx_map) == 0
+            return self, {}
+
         new_layer = Layer(
             out_to=self.out_to,
             linear=mdl,

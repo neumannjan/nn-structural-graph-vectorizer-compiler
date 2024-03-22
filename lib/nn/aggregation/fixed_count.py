@@ -3,17 +3,23 @@ from typing import Type
 
 import torch
 import torch.nn.functional as F
+from torch.jit import unused
 
 from lib.nn.definitions.ops import AggregationDef
+from lib.nn.utils import ShapeTransformable
 
 
-class FixedCountAggregation(torch.nn.Module):
+class FixedCountAggregation(torch.nn.Module, ShapeTransformable):
     def __init__(self, dim: int = 1) -> None:
         super().__init__()
         self.dim = dim
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError()
+
+    @unused
+    def compute_output_shape(self, shape: list[int]) -> list[int]:
+        return [shape[0], *shape[2:]]
 
     def extra_repr(self) -> str:
         return f"dim={self.dim}"

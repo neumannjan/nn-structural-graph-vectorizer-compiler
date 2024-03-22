@@ -88,7 +88,7 @@ def test_weighted_atom_layer(indices: Sequence[int], settings: Settings):
         out_to=13,
         network=network,
         neurons=network[13],
-        layer_sizes={16: len(inputs["16"])},
+        layer_shapes={16: len(inputs["16"])},
         settings=settings,
     )
 

@@ -1,6 +1,5 @@
 import itertools
 
-import jpype
 import pytest
 import torch
 from lib.benchmarks.runnables.neuralogic_vectorized import NeuralogicVectorizedTorchRunnable

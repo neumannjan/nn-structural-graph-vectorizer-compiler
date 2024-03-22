@@ -1,14 +1,17 @@
 from typing import List, Protocol, Union
 
 import torch
+from torch.jit import unused
 
 from lib.nn.aggregation.fixed_count import FixedCountAggregation, build_fixed_count_aggregate
 from lib.nn.aggregation.scatter import build_optimal_scatter_aggregate
 from lib.nn.definitions.ops import AggregationDef
 from lib.nn.gather import ViewWithPeriod
+from lib.nn.scatter import Scatter, SegmentCOO, SegmentCSR
+from lib.nn.utils import ShapeTransformable
 
 
-class ReshapeAggregateLike(Protocol):
+class ReshapeAggregateLike(ShapeTransformable, Protocol):
     @property
     def is_matching_dimension(self) -> bool:
         ...
@@ -33,6 +36,12 @@ class ViewAndAggregate(torch.nn.Module, ReshapeAggregateModuleLike):
         self.reshape = view
         self.aggregate = aggregate
 
+    @unused
+    def compute_output_shape(self, shape_like) -> list[int]:
+        shape_like = self.reshape.compute_output_shape(shape_like)
+        shape_like = self.aggregate.compute_output_shape(shape_like)
+        return shape_like
+
     @property
     def is_matching_dimension(self) -> bool:
         return True
@@ -50,9 +59,13 @@ class ViewAndAggregate(torch.nn.Module, ReshapeAggregateModuleLike):
 
 
 class ScatterAggregate(torch.nn.Module, ReshapeAggregateModuleLike):
-    def __init__(self, scatter: torch.nn.Module) -> None:
+    def __init__(self, scatter: Scatter | SegmentCOO | SegmentCSR) -> None:
         super().__init__()
         self.delegate = scatter
+
+    @unused
+    def compute_output_shape(self, shape_like) -> list[int]:
+        return self.delegate.compute_output_shape(shape_like)
 
     def forward(self, x):
         return self.delegate(x)
@@ -89,7 +102,7 @@ def build_optimal_reshape_aggregate(
     if (counts[1:] == counts[0]).all():
         period = int(counts[0].item())
         return ViewAndAggregate(
-            view=ViewWithPeriod(input_length=period * counts.shape[0], period=period),
+            view=ViewWithPeriod(period=period),
             aggregate=build_fixed_count_aggregate(aggregation=aggregation, dim=1),
         )
 

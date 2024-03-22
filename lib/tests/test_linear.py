@@ -69,7 +69,7 @@ FLAGS_PARAMETERS = [Flags(a, b, c) for a, b, c in itertools.product([False, True
 
 def build_linear(sample: Network, period: int | None, flags: Flags):
     layer_sizes = {l.id: len(ns) for l, ns in sample.items()}
-    return build_optimal_linear(network=sample, neurons=sample[13], layer_sizes=layer_sizes, period=period, **asdict(flags))
+    return build_optimal_linear(network=sample, neurons=sample[13], layer_shapes=layer_sizes, period=period, **asdict(flags))
 
 
 @dataclass

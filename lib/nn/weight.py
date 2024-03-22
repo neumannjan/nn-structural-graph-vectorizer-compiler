@@ -1,5 +1,5 @@
 import itertools
-from typing import Collection, Iterable, Protocol, Sequence
+from typing import Collection, Generic, Iterable, Protocol, Sequence, TypeVar
 
 import numpy as np
 import torch
@@ -16,6 +16,7 @@ from lib.nn.gather import (
     build_optimal_gather_and_reshape,
 )
 from lib.nn.sources.base import WeightDefinition
+from lib.nn.utils import ShapeTransformable
 from lib.utils import detect_repeating_K_sequence_in_list
 
 
@@ -79,10 +80,6 @@ class Weight(torch.nn.Module, WeightLike, WeightModuleLike):
             raise ValueError(f"For weight that is {lrn}, it must hold that requires_grad == {learnable}")
 
     @unused
-    def get_period(self) -> int | None:
-        return None
-
-    @unused
     def apply_to(self, to: torch.Tensor) -> torch.Tensor:
         return self.weight @ to
 
@@ -118,14 +115,12 @@ class Weight(torch.nn.Module, WeightLike, WeightModuleLike):
         return self.weight
 
     @unused
-    @property
-    def total_items(self) -> int:
-        return 1 if not self.is_multiple else self.shape[0]
+    def compute_output_shape(self) -> list[int]:
+        return list(self.shape)
 
     @unused
-    @property
-    def optimal_period(self) -> int:
-        return self.total_items
+    def compute_optimal_shape(self) -> list[int]:
+        return self.compute_output_shape()
 
     @unused
     @property
@@ -137,8 +132,8 @@ class Weight(torch.nn.Module, WeightLike, WeightModuleLike):
         return self
 
     @unused
-    def unwrap_final_gather(self) -> tuple[torch.nn.Module, dict[int, int]] | None:
-        return None
+    def unwrap_final_gather(self) -> tuple[ShapeTransformable, dict[int, int]]:
+        return self, {}
 
     @unused
     @property
@@ -373,10 +368,6 @@ class StackWeights(torch.nn.Module, WeightModuleLike):
         super().__init__()
         self.weights = torch.nn.ParameterList([w for w in weights_unsqueezed])
 
-    @unused
-    def get_period(self) -> int | None:
-        return None
-
     def forward(self) -> torch.Tensor:
         return torch.concatenate(tuple(self.weights))
 
@@ -396,14 +387,12 @@ class StackWeights(torch.nn.Module, WeightModuleLike):
         return True
 
     @unused
-    @property
-    def total_items(self) -> int:
-        return self.shape[0]
+    def compute_output_shape(self) -> list[int]:
+        return list(self.shape)
 
     @unused
-    @property
-    def optimal_period(self) -> int:
-        return self.shape[0]
+    def compute_optimal_shape(self) -> list[int]:
+        return self.compute_output_shape()
 
     @unused
     @property
@@ -415,8 +404,8 @@ class StackWeights(torch.nn.Module, WeightModuleLike):
         return self
 
     @unused
-    def unwrap_final_gather(self) -> tuple[torch.nn.Module, dict[int, int]] | None:
-        return None
+    def unwrap_final_gather(self) -> tuple[ShapeTransformable, dict[int, int]]:
+        return self, {}
 
 
 class ExpandWeight(torch.nn.Module, WeightModuleLike):
@@ -424,10 +413,6 @@ class ExpandWeight(torch.nn.Module, WeightModuleLike):
         super().__init__()
         self.weight = weight
         self._shape = shape if shape_single else shape[1:]
-
-    @unused
-    def get_period(self) -> int | None:
-        return None
 
     def forward(self) -> torch.Tensor:
         return self.weight.expand_to(self._shape, shape_single=True)
@@ -449,14 +434,13 @@ class ExpandWeight(torch.nn.Module, WeightModuleLike):
     def is_multiple(self) -> bool:
         return self.weight.is_multiple
 
-    @property
-    def total_items(self) -> int:
-        return self.shape[0]
+    @unused
+    def compute_output_shape(self) -> list[int]:
+        return list(self.shape)
 
     @unused
-    @property
-    def optimal_period(self) -> int:
-        return self.shape[0]
+    def compute_optimal_shape(self) -> list[int]:
+        return self.compute_output_shape()
 
     @unused
     @property
@@ -468,8 +452,8 @@ class ExpandWeight(torch.nn.Module, WeightModuleLike):
         return self
 
     @unused
-    def unwrap_final_gather(self) -> tuple[torch.nn.Module, dict[int, int]] | None:
-        return None
+    def unwrap_final_gather(self) -> tuple[ShapeTransformable, dict[int, int]]:
+        return self, {}
 
 
 class StackWeightModules(torch.nn.Module, WeightModuleLike):
@@ -487,10 +471,6 @@ class StackWeightModules(torch.nn.Module, WeightModuleLike):
                 the_modules.append(module)
 
         self.the_modules = torch.nn.ModuleList(the_modules)
-
-    @unused
-    def get_period(self) -> int | None:
-        return None
 
     @unused
     @property
@@ -512,14 +492,12 @@ class StackWeightModules(torch.nn.Module, WeightModuleLike):
         return True
 
     @unused
-    @property
-    def total_items(self) -> int:
-        return self.shape[0]
+    def compute_output_shape(self) -> list[int]:
+        return list(self.shape)
 
     @unused
-    @property
-    def optimal_period(self) -> int:
-        return self.shape[0]
+    def compute_optimal_shape(self) -> list[int]:
+        return self.compute_output_shape()
 
     @unused
     @property
@@ -531,8 +509,8 @@ class StackWeightModules(torch.nn.Module, WeightModuleLike):
         return self
 
     @unused
-    def unwrap_final_gather(self) -> tuple[torch.nn.Module, dict[int, int]] | None:
-        return None
+    def unwrap_final_gather(self) -> tuple[ShapeTransformable, dict[int, int]]:
+        return self, {}
 
     def forward(self) -> torch.Tensor:
         modules = [m() for m in self.the_modules]
@@ -636,62 +614,68 @@ def _create_weights_set(weights: Iterable[WeightDefinition], out_map: dict[int, 
             weights_out.append(weight)
 
 
-class WeightsGathered(torch.nn.Module, GatherModuleLike):
-    def __init__(self, weight: WeightModuleLike, gather: GatherModuleLike) -> None:
+_TMap = TypeVar('_TMap', bound=ShapeTransformable)
+
+
+class _WeightsMapped(torch.nn.Module, Generic[_TMap]):
+    def __init__(self, weight: WeightModuleLike | GatherModuleLike, map: _TMap) -> None:
         super().__init__()
         self.weight = weight
-        self.gather = gather
+        self.map = map
 
     @unused
-    def get_period(self) -> int | None:
-        return self.gather.get_period() or self.weight.get_period()
+    def compute_output_shape(self) -> list[int]:
+        shape = self.weight.compute_output_shape()
+        shape = self.map.compute_output_shape(shape)
+        return shape
+
+    def forward(self):
+        w = self.weight()
+        w = self.map(w)
+        return w
+
+
+class WeightsMapped(_WeightsMapped[ShapeTransformable], ShapeTransformable):
+    pass
+
+
+class WeightsGathered(_WeightsMapped[GatherModuleLike], GatherModuleLike):
+    def __init__(self, weight: WeightModuleLike | GatherModuleLike, gather: GatherModuleLike) -> None:
+        super().__init__(weight, gather)
 
     @unused
-    @property
-    def total_items(self) -> int:
-        return self.gather.total_items
-
-    @unused
-    @property
-    def optimal_period(self) -> int:
-        return self.gather.optimal_period
+    def compute_optimal_shape(self) -> list[int]:
+        shape = self.weight.compute_output_shape()
+        shape = self.map.compute_optimal_shape(shape)
+        return shape
 
     @unused
     @property
     def is_optimal(self) -> bool:
-        return self.gather.is_optimal and not isinstance(self.gather, NoopGather)
+        return self.map.is_optimal
 
     @unused
     def get_optimal(self):
-        gather_optimal = self.gather
+        gather_optimal = self.map
 
         if not gather_optimal.is_optimal:
             gather_optimal = gather_optimal.get_optimal()
 
-        if isinstance(gather_optimal, NoopGather):
-            return self.weight
-
-        if gather_optimal == self.gather:
+        if gather_optimal == self.map:
             return self
 
-        return WeightsGathered(weight=self.weight, gather=gather_optimal)
+        return WeightsGathered(self.weight, gather_optimal)
 
     @unused
-    def unwrap_final_gather(self) -> tuple[GatherModuleLike, dict[int, int]] | None:
-        tpl = self.gather.unwrap_final_gather()
-        if tpl is None:
-            return None
-
-        gather2, idx_map = tpl
-        if isinstance(gather2, NoopGather):
+    def unwrap_final_gather(self) -> tuple[ShapeTransformable, dict[int, int]]:
+        mdl, idx_map = self.map.unwrap_final_gather(self.weight.compute_output_shape())
+        if isinstance(mdl, NoopGather):
             return self.weight, idx_map
-        else:
-            return WeightsGathered(self.weight, gather2), idx_map
 
-    def forward(self):
-        w = self.weight()
-        w = self.gather(w)
-        return w
+        if mdl == self.map:
+            return self, {}
+
+        return WeightsMapped(self.weight, mdl), idx_map
 
 
 def _create_weights_using_packing_strategy(
@@ -732,7 +716,7 @@ def _create_weights_using_packing_strategy(
     else:
         gather = build_optimal_gather_and_reshape(weight_idxs, period=period)
 
-    if not (weight.total_items == 1 and gather.total_items == 1):
+    if not (weight.shape[0] == 1 and gather.compute_output_shape(list(weight.shape))[0] == 1):
         weight = WeightsGathered(weight, gather)
 
     return weight
@@ -814,14 +798,13 @@ def create_weights_and_gather(
     if n_orig_weight_definitions > len(weight_definitions):
         # TODO weight might already be gathered. We don't want two consecutive gathers due to unpacking, though.
         gather = Repeat(
-            input_length=weight.total_items,
             repeats=-(-n_orig_weight_definitions // len(weight_definitions)),
             total_length=n_orig_weight_definitions,
         )
 
     if period is not None:
         # TODO weight might already be gathered. We don't want two consecutive gathers due to unpacking, though.
-        view = ViewWithPeriod(input_length=weight.total_items, period=period)
+        view = ViewWithPeriod(period=period)
 
         if gather is not None:
             gather = GatherAndView(gather, view)

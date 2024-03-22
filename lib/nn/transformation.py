@@ -3,6 +3,7 @@ from typing import Callable
 import torch
 
 from lib.nn.definitions.ops import TransformationDef
+from lib.nn.utils import Identity
 
 
 class Sqrt(torch.nn.Module):
@@ -26,8 +27,8 @@ class Exp(torch.nn.Module):
 
 
 _MAPPING: dict[TransformationDef | None, Callable[[], torch.nn.Module]] = {
-    None: torch.nn.Identity,
-    "identity": torch.nn.Identity,
+    None: Identity,
+    "identity": Identity,
     "tanh": torch.nn.Tanh,
     "square_root": Sqrt,
     "signum": Signum,

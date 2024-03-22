@@ -2,7 +2,10 @@ from typing import Literal, Sequence
 
 import numpy as np
 import torch
+from torch.jit import unused
 from torch_scatter import scatter, segment_coo, segment_csr
+
+from lib.nn.utils import ShapeTransformable
 
 ReductionDef = Literal[
     "mean",
@@ -33,11 +36,15 @@ def _to_strict(reduce: ReductionDef) -> _StrictReductionRef:
     return _TO_STRICT[reduce]
 
 
-class _ScatterBase(torch.nn.Module):
+class _ScatterBase(torch.nn.Module, ShapeTransformable):
     def __init__(self, index: torch.Tensor, reduce: ReductionDef) -> None:
         super().__init__()
         self.index = torch.nn.Parameter(index, requires_grad=False)
         self.reduce = _to_strict(reduce)
+
+    @unused
+    def compute_output_shape(self, shape: list[int]) -> list[int]:
+        return [int(self.index.cpu().max().item()) + 1, *shape[1:]]
 
     def extra_repr(self) -> str:
         return f"reduce={self.reduce}"

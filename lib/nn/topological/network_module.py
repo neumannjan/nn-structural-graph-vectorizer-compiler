@@ -35,21 +35,18 @@ class NetworkModule(torch.nn.Module):
             network = MergeFactsView(network)
 
         layers = network.layers.as_list()
-        layer_sizes: dict[int, int] = {}
+        layer_shapes: dict[str, list[int]] = {}
 
         for l in tqdm(layers):
             neurons = network[l]
-            layer_module = Layer.from_network(l.id, network, neurons, layer_sizes, settings)
+            layer_module = Layer.from_network(l.id, network, neurons, layer_shapes, settings)
 
             if settings.optimize_tail_gathers and l != layers[-1]:
-                tpl = layer_module.unwrap_final_gather()
-
-                if tpl is not None:
-                    layer_module2, ord_map = tpl
-                    layer_module = layer_module2
+                layer_module, ord_map = layer_module.unwrap_final_gather(layer_shapes)
+                if len(ord_map) > 0:
                     network = MapOrdinalsView(network, ord_map)
 
-            layer_sizes[l.id] = layer_module.total_items
+            layer_shapes[str(l.id)] = layer_module.compute_output_shape(layer_shapes)
             model.append(layer_module)
 
         self.model = model

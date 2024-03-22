@@ -60,14 +60,14 @@ def test_gather_module(
     execution_number: int,
 ):
     network = generate_example_network(inputs_from_previous_layer_only=inputs_from_previous_layer_only)
-    layer_sizes = {l.id: len(ns) for l, ns in network.items()}
+    layer_shapes = {str(l.id): [len(ns), 1] for l, ns in network.items()}
 
     for ld, neurons in itertools.islice(network.items(), 1, None):
         inputs_ordinals = list(neurons.inputs.ordinals)
 
         gather = build_optimal_multi_layer_gather(
             inputs_ordinals,
-            layer_sizes,
+            layer_shapes,
             use_unique_pre_gathers=use_unique_pre_gathers,
         )
 
