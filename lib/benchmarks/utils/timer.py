@@ -7,7 +7,7 @@ import torch
 class TimerResult:
     def __init__(self, times: list[int], agg_skip_first=2) -> None:
         self._times = np.array(times)
-        self._agg_skip_first = 2
+        self._agg_skip_first = agg_skip_first
 
     @property
     def result_mean_ns(self) -> float:
@@ -41,10 +41,11 @@ class TimerResult:
 
 
 class Timer:
-    def __init__(self, device) -> None:
+    def __init__(self, device, agg_skip_first=2) -> None:
         self._start_time: int | None = None
         self._device = device
         self._times: list[int] = []
+        self._agg_skip_first = agg_skip_first
 
     def _get_time_ns(self):
         return time.perf_counter_ns()
@@ -75,4 +76,4 @@ class Timer:
         self._start_time = None
 
     def get_result(self) -> TimerResult:
-        return TimerResult(self._times)
+        return TimerResult(self._times, agg_skip_first=self._agg_skip_first)

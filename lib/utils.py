@@ -3,10 +3,34 @@ import heapq
 import inspect
 from collections.abc import Collection
 from types import MethodType
-from typing import Callable, Generic, Iterable, Iterator, Mapping, Sequence, Type, TypeVar
+from typing import Callable, Generic, Iterable, Iterator, Mapping, MutableSet, OrderedDict, Sequence, Type, TypeVar
 
 import numpy as np
 import torch
+
+
+def atleast_2d_shape(shape: Sequence[int]) -> Sequence[int]:
+    dim = len(shape)
+
+    if dim == 0:
+        return [1, 1]
+    elif dim == 1:
+        return [shape[0], 1]
+    else:
+        return shape
+
+
+def atleast_3d_shape(shape: Sequence[int]) -> Sequence[int]:
+    dim = len(shape)
+
+    if dim == 0:
+        return [1, 1, 1]
+    elif dim == 1:
+        return [shape[0], 1, 1]
+    elif dim == 2:
+        return [*shape, 1]
+    else:
+        return shape
 
 
 def atleast_3d_rev(tensor: torch.Tensor) -> torch.Tensor:
@@ -622,3 +646,58 @@ def addindent(s_, numSpaces):
     s = "\n".join(s)
     s = first + "\n" + s
     return s
+
+
+class OrderedSet(Generic[_T], MutableSet[_T]):
+    # __contains__, __iter__, __len__, add(), and discard()
+    __slots__ = ("__dict", "__rev")
+
+    def __init__(self, vals: Iterable[_T] | None = None) -> None:
+        if vals is None:
+            vals = iter(())
+
+        self.__rev = list(vals)
+        self.__dict = OrderedDict(((v, i) for i, v in enumerate(self.__rev)))
+
+    def __contains__(self, x: object) -> bool:
+        return x in self.__dict
+
+    def __iter__(self) -> Iterator[_T]:
+        return iter(self.__dict)
+
+    def __len__(self) -> int:
+        return len(self.__dict)
+
+    def add(self, value: _T) -> None:
+        if value in self.__dict:
+            return
+
+        self.__dict[value] = len(self.__dict)
+        self.__rev.append(value)
+
+    def _reenumerate(self):
+        for i, k in enumerate(self.__dict):
+            self.__dict[k] = i
+
+    def _discard(self, value: _T) -> bool:
+        if value not in self.__dict:
+            return False
+
+        pos = self.__dict[value]
+        del self.__dict[value]
+        del self.__rev[pos]
+        return True
+
+    def discard(self, value: _T) -> None:
+        if self._discard(value):
+            self._reenumerate()
+
+    def discard_all(self, *values: _T):
+        if any((self._discard(v) for v in values)):
+            self._reenumerate()
+
+    def index_of(self, value: _T) -> int:
+        return self.__dict[value]
+
+    def __getitem__(self, i: int) -> _T:
+        return self.__rev[i]

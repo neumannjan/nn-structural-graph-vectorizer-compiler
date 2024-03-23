@@ -1,0 +1,11 @@
+[tool.pdm.dev-dependencies]  # or the poetry equivalent
+dev = [
+    "basedpyright", # you can pin the version here if you want, or just rely on the lockfile
+]
+
+[tool.basedpyright]
+# many settings are not enabled even in strict mode, which is why basedpyright includes an "all" option
+# you can then decide which rules you want to disable
+typeCheckingMode = "basic"
+diagnosticMode = "workspace"
+autoImportCompletions = true
