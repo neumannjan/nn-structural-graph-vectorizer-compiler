@@ -6,12 +6,12 @@ from torch.jit import unused
 
 from lib.nn.aggregation.fixed_count import FixedCountAggregation, build_fixed_count_aggregate
 from lib.nn.aggregation.universal import ScatterAggregate, ViewAndAggregate, build_optimal_reshape_aggregate
-from lib.nn.gather import GatherModuleLike
-from lib.sources.base import LayerNeurons, LayerOrdinal, Network
-from lib.nn.topological.linear import Linear, build_optimal_linear
 from lib.nn.definitions.settings import Settings
+from lib.nn.gather import GatherModuleLike
+from lib.nn.topological.linear import Linear, build_optimal_linear
 from lib.nn.transformation import build_transformation
 from lib.nn.utils import Identity, ShapeTransformable
+from lib.sources.base import LayerNeurons, LayerOrdinal, Network
 from lib.utils import addindent, atleast_3d_rev, head_and_rest
 
 _T = TypeVar("_T")
@@ -55,8 +55,6 @@ def _assert_all_same_ignore_none(what_plural: str, source: Iterable[_T]) -> _T |
 
 class FactLayer(torch.nn.Module):
     def __init__(self, out_to: int, neurons: LayerNeurons, settings: Settings) -> None:
-        super().__init__()
-
         self.neuron_ids = neurons.ids
 
         # TODO: assumption: FactLayer has no transformation

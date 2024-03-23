@@ -32,3 +32,14 @@ AggregationDef = Literal[
     "max",
     "count",
 ]
+
+ReductionDef = Literal[
+    "mean",
+    "avg",
+    "average",
+    "minimum",
+    "min",
+    "sum",
+    "max",
+    "maximum",
+]

@@ -6,6 +6,7 @@ import torch
 from neuralogic.core.builder.builder import NeuralSample
 
 from lib.nn.definitions.ops import AggregationDef, TransformationDef
+from lib.nn.definitions.settings import Settings
 from lib.sources.base import LayerDefinition, LayerType, WeightDefinition, is_weighted
 from lib.sources.base_impl import BaseWeightDefinition
 from lib.sources.minimal_api.base import MinimalAPINetwork
@@ -13,13 +14,11 @@ from lib.sources.minimal_api.internal.java import (
     JavaNeuron,
     JavaWeight,
     compute_java_neurons_per_layer,
-    discover_layers,
     get_aggregation,
     get_transformation,
     java_value_to_numpy,
     java_value_to_tensor,
 )
-from lib.nn.definitions.settings import Settings
 from lib.utils import LambdaIterable, MapCollection, MapSequence, cache
 
 
@@ -67,14 +66,10 @@ class MinimalAPIJavaNetwork(MinimalAPINetwork[_JavaNeuronsPointer]):
     def __init__(self, samples: Sequence[NeuralSample | JavaNeuron], settings: Settings) -> None:
         self._samples = samples
         self._settings = settings
-        self._java_neurons_per_layer = compute_java_neurons_per_layer(samples)
+        self._java_neurons_per_layer, self._layers = compute_java_neurons_per_layer(samples)
 
-    @cache
     def get_layers(self) -> Sequence[LayerDefinition]:
-        return discover_layers(
-            self._samples,
-            check_same_layers_assumption=self._settings.check_same_layers_assumption,
-        )
+        return self._layers
 
     @cache
     def get_layers_map(self) -> Mapping[int, LayerDefinition]:
