@@ -51,15 +51,21 @@ class ViewWithPeriod:
         self.period = period
 
 
-class GatherSequence:
-    __slots__ = ("gathers",)
+OneGather = GenericGather | TakeSingleValue | NoopGather | SliceValues | Repeat | ViewWithPeriod
+
+
+class GatherPair:
+    __slots__ = ("a", "b")
+    __match_args__ = ("a", "b")
     __repr__ = repr_slots
 
-    def __init__(self, gathers: Sequence["Gather"]) -> None:
-        self.gathers = gathers
+    def __init__(self, a: "Gather", b: "OneGather") -> None:
+        self.a = a
+        self.b = b
 
 
-Gather = GenericGather | TakeSingleValue | NoopGather | SliceValues | Repeat | ViewWithPeriod | GatherSequence
+Gather = GenericGather | TakeSingleValue | NoopGather | SliceValues | Repeat | ViewWithPeriod | GatherPair
+
 
 def _match_all(gather: Gather):
     match gather:
@@ -75,7 +81,7 @@ def _match_all(gather: Gather):
             ...
         case ViewWithPeriod(period=period):
             ...
-        case GatherSequence(gathers=gathers):
+        case GatherPair(a, b):
             ...
         case _:
             assert False, f"{gather}"

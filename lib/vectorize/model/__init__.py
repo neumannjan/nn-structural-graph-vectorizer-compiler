@@ -1,6 +1,6 @@
 from lib.vectorize.model.gather import (
     Gather,
-    GatherSequence,
+    GatherPair,
     GenericGather,
     NoopGather,
     Repeat,
@@ -38,10 +38,12 @@ from lib.vectorize.model.source import (
     FactLayerRef,
     FactRef,
     LayerRef,
+    LayerRefPool,
     LayerRefs,
     NeuronLayerRef,
     NeuronRef,
     Ref,
+    RefPool,
     Refs,
     WeightRef,
 )

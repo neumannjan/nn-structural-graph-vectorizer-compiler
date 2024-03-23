@@ -3,8 +3,9 @@ from typing import OrderedDict
 import numpy as np
 
 from lib.vectorize.model.layer import Layer
-from lib.vectorize.model.repr import ModuleDictWrapper, my_repr, repr_module_like, repr_slots
+from lib.vectorize.model.repr import ModuleDictWrapper, my_repr, repr_slots
 from lib.vectorize.model.shape import Shape, VariousShape
+from lib.vectorize.model.source import RefPool
 
 
 class ValueFact:
@@ -44,15 +45,16 @@ def _fact_repr(fact: Fact) -> str:
 
 
 class FactLayer:
-    __slots__ = ("facts", "shape")
+    __slots__ = ("facts", "count", "shape")
 
-    def __init__(self, facts: list[Fact], shape: Shape | None = None) -> None:
+    def __init__(self, facts: list[Fact], count: int | None = None, shape: Shape | None = None) -> None:
         self.facts = facts
+        self.count = count
         self.shape = shape if shape is not None else VariousShape()
 
     def __repr__(self) -> str:
         items_repr = ", ".join((_fact_repr(f) for f in self.facts[:3]))
-        return f"{self.__class__.__name__}({items_repr}, ... (size: {len(self.facts)}))"
+        return f"{self.__class__.__name__}({items_repr}, ... (size: {len(self.facts)}), count={self.count}, shape={my_repr(self.shape)})"
 
 
 class LearnableWeight:
@@ -74,7 +76,7 @@ class Batch:
         if not isinstance(self.layers, ModuleDictWrapper):
             return repr_slots(
                 self.__class__(
-                    ModuleDictWrapper(self.layers),  # pyright: ignore
+                    layers=ModuleDictWrapper(self.layers),  # pyright: ignore
                 )
             )
         else:
@@ -82,25 +84,28 @@ class Batch:
 
 
 class VectorizedNetwork:
-    __slots__ = ("fact_layers", "weights", "batches")
+    __slots__ = ("fact_layers", "weights", "batches", "ref_pool")
 
     def __init__(
         self,
         fact_layers: dict[str, FactLayer],
         weights: dict[str, LearnableWeight],
         batches: dict[int, Batch],
+        ref_pool: RefPool,
     ) -> None:
         self.fact_layers = fact_layers
         self.weights = weights
         self.batches = batches
+        self.ref_pool = ref_pool
 
     def __repr__(self) -> str:
         if not isinstance(self.fact_layers, ModuleDictWrapper):
             return repr_slots(
                 self.__class__(
-                    ModuleDictWrapper(self.fact_layers),  # pyright: ignore
-                    ModuleDictWrapper(self.weights),  # pyright: ignore
-                    ModuleDictWrapper(self.batches),  # pyright: ignore
+                    fact_layers=ModuleDictWrapper(self.fact_layers),  # pyright: ignore
+                    weights=ModuleDictWrapper(self.weights),  # pyright: ignore
+                    batches=ModuleDictWrapper(self.batches),  # pyright: ignore
+                    ref_pool=self.ref_pool,
                 )
             )
         else:

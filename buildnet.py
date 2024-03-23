@@ -7,7 +7,7 @@ from lib.vectorize.pipeline.pipeline import build_vectorized_network
 
 if __name__ == "__main__":
     settings = Settings()
-    settings.neuralogic.iso_value_compression = False
+    settings.neuralogic.iso_value_compression = True
     dataset = MyMutagenesis(settings, "simple", "original")
     # dataset = MyTUDataset(settings, "mutag", "gsage")
 

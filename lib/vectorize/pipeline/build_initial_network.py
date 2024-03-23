@@ -7,8 +7,12 @@ from lib.nn.definitions.ops import AggregationDef, ReductionDef, TransformationD
 from lib.sources.base import LayerNeurons, Network, Neurons, Ordinals
 from lib.utils import atleast_2d_shape, head_and_rest
 from lib.vectorize.model import *
+from lib.vectorize.model.source import RefPool
 
 _REDUCTIONS: set[ReductionDef] = set(get_args(ReductionDef))
+
+
+UNIT_FACT = UnitFact()
 
 
 def _is_reduction_def(agg: AggregationDef | None) -> TypeGuard[ReductionDef | None]:
@@ -38,20 +42,21 @@ def _assert_all_same_ignore_none(what_plural: str, source: Iterable[_T]) -> _T |
     return first
 
 
-def _build_gather(fact_layers: Collection[str], layer_sizes: dict[str, int], input_ordinals: Ordinals):
+def _build_gather(pool: RefPool, fact_layers: Collection[str], layer_sizes: dict[str, int], input_ordinals: Ordinals):
     refs: list[Ref] = []
 
     for ord in input_ordinals:
         layer = str(ord.layer)
         if layer in fact_layers:
-            refs.append(FactRef(layer, ord.ordinal))
+            refs.append(pool.fact(layer, ord.ordinal))
         else:
-            refs.append(NeuronRef(layer, ord.ordinal))
+            refs.append(pool.neuron(layer, ord.ordinal))
 
     return Refs(refs)
 
 
 def _build_weights(
+    pool: RefPool,
     neurons: Neurons,
     weights_out: dict[str, LearnableWeight],
     fact_weights_out: list[Fact],
@@ -72,7 +77,7 @@ def _build_weights(
             val = np.reshape(val, [1, *atleast_2d_shape(val.shape)])
             if not w.learnable:
                 if np.all(val == 1.0):
-                    fact = UnitFact()
+                    fact = UNIT_FACT
                 else:
                     fact = ValueFact(val)
                 fact_weights_out.append(fact)
@@ -80,7 +85,9 @@ def _build_weights(
             else:
                 weights_out[w_id] = LearnableWeight(val)
 
-    weight_sources = [FactRef(fact_weights_layer, facts_map[id]) if id in facts_map else WeightRef(id) for id in ids]
+    weight_sources: list[Ref] = [
+        pool.fact(fact_weights_layer, facts_map[id]) if id in facts_map else pool.weight(id) for id in ids
+    ]
     return Refs(weight_sources)
 
 
@@ -130,7 +137,7 @@ def _build_fact_layer(neurons: LayerNeurons):
     out: list[Fact] = []
     for value in neurons.get_values_numpy():
         if np.all(value == 1.0):
-            out.append(UnitFact())
+            out.append(UNIT_FACT)
         else:
             out.append(ValueFact(np.reshape(value, [1, *atleast_2d_shape(value.shape)])))
 
@@ -149,6 +156,8 @@ def build_initial_network(network: Network) -> VectorizedNetwork:
 
     FACT_WEIGHTS_LAYER_KEY = "w"
 
+    ref_pool = RefPool()
+
     for layer, neurons in network.items():
         try:
             layer_id = str(layer.id)
@@ -160,8 +169,9 @@ def build_initial_network(network: Network) -> VectorizedNetwork:
                 transform = _build_transform(neurons)
                 reduce = _build_reduce(neurons)
 
-                gather_source = _build_gather(fact_layers, layer_sizes, neurons.inputs.ordinals)
+                gather_source = _build_gather(ref_pool, fact_layers, layer_sizes, neurons.inputs.ordinals)
                 weight_source = _build_weights(
+                    ref_pool,
                     neurons,
                     weights_out=weights,
                     fact_weights_out=fact_weights,
@@ -181,5 +191,7 @@ def build_initial_network(network: Network) -> VectorizedNetwork:
     fact_weights_layer = FactLayer(fact_weights)
     fact_layers[FACT_WEIGHTS_LAYER_KEY] = fact_weights_layer
 
-    vectorized_net = VectorizedNetwork(fact_layers=fact_layers, weights=weights, batches={0: Batch(layers)})
+    vectorized_net = VectorizedNetwork(
+        fact_layers=fact_layers, weights=weights, batches={0: Batch(layers)}, ref_pool=ref_pool
+    )
     return vectorized_net

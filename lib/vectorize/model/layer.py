@@ -1,6 +1,6 @@
 from lib.vectorize.model.gather import Gather
 from lib.vectorize.model.reduce import Reduce
-from lib.vectorize.model.repr import repr_slots
+from lib.vectorize.model.repr import repr_module_like, repr_slots
 from lib.vectorize.model.shape import Shape, VariousShape
 from lib.vectorize.model.source import LayerRefs, Refs
 from lib.vectorize.model.transform import Transform
@@ -70,12 +70,29 @@ def _match_layer_base(layer_base: LayerBase):
             assert False
 
 
+_LAYER_MODULE_LIKES = ("base", "aggregate", "transform")
+
+
 class Layer:
-    __slots__ = ("base", "aggregate", "transform", "shape")
+    __slots__ = ("base", "aggregate", "transform", "count", "shape")
     __repr__ = repr_slots
 
-    def __init__(self, base: LayerBase, aggregate: Reduce, transform: Transform, shape: Shape | None = None) -> None:
+    def __init__(
+        self,
+        base: LayerBase,
+        aggregate: Reduce,
+        transform: Transform,
+        count: int | None = None,
+        shape: Shape | None = None,
+    ) -> None:
         self.base = base
         self.aggregate = aggregate
         self.transform = transform
+        self.count = count
         self.shape = shape if shape is not None else VariousShape()
+
+    def __repr__(self) -> str:
+        out = self.__class__.__name__ + '('
+        out += repr_module_like(self, is_module=lambda k, v: k in _LAYER_MODULE_LIKES)
+        out += ')'
+        return out
