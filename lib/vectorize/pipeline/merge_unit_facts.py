@@ -41,11 +41,12 @@ class MergeUnitFacts:
     def merge_unit_facts(self):
         self._build_ref_map()
 
-        for batch in self.network.batches.values():
-            for layer in batch.layers.values():
-                self._remap_layer_base(layer.base)
+        if len(self._ref_map) > 0:
+            for batch in self.network.batches.values():
+                for layer in batch.layers.values():
+                    self._remap_layer_base(layer.base)
 
-        self.network.fact_layers["unit"] = FactLayer([UnitFact()])
+            self.network.fact_layers["unit"] = FactLayer([UnitFact()])
 
 
 def merge_unit_facts(network: VectorizedNetwork):
