@@ -28,7 +28,6 @@ from lib.vectorize.model.network import (
 )
 from lib.vectorize.model.noop import Noop
 from lib.vectorize.model.reduce import (
-    DimReduce,
     FixedCountReduce,
     Reduce,
     UnevenReduce,

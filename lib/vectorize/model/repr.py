@@ -94,6 +94,8 @@ def repr_slots(self: object) -> str:
 
 
 class ModuleDictWrapper:
+    __slots__ = ("value",)
+
     def __init__(self, value: dict) -> None:
         self.value = value
 

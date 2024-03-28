@@ -46,9 +46,6 @@ class ComputeLayerCounts:
         match agg:
             case FixedCountReduce(period=period, reduce=_):
                 return in_count // period
-            case DimReduce(dim=dim, reduce=_):
-                assert dim > 0
-                return in_count
             case UnevenReduce(counts=counts, reduce=_):
                 return len(counts)
             case Noop():

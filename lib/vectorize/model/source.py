@@ -1,5 +1,3 @@
-from typing import Sequence
-
 from lib.utils import cache
 from lib.vectorize.model.repr import my_repr, repr_slots
 

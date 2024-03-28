@@ -64,13 +64,6 @@ class ComputeLayerShapes:
             case _:
                 return in_shape
 
-    def compute_aggregation_shape(self, shp: Shape, agg: Reduce) -> Shape:
-        match (shp, agg):
-            case (ConcreteShape(_), DimReduce(dim=dim)):
-                return ConcreteShape([*shp[: dim - 1], *shp[dim:]])
-            case _:
-                return shp
-
     def compute_ref_shape(self, batch: int, ref: Ref) -> Shape:
         match ref:
             case FactRef(id=id, ordinal=ordinal):
@@ -157,7 +150,6 @@ class ComputeLayerShapes:
 
     def compute_layer_shape(self, batch: int, layer: Layer) -> Shape:
         shape = self.compute_layer_base_shape(batch, layer.base)
-        shape = self.compute_aggregation_shape(shape, layer.aggregate)
         return shape
 
     def compute_shapes(self):

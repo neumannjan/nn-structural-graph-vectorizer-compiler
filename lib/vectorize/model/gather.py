@@ -1,5 +1,3 @@
-from typing import Sequence
-
 from lib.vectorize.model.repr import repr_slots
 
 
