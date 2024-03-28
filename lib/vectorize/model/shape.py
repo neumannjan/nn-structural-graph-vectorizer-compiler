@@ -36,6 +36,9 @@ class ConcreteShape(Sequence[int]):
     def __len__(self) -> int:
         return len(self.dims)
 
+    def __hash__(self) -> int:
+        return hash(self.dims)
+
     def __eq__(self, value: object, /) -> bool:
         return (
             isinstance(value, ConcreteShape) and len(self) == len(value) and all((a == b for a, b in zip(self, value)))

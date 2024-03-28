@@ -5,6 +5,7 @@ from lib.vectorize.pipeline.compute_layer_counts import compute_layer_counts
 from lib.vectorize.pipeline.compute_layer_shapes import compute_layer_shapes
 from lib.vectorize.pipeline.concat_inputs_layers import ConcatInputsLayers
 from lib.vectorize.pipeline.layerwise import Layerwise, LayerwiseSeq
+from lib.vectorize.pipeline.materialize_unit_facts import materialize_unit_facts
 from lib.vectorize.pipeline.merge_unit_facts import merge_unit_facts
 from lib.vectorize.pipeline.simplify_gathers import SimplifyGathers
 from lib.vectorize.pipeline.simplify_linears import SimplifyLinears
@@ -41,7 +42,7 @@ def build_vectorized_network(network: Network) -> VectorizedNetwork:
         + Layerwise(SimplifyGathers)
         + compute_layer_shapes  # <- shapes are expected starting here
         # + merge_weights
-        # + materialize_unit_facts
+        + materialize_unit_facts
         # + precompute_pure_fact_layers
     )
 

@@ -1,3 +1,9 @@
+from lib.vectorize.model.fact import (
+    EyeFact,
+    Fact,
+    UnitFact,
+    ValueFact,
+)
 from lib.vectorize.model.gather import (
     Gather,
     GatherPair,
@@ -18,11 +24,8 @@ from lib.vectorize.model.layer import (
 )
 from lib.vectorize.model.network import (
     Batch,
-    Fact,
     FactLayer,
     LearnableWeight,
-    UnitFact,
-    ValueFact,
     VectorizedNetwork,
 )
 from lib.vectorize.model.noop import Noop

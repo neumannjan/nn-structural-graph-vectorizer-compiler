@@ -1,71 +1,9 @@
 from typing import OrderedDict
 
-import numpy as np
-
-from lib.vectorize.model.layer import Layer
-from lib.vectorize.model.repr import ModuleDictWrapper, my_repr, repr_slots
-from lib.vectorize.model.shape import Shape, VariousShape
+from lib.vectorize.model.layer import FactLayer, Layer
+from lib.vectorize.model.repr import ModuleDictWrapper, repr_slots
 from lib.vectorize.model.source import RefPool
-
-
-class ValueFact:
-    __slots__ = ("value",)
-    __repr__ = repr_slots
-
-    def __init__(self, value: np.ndarray) -> None:
-        self.value = value
-
-
-class UnitFact:
-    __slots__ = ()
-    __repr__ = repr_slots
-
-
-Fact = ValueFact | UnitFact
-
-
-def _match_all_facts(fact: Fact):
-    match fact:
-        case UnitFact():
-            ...
-        case ValueFact(value=value):
-            ...
-        case _:
-            assert False, f"{fact}"
-
-
-def _fact_repr(fact: Fact) -> str:
-    match fact:
-        case ValueFact(value=value):
-            return my_repr(list(value.shape))
-        case UnitFact():
-            return "unit"
-        case _:
-            assert False
-
-
-class FactLayer:
-    __slots__ = ("facts", "count", "shape")
-
-    def __init__(self, facts: list[Fact], count: int | None = None, shape: Shape | None = None) -> None:
-        self.facts = facts
-        self.count = count
-        self.shape = shape if shape is not None else VariousShape()
-
-    def __repr__(self) -> str:
-        n = 3
-        items_repr = ", ".join((_fact_repr(f) for f in self.facts[:n]))
-        if len(self.facts) > n:
-            items_repr += f", ... (size: {len(self.facts)})"
-        return f"{self.__class__.__name__}({items_repr}, count={self.count}, shape={my_repr(self.shape)})"
-
-
-class LearnableWeight:
-    __slots__ = ("value",)
-    __repr__ = repr_slots
-
-    def __init__(self, value: np.ndarray) -> None:
-        self.value = value
+from lib.vectorize.model.weight import LearnableWeight
 
 
 class Batch:

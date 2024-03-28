@@ -1,6 +1,7 @@
+from lib.vectorize.model.fact import Fact, fact_repr
 from lib.vectorize.model.gather import Gather
 from lib.vectorize.model.reduce import Reduce
-from lib.vectorize.model.repr import repr_module_like, repr_slots
+from lib.vectorize.model.repr import my_repr, repr_module_like, repr_slots
 from lib.vectorize.model.shape import Shape, VariousShape
 from lib.vectorize.model.source import LayerRefs, Refs
 from lib.vectorize.model.transform import Transform
@@ -92,7 +93,23 @@ class Layer:
         self.shape = shape if shape is not None else VariousShape()
 
     def __repr__(self) -> str:
-        out = self.__class__.__name__ + '('
+        out = self.__class__.__name__ + "("
         out += repr_module_like(self, is_module=lambda k, _: k in _LAYER_MODULE_LIKES)
-        out += ')'
+        out += ")"
         return out
+
+
+class FactLayer:
+    __slots__ = ("facts", "count", "shape")
+
+    def __init__(self, facts: list[Fact], count: int | None = None, shape: Shape | None = None) -> None:
+        self.facts = facts
+        self.count = count
+        self.shape = shape if shape is not None else VariousShape()
+
+    def __repr__(self) -> str:
+        n = 3
+        items_repr = ", ".join((fact_repr(f) for f in self.facts[:n]))
+        if len(self.facts) > n:
+            items_repr += f", ... (size: {len(self.facts)})"
+        return f"{self.__class__.__name__}({items_repr}, count={self.count}, shape={my_repr(self.shape)})"
