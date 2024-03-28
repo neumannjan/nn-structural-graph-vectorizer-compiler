@@ -58,8 +58,8 @@ class LinearGatherLayerBase:
 LayerBase = InputLayerBase | LinearLayerBase | LinearGatherLayerBase
 
 
-def _match_layer_base(layer_base: LayerBase):
-    match layer_base:
+def _match_layer_base(base: LayerBase):
+    match base:
         case InputLayerBase(input=input):
             ...
         case LinearLayerBase(input=input, weight=weight):

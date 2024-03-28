@@ -52,8 +52,6 @@ class ComputeLayerShapes:
         match in_shape:
             case ConcreteShape():
                 match gather:
-                    case ViewWithPeriod(period=period):
-                        return ConcreteShape([period, *in_shape[0:]])
                     case GatherPair(a, b):
                         shape = in_shape
                         shape = self.compute_gather_shape(shape, a)

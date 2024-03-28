@@ -21,10 +21,13 @@ class Layerwise:
 
         for bid, batch in network.batches.items():
             for lid, layer in batch.layers.items():
-                out_layer = op(bid, lid, layer)
+                try:
+                    out_layer = op(bid, lid, layer)
 
-                if out_layer != layer:
-                    batch.layers[lid] = out_layer
+                    if out_layer != layer:
+                        batch.layers[lid] = out_layer
+                except Exception as e:
+                    raise Exception(f"Exception in layer {lid} (batch {bid})") from e
 
         return network
 

@@ -3,6 +3,7 @@ from lib.vectorize.model.repr import repr_slots
 
 class GenericGather:
     __slots__ = ("ordinals",)
+    __match_args__ = ("ordinals",)
     __repr__ = repr_slots
 
     def __init__(self, ordinals: list[int]) -> None:
@@ -11,6 +12,7 @@ class GenericGather:
 
 class TakeSingleValue:
     __slots__ = ("ordinal",)
+    __match_args__ = ("ordinal",)
     __repr__ = repr_slots
 
     def __init__(self, ordinal: int) -> None:
@@ -41,15 +43,7 @@ class Repeat:
         self.total_length = total_length
 
 
-class ViewWithPeriod:
-    __slots__ = ("period",)
-    __repr__ = repr_slots
-
-    def __init__(self, period: int) -> None:
-        self.period = period
-
-
-OneGather = GenericGather | TakeSingleValue | NoopGather | SliceValues | Repeat | ViewWithPeriod
+OneGather = GenericGather | TakeSingleValue | NoopGather | SliceValues | Repeat
 
 
 class GatherPair:
@@ -62,7 +56,7 @@ class GatherPair:
         self.b = b
 
 
-Gather = GenericGather | TakeSingleValue | NoopGather | SliceValues | Repeat | ViewWithPeriod | GatherPair
+Gather = GenericGather | TakeSingleValue | NoopGather | SliceValues | Repeat | GatherPair
 
 
 def _match_all(gather: Gather):
@@ -76,8 +70,6 @@ def _match_all(gather: Gather):
         case SliceValues(start=start, end=end, step=step):
             ...
         case Repeat(times=_, total_length=total_length):
-            ...
-        case ViewWithPeriod(period=period):
             ...
         case GatherPair(a, b):
             ...

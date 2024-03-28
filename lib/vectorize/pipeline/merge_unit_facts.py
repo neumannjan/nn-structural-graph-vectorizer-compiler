@@ -10,13 +10,22 @@ class MergeUnitFacts:
     def _build_ref_map(self):
         self._ref_map = {}
 
+        to_delete: list[str] = []
+
         for id, fact_layer in self.network.fact_layers.items():
+            all_unit = True
             for o, fact in enumerate(fact_layer.facts):
                 match fact:
                     case UnitFact():
                         self._ref_map[self.network.ref_pool.fact(id=id, ordinal=o)] = self._ref
                     case _:
-                        pass
+                        all_unit = False
+
+            if all_unit:
+                to_delete.append(id)
+
+        for id in to_delete:
+            del self.network.fact_layers[id]
 
         return self._ref_map
 

@@ -32,8 +32,6 @@ class ComputeLayerCounts:
                 return -(-(end - start) // step)
             case Repeat(times=_, total_length=total_length):
                 return total_length
-            case ViewWithPeriod(period=period):
-                return in_count // period
             case GatherPair(a, b):
                 count = in_count
                 count = self.compute_gather_count(count, a)

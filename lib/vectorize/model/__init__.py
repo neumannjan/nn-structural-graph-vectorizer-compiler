@@ -6,7 +6,6 @@ from lib.vectorize.model.gather import (
     Repeat,
     SliceValues,
     TakeSingleValue,
-    ViewWithPeriod,
 )
 from lib.vectorize.model.layer import (
     GatheredLayers,

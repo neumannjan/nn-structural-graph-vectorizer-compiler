@@ -53,8 +53,11 @@ class FactLayer:
         self.shape = shape if shape is not None else VariousShape()
 
     def __repr__(self) -> str:
-        items_repr = ", ".join((_fact_repr(f) for f in self.facts[:3]))
-        return f"{self.__class__.__name__}({items_repr}, ... (size: {len(self.facts)}), count={self.count}, shape={my_repr(self.shape)})"
+        n = 3
+        items_repr = ", ".join((_fact_repr(f) for f in self.facts[:n]))
+        if len(self.facts) > n:
+            items_repr += f", ... (size: {len(self.facts)})"
+        return f"{self.__class__.__name__}({items_repr}, count={self.count}, shape={my_repr(self.shape)})"
 
 
 class LearnableWeight:

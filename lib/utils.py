@@ -3,7 +3,19 @@ import heapq
 import inspect
 from collections.abc import Collection
 from types import MethodType
-from typing import Callable, Generic, Iterable, Iterator, Mapping, MutableSet, OrderedDict, Sequence, Type, TypeVar
+from typing import (
+    Callable,
+    Generic,
+    Iterable,
+    Iterator,
+    Mapping,
+    MutableSet,
+    OrderedDict,
+    Sequence,
+    Type,
+    TypeVar,
+    overload,
+)
 
 import numpy as np
 import torch
@@ -448,6 +460,8 @@ def head_and_rest(it: Iterator[_T] | Iterable[_T]) -> tuple[_T, Iterator[_T]]:
 
 
 class MapCollection(Collection[_T]):
+    __slots__ = ("_mapping", "_orig")
+
     def __init__(self, mapping: Callable[[_S], _T], orig: Collection[_S]) -> None:
         self._orig = orig
         self._mapping = mapping
@@ -467,18 +481,34 @@ class MapCollection(Collection[_T]):
 
 
 class MapSequence(Sequence[_T]):
+    __slots__ = ("_mapping", "_orig")
+
     def __init__(self, mapping: Callable[[_S], _T], orig: Sequence[_S]) -> None:
         self._orig = orig
         self._mapping = mapping
 
-    def __getitem__(self, key: int) -> _T:
+    @overload
+    def __getitem__(self, key: int) -> _T: ...
+
+    @overload
+    def __getitem__(self, key: slice) -> Sequence[_T]: ...
+
+    def __getitem__(self, key: int | slice) -> _T | Sequence[_T]:
+        if isinstance(key, slice):
+            return MapSequence(self._mapping, self._orig[key])
+
         return self._mapping(self._orig[key])
+
+    def __iter__(self) -> Iterator[_T]:
+        return map(self._mapping, self._orig)
 
     def __len__(self) -> int:
         return len(self._orig)
 
 
 class MapMapping(Mapping[_T, _S]):
+    __slots__ = ("_mapping", "_orig")
+
     def __init__(self, mapping: Callable[[_R], _S], orig: Mapping[_T, _R]) -> None:
         self._orig = orig
         self._mapping = mapping
@@ -494,6 +524,8 @@ class MapMapping(Mapping[_T, _S]):
 
 
 class LambdaIterable(Iterable[_T]):
+    __slots__ = ("_func",)
+
     def __init__(self, func: Callable[[], Iterator[_T]]) -> None:
         self._func = func
 
