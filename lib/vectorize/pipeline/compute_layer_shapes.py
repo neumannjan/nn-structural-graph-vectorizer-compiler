@@ -96,20 +96,19 @@ class ComputeLayerShapes:
             lambda a, b: VARIOUS_SHAPE if a != b else a,
         )
 
-    def compute_layer_ref_shape(self, batch: int, ref: LayerRef) -> Shape:
-        match ref:
-            case FactLayerRef(id=id):
-                return self.network.fact_layers[id].shape
-            case NeuronLayerRef(id=id):
-                return self.network.batches[batch].layers[id].shape
-            case WeightRef(id=id):
-                return _compute_weight_shape(self.network.weights[id])
-            case _:
-                assert False, f"{ref}"
+    def iter_layer_refs_shapes(self, batch: int, refs: LayerRefs) -> Iterable[Shape]:
+        for id in refs.facts:
+            yield self.network.fact_layers[id].shape
+
+        for id in refs.weights:
+            yield _compute_weight_shape(self.network.weights[id])
+
+        for id in refs.layers:
+            yield self.network.batches[batch].layers[id].shape
 
     def compute_layer_refs_shape(self, batch: int, refs: LayerRefs) -> Shape:
         return reduce_shapes(
-            (self.compute_layer_ref_shape(batch, ref) for ref in refs.refs),
+            self.iter_layer_refs_shapes(batch, refs),
             lambda a, b: VARIOUS_SHAPE if a != b else a,
         )
 

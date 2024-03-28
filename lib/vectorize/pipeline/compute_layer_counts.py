@@ -1,3 +1,5 @@
+from typing import Iterable
+
 from lib.vectorize.model import *
 
 
@@ -68,23 +70,22 @@ class ComputeLayerCounts:
     def compute_refs_count(self, batch: int, refs: Refs) -> int:
         return sum((self.compute_ref_count(batch, ref) for ref in refs.refs))
 
-    def compute_layer_ref_count(self, batch: int, ref: LayerRef) -> int:
-        match ref:
-            case FactLayerRef(id=id):
-                cnt = self.network.fact_layers[id].count
-                assert cnt is not None
-                return cnt
-            case NeuronLayerRef(id=id):
-                cnt = self.network.batches[batch].layers[id].count
-                assert cnt is not None
-                return cnt
-            case WeightRef(id=id):
-                return self.compute_weight_count(self.network.weights[id])
-            case _:
-                assert False, f"{ref}"
+    def iter_layer_refs_counts(self, batch: int, refs: LayerRefs) -> Iterable[int]:
+        for id in refs.facts:
+            cnt = self.network.fact_layers[id].count
+            assert cnt is not None
+            yield cnt
+
+        for id in refs.weights:
+            yield self.compute_weight_count(self.network.weights[id])
+
+        for id in refs.layers:
+            cnt = self.network.batches[batch].layers[id].count
+            assert cnt is not None
+            yield cnt
 
     def compute_layer_refs_count(self, batch: int, refs: LayerRefs) -> int:
-        return sum((self.compute_layer_ref_count(batch, ref) for ref in refs.refs))
+        return sum(self.iter_layer_refs_counts(batch, refs))
 
     def compute_input_count(self, batch: int, input: Input) -> int:
         match input:

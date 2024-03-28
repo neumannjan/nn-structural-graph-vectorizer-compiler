@@ -18,11 +18,6 @@ class FactRef:
     def __eq__(self, value: object, /) -> bool:
         return isinstance(value, FactRef) and self.id == value.id and self.ordinal == value.ordinal
 
-    def __lt__(self, ref: "Ref"):
-        if isinstance(ref, FactRef):
-            return self.id < ref.id or (self.id == ref.id and self.ordinal < ref.ordinal)
-        return True
-
 
 class WeightRef:
     __slots__ = ("id",)
@@ -37,10 +32,7 @@ class WeightRef:
     def __eq__(self, value: object, /) -> bool:
         return isinstance(value, WeightRef) and self.id == value.id
 
-    def __lt__(self, ref: "Ref | LayerRef"):
-        if isinstance(ref, (FactRef, FactLayerRef)):
-            return False
-
+    def __lt__(self, ref: "WeightRef"):
         if isinstance(ref, WeightRef):
             return self.id < ref.id
 
@@ -60,15 +52,6 @@ class NeuronRef:
 
     def __eq__(self, value: object, /) -> bool:
         return isinstance(value, NeuronRef) and self.id == value.id and self.ordinal == value.ordinal
-
-    def __lt__(self, ref: "Ref"):
-        if isinstance(ref, (FactRef, WeightRef)):
-            return False
-
-        if isinstance(ref, NeuronRef):
-            return self.id < ref.id or (self.id == ref.id and self.ordinal < ref.ordinal)
-
-        assert False
 
 
 Ref = FactRef | NeuronRef | WeightRef
@@ -107,85 +90,6 @@ class Refs:
         return f"{self.__class__.__name__}({my_repr(self.refs)})"
 
 
-class FactLayerRef:
-    __slots__ = ("id",)
-    __repr__ = repr_slots
-
-    def __init__(self, id: str) -> None:
-        self.id = id
-
-    def __hash__(self) -> int:
-        return hash(self.id)
-
-    def __eq__(self, value: object, /) -> bool:
-        return isinstance(value, FactLayerRef) and self.id == value.id
-
-    def __lt__(self, ref: "LayerRef"):
-        if isinstance(ref, FactLayerRef):
-            return self.id < ref.id
-
-        return True
-
-
-class NeuronLayerRef:
-    __slots__ = ("id",)
-    __repr__ = repr_slots
-
-    def __init__(self, id: str) -> None:
-        self.id = id
-
-    def __hash__(self) -> int:
-        return hash(self.id)
-
-    def __eq__(self, value: object, /) -> bool:
-        return isinstance(value, FactLayerRef) and self.id == value.id
-
-    def __lt__(self, ref: "LayerRef"):
-        if isinstance(ref, FactLayerRef):
-            return False
-
-        if isinstance(ref, NeuronLayerRef):
-            return self.id < ref.id
-
-        return True
-
-
-LayerRef = FactLayerRef | NeuronLayerRef | WeightRef
-
-
-def _match_all_layer_ref(ref: LayerRef):
-    match ref:
-        case FactLayerRef(id=id):
-            ...
-        case NeuronLayerRef(id=id):
-            ...
-        case WeightRef(id=id):
-            ...
-        case _:
-            assert False, f"{ref}"
-
-
-class LayerRefs:
-    __slots__ = ("refs",)
-    __match_args__ = ("refs",)
-
-    def __init__(self, refs: Sequence["LayerRef"]) -> None:
-        self.refs = refs
-
-    def __hash__(self) -> int:
-        return hash(iter(self.refs))
-
-    def __eq__(self, value: object, /) -> bool:
-        return (
-            isinstance(value, Refs)
-            and len(self.refs) == len(value.refs)
-            and all((a == b for a, b in zip(self.refs, value.refs)))
-        )
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({my_repr(self.refs)})"
-
-
 class RefPool:
     @cache
     def fact(self, id: str, ordinal: int):
@@ -200,11 +104,11 @@ class RefPool:
         return WeightRef(id)
 
 
-class LayerRefPool:
-    @cache
-    def fact(self, id: str):
-        return FactLayerRef(id)
+class LayerRefs:
+    __slots__ = ("facts", "weights", "layers")
+    __repr__ = repr_slots
 
-    @cache
-    def neuron(self, id: str):
-        return NeuronLayerRef(id)
+    def __init__(self, facts: list[str], weights: list[str], layers: list[str]) -> None:
+        self.facts = facts
+        self.weights = weights
+        self.layers = layers

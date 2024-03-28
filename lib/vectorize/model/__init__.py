@@ -35,12 +35,8 @@ from lib.vectorize.model.reduce import (
 )
 from lib.vectorize.model.shape import AnyShape, ConcreteShape, Shape, VariousShape
 from lib.vectorize.model.source import (
-    FactLayerRef,
     FactRef,
-    LayerRef,
-    LayerRefPool,
     LayerRefs,
-    NeuronLayerRef,
     NeuronRef,
     Ref,
     RefPool,
