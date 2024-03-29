@@ -26,9 +26,18 @@ from lib.vectorize.model.network import (
     Batch,
     FactLayer,
     LearnableWeight,
-    VectorizedNetwork,
+    VectorizedLayerNetwork,
 )
 from lib.vectorize.model.noop import Noop
+from lib.vectorize.model.op_network import (
+    DimReduce,
+    Linear,
+    Operation,
+    OperationSeq,
+    OpSeqBatch,
+    VectorizedOpSeqNetwork,
+    View,
+)
 from lib.vectorize.model.reduce import (
     FixedCountReduce,
     Reduce,

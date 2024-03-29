@@ -1,5 +1,5 @@
 from lib.sources.base import Network
-from lib.vectorize.model.network import VectorizedNetwork
+from lib.vectorize.model.network import VectorizedLayerNetwork
 from lib.vectorize.pipeline.build_initial_network import build_initial_network
 from lib.vectorize.pipeline.compute_layer_counts import compute_layer_counts
 from lib.vectorize.pipeline.compute_layer_shapes import compute_layer_shapes
@@ -12,6 +12,7 @@ from lib.vectorize.pipeline.simplify_linears import SimplifyLinears
 from lib.vectorize.pipeline.simplify_pure_unit_fact_linears import (
     SimplifyPureUnitFactLinears,
 )
+from lib.vectorize.pipeline.to_seq_network import to_seq_network
 from lib.vectorize.pipeline.utils.pipe import PIPE
 
 
@@ -20,7 +21,7 @@ def _print(a):
     return a
 
 
-def build_vectorized_network(network: Network) -> VectorizedNetwork:
+def build_vectorized_network(network: Network):
     compile = (
         PIPE  #
         + build_initial_network
@@ -44,6 +45,8 @@ def build_vectorized_network(network: Network) -> VectorizedNetwork:
         # + merge_weights
         + materialize_unit_facts
         # + precompute_pure_fact_layers
+        + _print
+        + to_seq_network
     )
 
     return compile(network)

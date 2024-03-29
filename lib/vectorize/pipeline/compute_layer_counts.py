@@ -14,7 +14,7 @@ def _compute_fact_count(fact: Fact) -> int:
 
 
 class ComputeLayerCounts:
-    def __init__(self, network: VectorizedNetwork) -> None:
+    def __init__(self, network: VectorizedLayerNetwork) -> None:
         self.network = network
 
     def compute_weight_count(self, weight: LearnableWeight) -> int:
@@ -129,6 +129,6 @@ class ComputeLayerCounts:
                 raise Exception(f"Exception in batch {bid}, layer {lid}") from e
 
 
-def compute_layer_counts(network: VectorizedNetwork):
+def compute_layer_counts(network: VectorizedLayerNetwork):
     ComputeLayerCounts(network).compute_counts()
     return network

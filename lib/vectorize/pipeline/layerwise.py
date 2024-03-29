@@ -9,14 +9,14 @@ class LayerwiseOperation(Protocol):
 
 
 class _LayerwiseOpFactory(Protocol):
-    def __call__(self, network: VectorizedNetwork) -> LayerwiseOperation: ...
+    def __call__(self, network: VectorizedLayerNetwork) -> LayerwiseOperation: ...
 
 
 class Layerwise:
     def __init__(self, op_factory: _LayerwiseOpFactory) -> None:
         self._op_factory = op_factory
 
-    def __call__(self, network: VectorizedNetwork) -> VectorizedNetwork:
+    def __call__(self, network: VectorizedLayerNetwork) -> VectorizedLayerNetwork:
         op = self._op_factory(network)
 
         for bid, batch in network.batches.items():
@@ -36,7 +36,7 @@ class _LayerwiseOpSeqFactory(_LayerwiseOpFactory):
     def __init__(self, ops: Sequence[_LayerwiseOpFactory]) -> None:
         self._op_factories = ops
 
-    def __call__(self, network: VectorizedNetwork) -> LayerwiseOperation:
+    def __call__(self, network: VectorizedLayerNetwork) -> LayerwiseOperation:
         ops = [f(network) for f in self._op_factories]
         return _LayerwiseOpSeq(ops)
 

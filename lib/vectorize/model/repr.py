@@ -59,6 +59,14 @@ def my_repr(self) -> str:
         return f"array({self.shape})"
     elif isinstance(self, str):
         return repr(self)
+    elif (
+        isinstance(self, object)
+        and not isinstance(self, (list, dict, tuple))
+        and hasattr(self.__class__, "__repr__")
+        and self.__class__.__repr__ != my_repr
+        and self.__class__.__repr__ != object.__repr__
+    ):
+        return repr(self)
     elif isinstance(self, Sequence):
         n = 3
         if len(self) <= n:
@@ -72,13 +80,6 @@ def my_repr(self) -> str:
             return f"{{{vals}}}"
         else:
             return f"{{{vals}, ... (size: {len(vals)})}}"
-    elif (
-        isinstance(self, object)
-        and hasattr(self.__class__, "__repr__")
-        and self.__class__.__repr__ != my_repr
-        and self.__class__.__repr__ != object.__repr__
-    ):
-        return repr(self)
     else:
         return repr(self)
 

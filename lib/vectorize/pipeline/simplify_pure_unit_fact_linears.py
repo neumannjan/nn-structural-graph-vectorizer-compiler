@@ -4,7 +4,7 @@ from lib.vectorize.pipeline.layerwise import LayerwiseOperation
 
 
 class SimplifyPureUnitFactLinears(LayerwiseOperation):
-    def __init__(self, network: VectorizedNetwork) -> None:
+    def __init__(self, network: VectorizedLayerNetwork) -> None:
         self.network = network
 
     @property
@@ -73,6 +73,6 @@ class SimplifyPureUnitFactLinears(LayerwiseOperation):
                 layer.base = self._for_layer_base(layer.base)
 
 
-def simplify_pure_unit_fact_linears(network: VectorizedNetwork):
+def simplify_pure_unit_fact_linears(network: VectorizedLayerNetwork):
     SimplifyPureUnitFactLinears(network).simplify_pure_unit_fact_linears()
     return network

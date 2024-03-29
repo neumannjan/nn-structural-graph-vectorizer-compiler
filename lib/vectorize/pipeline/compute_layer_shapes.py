@@ -22,20 +22,20 @@ def _compute_weight_shape(weight: LearnableWeight) -> Shape:
 
 def reduce_shapes(shapes: Iterable[Shape], func: Callable[[ConcreteShape, ConcreteShape], Shape]) -> Shape:
     acc = ANY_SHAPE
-    for s in shapes:
-        match s:
+    for shp in shapes:
+        match shp:
             case AnyShape():
                 continue
             case VariousShape():
                 return VARIOUS_SHAPE
-            case ConcreteShape(_) as shp2:
+            case ConcreteShape(_):
                 match acc:
                     case AnyShape():
-                        acc = ConcreteShape(shp2)
+                        acc = ConcreteShape(shp)
                     case VariousShape():
                         return VARIOUS_SHAPE
-                    case ConcreteShape(_) as shp:
-                        acc = func(shp, shp2)
+                    case ConcreteShape(_):
+                        acc = func(acc, shp)
                     case _:
                         assert False
             case _:
@@ -45,7 +45,7 @@ def reduce_shapes(shapes: Iterable[Shape], func: Callable[[ConcreteShape, Concre
 
 
 class ComputeLayerShapes:
-    def __init__(self, network: VectorizedNetwork) -> None:
+    def __init__(self, network: VectorizedLayerNetwork) -> None:
         self.network = network
 
     def compute_gather_shape(self, in_shape: Shape, gather: Gather) -> Shape:
@@ -165,6 +165,6 @@ class ComputeLayerShapes:
                 raise Exception(f"Exception in batch {bid}, layer {lid}") from e
 
 
-def compute_layer_shapes(network: VectorizedNetwork):
+def compute_layer_shapes(network: VectorizedLayerNetwork):
     ComputeLayerShapes(network).compute_shapes()
     return network

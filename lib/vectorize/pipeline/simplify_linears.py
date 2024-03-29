@@ -6,7 +6,7 @@ from lib.vectorize.pipeline.layerwise import LayerwiseOperation
 
 
 class SimplifyLinears(LayerwiseOperation):
-    def __init__(self, network: VectorizedNetwork) -> None:
+    def __init__(self, network: VectorizedLayerNetwork) -> None:
         self.network = network
 
     def _simplify(self, a: GenericGather, b: GenericGather, period: int) -> tuple[Gather, Gather]:
@@ -54,6 +54,6 @@ class SimplifyLinears(LayerwiseOperation):
                 self(bid, lid, layer)
 
 
-def simplify_linears(network: VectorizedNetwork):
+def simplify_linears(network: VectorizedLayerNetwork):
     SimplifyLinears(network).simplify_linears()
     return network

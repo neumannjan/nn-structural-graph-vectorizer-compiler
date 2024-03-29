@@ -8,4 +8,4 @@ class Transform:
     __repr__ = repr_slots
 
     def __init__(self, transform: TransformationDef) -> None:
-        self.transform = transform
+        self.transform: TransformationDef = transform

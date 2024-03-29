@@ -1,6 +1,7 @@
 import itertools
 
 from lib.vectorize.model import *
+from lib.vectorize.pipeline.compute_layer_shapes import ComputeLayerShapes
 
 
 def _build_exact_unit_fact(shape: ConcreteShape) -> Fact:
@@ -11,9 +12,10 @@ def _build_exact_unit_fact(shape: ConcreteShape) -> Fact:
 
 
 class MaterializeUnitFacts:
-    def __init__(self, network: VectorizedNetwork) -> None:
+    def __init__(self, network: VectorizedLayerNetwork) -> None:
         self.network = network
         self._unit_layer_map: dict[ConcreteShape, str] = {}
+        self._compute_shapes = ComputeLayerShapes(network)
 
     def _get_unit_layer_id(self, shape: ConcreteShape) -> str:
         if shape not in self._unit_layer_map:
@@ -33,7 +35,8 @@ class MaterializeUnitFacts:
         return self._unit_layer_map[shape]
 
     def _for_input(self, batch: int, layer: str, input: GatheredLayers):
-        shape = self.network.batches[batch].layers[layer].shape
+        shape = self._compute_shapes.compute_layer_refs_shape(batch, input.refs)
+
         if not isinstance(shape, ConcreteShape):
             raise Exception(f"Failed to materialize layer {layer} (batch {batch}): Found shape {shape}.")
 
@@ -52,6 +55,8 @@ class MaterializeUnitFacts:
                 input=GatheredLayers() as input,
                 weight=GatheredLayers() as weight,
             ):
+                self._for_input(batch, layer, input)
+                self._for_input(batch, layer, weight)
                 return base
             case _:
                 assert False, f"{base}"
@@ -61,12 +66,13 @@ class MaterializeUnitFacts:
             for lid, layer in batch.layers.items():
                 layer.base = self._for_layer_base(bid, lid, layer.base)
 
-        del self.network.fact_layers["unit"]
+        if "unit" in self.network.fact_layers:
+            del self.network.fact_layers["unit"]
 
         for shape, fact_layer_id in self._unit_layer_map.items():
             self.network.fact_layers[fact_layer_id] = FactLayer([_build_exact_unit_fact(shape)], count=1, shape=shape)
 
 
-def materialize_unit_facts(network: VectorizedNetwork):
+def materialize_unit_facts(network: VectorizedLayerNetwork):
     MaterializeUnitFacts(network).materialize_unit_facts()
     return network

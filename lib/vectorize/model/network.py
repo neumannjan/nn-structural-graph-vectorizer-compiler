@@ -24,7 +24,7 @@ class Batch:
             return repr_slots(self)
 
 
-class VectorizedNetwork:
+class VectorizedLayerNetwork:
     __slots__ = ("fact_layers", "weights", "batches", "ref_pool")
 
     def __init__(

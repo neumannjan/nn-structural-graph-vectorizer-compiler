@@ -2,7 +2,7 @@ from lib.vectorize.model import *
 
 
 class MergeUnitFacts:
-    def __init__(self, network: VectorizedNetwork) -> None:
+    def __init__(self, network: VectorizedLayerNetwork) -> None:
         self._ref_map: dict[Ref, Ref]
         self.network = network
         self._ref = network.ref_pool.fact("unit", 0)
@@ -58,6 +58,6 @@ class MergeUnitFacts:
             self.network.fact_layers["unit"] = FactLayer([UnitFact()])
 
 
-def merge_unit_facts(network: VectorizedNetwork):
+def merge_unit_facts(network: VectorizedLayerNetwork):
     MergeUnitFacts(network).merge_unit_facts()
     return network

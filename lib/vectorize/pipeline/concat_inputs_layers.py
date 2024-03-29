@@ -6,7 +6,7 @@ from lib.vectorize.pipeline.layerwise import LayerwiseOperation
 
 
 class ConcatInputsLayers(LayerwiseOperation):
-    def __init__(self, network: VectorizedNetwork) -> None:
+    def __init__(self, network: VectorizedLayerNetwork) -> None:
         self.network = network
 
     def _get_ref_offset(self, ref: Ref) -> int:
@@ -97,6 +97,6 @@ class ConcatInputsLayers(LayerwiseOperation):
                 layer.base = self._for_layer_base(bid, layer.base)
 
 
-def concat_inputs_layers(network: VectorizedNetwork):
+def concat_inputs_layers(network: VectorizedLayerNetwork):
     ConcatInputsLayers(network).concat_inputs_layers()
     return network

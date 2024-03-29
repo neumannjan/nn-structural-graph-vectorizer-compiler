@@ -2,7 +2,7 @@ from lib.vectorize.model import *
 
 
 class DropUnusedNeurons:
-    def __init__(self, network: VectorizedNetwork) -> None:
+    def __init__(self, network: VectorizedLayerNetwork) -> None:
         self.network = network
 
     def _find_used_neurons(self):
@@ -50,6 +50,6 @@ class DropUnusedNeurons:
                 pass
 
 
-def drop_unused_neurons(network: VectorizedNetwork):
+def drop_unused_neurons(network: VectorizedLayerNetwork):
     DropUnusedNeurons(network).drop_unused_neurons()
     return network

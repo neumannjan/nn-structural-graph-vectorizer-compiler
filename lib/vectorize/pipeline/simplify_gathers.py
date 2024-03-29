@@ -48,7 +48,7 @@ def build_optimal_gather(ordinals: list[int], total_size: int | None, allow_subs
 
 
 class SimplifyGathers(LayerwiseOperation):
-    def __init__(self, network: VectorizedNetwork) -> None:
+    def __init__(self, network: VectorizedLayerNetwork) -> None:
         self.network = network
         self._compute_layer_counts = ComputeLayerCounts(network)
 
@@ -115,6 +115,6 @@ class SimplifyGathers(LayerwiseOperation):
                 layer.base = self._for_layer_base(bid, layer.base)
 
 
-def simplify_gathers(network: VectorizedNetwork):
+def simplify_gathers(network: VectorizedLayerNetwork):
     SimplifyGathers(network).simplify_gathers()
     return network
