@@ -3,6 +3,7 @@ from typing import Literal, Protocol
 
 from neuralogic.core import Aggregation, R, Template, Transformation, V
 from neuralogic.dataset import Data, TensorDataset
+from neuralogic.nn.init import Glorot, Uniform
 from torch_geometric.datasets import TUDataset
 
 from lib.datasets.dataset import BuiltDatasetInstance, MyDataset
@@ -11,8 +12,7 @@ from lib.nn.definitions.settings import Settings
 
 
 class _TemplateProtocol(Protocol):
-    def __call__(self, activation: Transformation, num_features: int, output_size: int, dim: int = 10) -> Template:
-        ...
+    def __call__(self, activation: Transformation, num_features: int, output_size: int, dim: int = 10) -> Template: ...
 
 
 def _gcn(activation: Transformation, num_features: int, output_size: int, dim: int = 10):
@@ -165,6 +165,16 @@ class MyTUDataset(MyDataset):
             return _TEMPLATE_MAP[template](
                 activation=Transformation.SIGMOID, num_features=num_node_features, output_size=output_size, dim=dim
             )
+
+        match settings.neuralogic.initializer:
+            case Uniform(scale=2):
+                pass
+            case Glorot(scale=2):
+                pass
+            case _:
+                assert False
+
+        settings.neuralogic.initializer = Glorot()
 
         super().__init__(f"TU_{source}", _build_template, dataset, settings)
         self.pyg_dataset = pyg_dataset
