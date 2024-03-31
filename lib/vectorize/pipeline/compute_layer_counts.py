@@ -7,6 +7,8 @@ def _compute_fact_count(fact: Fact) -> int:
     match fact:
         case UnitFact():
             return 1
+        case EyeFact():
+            return 1
         case ValueFact(value=value):
             return value.shape[0]
         case _:

@@ -4,7 +4,7 @@ from typing import Any, Literal, OrderedDict, Sequence
 from typing import get_args as t_get_args
 
 from lib.benchmarks.runnables.neuralogic_cpu import NeuraLogicCPURunnable
-from lib.benchmarks.runnables.neuralogic_vectorized import NeuralogicVectorizedTorchRunnable
+from lib.benchmarks.runnables.neuralogic_vectorized import NeuralogicLegacyVectorizedTorchRunnable
 from lib.benchmarks.runnables.pyg import PytorchGeometricRunnable
 from lib.benchmarks.runnables.runnable import Runnable
 from lib.benchmarks.runner import MultiRunner
@@ -122,7 +122,7 @@ if __name__ == "__main__":
                 elif model == "torch_geometric":
                     runnables[model, device] = PytorchGeometricRunnable(device=device)
                 elif model == "neuralogic_torch":
-                    runnables[model, device] = NeuralogicVectorizedTorchRunnable(device=device, settings=settings)
+                    runnables[model, device] = NeuralogicLegacyVectorizedTorchRunnable(device=device, settings=settings)
 
     runner = MultiRunner(n_repeats=args.repeats)
 

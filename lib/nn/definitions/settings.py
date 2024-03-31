@@ -8,11 +8,6 @@ Compilation = Literal["none", "trace", "script"]
 
 @dataclass
 class Settings:
-    # checks (to be removed):
-
-    # TODO: ASSUMPTION: all samples have the same layer layout
-    check_same_layers_assumption: bool = False
-
     # optimizations:
 
     merge_same_facts: bool = True

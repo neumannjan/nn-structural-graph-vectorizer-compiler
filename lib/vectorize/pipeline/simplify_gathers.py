@@ -11,6 +11,8 @@ def build_optimal_gather(ordinals: list[int], total_size: int | None, allow_subs
     all_inputs_the_same = all((ordinals[0] == o for o in ordinals[1:]))
 
     if all_inputs_the_same:
+        if total_size == 1:
+            return NoopGather()
         return TakeSingleValue(ordinals[0])
 
     ###### simple slicing #######

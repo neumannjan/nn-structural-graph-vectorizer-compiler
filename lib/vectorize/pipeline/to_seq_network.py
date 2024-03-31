@@ -1,4 +1,4 @@
-from typing import OrderedDict
+from typing import Callable, OrderedDict
 
 from lib.vectorize.model import *
 from lib.vectorize.model.op_network import DimReduce
@@ -21,11 +21,15 @@ class ToSeqNetwork:
             case _:
                 assert False, f"{aggregate}"
 
+    def _build_period_view(self, shape: Shape, period: int) -> View:
+        assert isinstance(shape, ConcreteShape)
+        return View(ConcreteShape([-1, period, *shape]))
+
     def _add_linear_ops(
         self,
         batch_id: int,
         id: str,
-        aggregate: Reduce,
+        period: int | None,
         input: GatheredLayers,
         weight: GatheredLayers,
         out: list[Operation],
@@ -33,36 +37,53 @@ class ToSeqNetwork:
         out.append(input.refs)
         if not isinstance(input.gather, NoopGather):
             out.append(input.gather)
-        out.append(Linear(weight))
 
-        period = self._get_aggregate_period(aggregate)
+        retrieve_weights = OperationSeq([])
+
+        if not isinstance(weight.gather, NoopGather):
+            retrieve_weights.operations.append(weight.gather)
+
         if period is not None:
-            shape = self._compute_shapes.compute_linear_shape(batch_id, input, weight)
-            assert isinstance(shape, ConcreteShape)
-            out.append(View(ConcreteShape([-1, period, *shape])))
+            input_shape = self._compute_shapes.compute_input_shape(batch_id, input)
+            out.append(self._build_period_view(input_shape, period))
+
+            weight_shape = self._compute_shapes.compute_input_shape(batch_id, weight)
+            retrieve_weights.operations.append(self._build_period_view(weight_shape, period))
+
+        out.append(Linear(weight.refs, retrieve_weights))
 
     def _map_layer(self, batch_id: int, id: str, layer: Layer) -> OperationSeq:
         try:
             out: list[Operation] = []
 
+            period = self._get_aggregate_period(layer.aggregate)
+
             match layer.base:
                 case InputLayerBase(input=GatheredLayers() as input):
                     out.append(input.refs)
+
                     if not isinstance(input.gather, NoopGather):
                         out.append(input.gather)
+
+                    if period is not None:
+                        shape = self._compute_shapes.compute_layer_base_shape(batch_id, layer.base)
+                        out.append(self._build_period_view(shape, period))
                 case LinearLayerBase(input=GatheredLayers() as input, weight=GatheredLayers() as weight):
-                    self._add_linear_ops(
-                        batch_id=batch_id, id=id, aggregate=layer.aggregate, input=input, weight=weight, out=out
-                    )
+                    self._add_linear_ops(batch_id=batch_id, id=id, period=period, input=input, weight=weight, out=out)
+
                 case LinearGatherLayerBase(
                     input=GatheredLayers() as input,
                     weight=GatheredLayers() as weight,
                     gather=gather,
                 ):
-                    self._add_linear_ops(
-                        batch_id=batch_id, id=id, aggregate=layer.aggregate, input=input, weight=weight, out=out
-                    )
+                    self._add_linear_ops(batch_id=batch_id, id=id, period=None, input=input, weight=weight, out=out)
+
                     out.append(gather)
+
+                    if period is not None:
+                        shape = self._compute_shapes.compute_layer_base_shape(batch_id, layer.base)
+                        out.append(self._build_period_view(shape, period))
+
                 case _:
                     assert False
 
@@ -91,7 +112,7 @@ class ToSeqNetwork:
         return VectorizedOpSeqNetwork(
             fact_layers=self.network.fact_layers,
             weights=self.network.weights,
-            batches={id: self._map_batch(id, batch) for id, batch in self.network.batches.items()},
+            batches=OrderedDict(((id, self._map_batch(id, batch)) for id, batch in self.network.batches.items())),
             ref_pool=self.network.ref_pool,
         )
 

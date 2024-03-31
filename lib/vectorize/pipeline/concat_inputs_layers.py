@@ -20,12 +20,16 @@ class ConcatInputsLayers(LayerwiseOperation):
             case _:
                 assert False
 
-    def _for_refs(self, batch: int, refs: Refs) -> GatheredLayers:
+    def _for_refs(self, batch: int, layer: str, refs: Refs) -> GatheredLayers:
         layer_refs = LayerRefs(
             facts=sorted(set((ref.id for ref in refs.refs if isinstance(ref, FactRef)))),
             weights=sorted(set((ref.id for ref in refs.refs if isinstance(ref, WeightRef)))),
             layers=sorted(set((ref.id for ref in refs.refs if isinstance(ref, NeuronRef)))),
         )
+
+        if layer in layer_refs.layers:
+            raise ValueError(f"Layer {layer} expects itself on input.")
+
         layer_counts = list(ComputeLayerCounts(self.network).iter_layer_refs_counts(batch, layer_refs))
         layer_offsets: list[int] = np.concatenate([[0], np.cumsum(layer_counts[:-1], dtype=int)], dtype=int).tolist()
 
@@ -62,39 +66,39 @@ class ConcatInputsLayers(LayerwiseOperation):
 
         return GatheredLayers(refs=layer_refs, gather=gather)
 
-    def _for_input(self, batch: int, input: Input):
+    def _for_input(self, batch: int, layer: str, input: Input):
         match input:
             case Refs(_) as refs:
-                return self._for_refs(batch, refs)
+                return self._for_refs(batch, layer, refs)
             case GatheredLayers():
                 return input
             case _:
                 assert False, f"{input}"
 
-    def _for_layer_base(self, batch: int, base: LayerBase):
+    def _for_layer_base(self, batch: int, layer: str, base: LayerBase):
         match base:
             case InputLayerBase(input=input):
-                input = self._for_input(batch, input)
+                input = self._for_input(batch, layer, input)
                 return InputLayerBase(input=input)
             case LinearLayerBase(input=input, weight=weight):
-                input = self._for_input(batch, input)
-                weight = self._for_input(batch, weight)
+                input = self._for_input(batch, layer, input)
+                weight = self._for_input(batch, layer, weight)
                 return LinearLayerBase(input=input, weight=weight)
             case LinearGatherLayerBase(input=input, weight=weight, gather=gather):
-                input = self._for_input(batch, input)
-                weight = self._for_input(batch, weight)
+                input = self._for_input(batch, layer, input)
+                weight = self._for_input(batch, layer, weight)
                 return LinearGatherLayerBase(input=input, weight=weight, gather=gather)
             case _:
                 assert False
 
     def __call__(self, batch: int, layer_id: str, layer: Layer) -> Layer:
-        layer.base = self._for_layer_base(batch, layer.base)
+        layer.base = self._for_layer_base(batch, layer_id, layer.base)
         return layer
 
     def concat_inputs_layers(self):
         for bid, batch in self.network.batches.items():
-            for layer in batch.layers.values():
-                layer.base = self._for_layer_base(bid, layer.base)
+            for layer_id, layer in batch.layers.items():
+                layer.base = self._for_layer_base(bid, layer_id, layer.base)
 
 
 def concat_inputs_layers(network: VectorizedLayerNetwork):

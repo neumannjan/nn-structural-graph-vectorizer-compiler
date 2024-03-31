@@ -59,21 +59,26 @@ class Timer:
             torch.mps.synchronize()
 
     def __enter__(self) -> "Timer":
+        self.start()
+        return self
+
+    def start(self):
         assert self._start_time is None
         self._synchronize()
         self._start_time = self._get_time_ns()
 
-        return self
-
     def _register_run_time(self, time_ns: int):
         self._times.append(time_ns)
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def stop(self):
         assert self._start_time is not None
 
         self._synchronize()
         self._register_run_time(self._get_time_ns() - self._start_time)
         self._start_time = None
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.stop()
 
     def get_result(self) -> TimerResult:
         return TimerResult(self._times, agg_skip_first=self._agg_skip_first)

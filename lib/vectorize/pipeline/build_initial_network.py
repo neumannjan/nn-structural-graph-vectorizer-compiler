@@ -192,6 +192,6 @@ def build_initial_network(network: Network) -> VectorizedLayerNetwork:
     fact_layers[FACT_WEIGHTS_LAYER_KEY] = fact_weights_layer
 
     vectorized_net = VectorizedLayerNetwork(
-        fact_layers=fact_layers, weights=weights, batches={0: Batch(layers)}, ref_pool=ref_pool
+        fact_layers=fact_layers, weights=weights, batches=OrderedDict([(0, Batch(layers))]), ref_pool=ref_pool
     )
     return vectorized_net

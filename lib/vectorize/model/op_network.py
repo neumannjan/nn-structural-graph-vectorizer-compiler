@@ -2,9 +2,17 @@ from typing import OrderedDict
 
 from lib.nn.definitions.ops import ReductionDef
 from lib.utils import addindent
-from lib.vectorize.model.gather import Gather
+from lib.vectorize.model.gather import (
+    Gather,
+    GatherPair,
+    GenericGather,
+    NoopGather,
+    Repeat,
+    SliceValues,
+    TakeSingleValue,
+)
 from lib.vectorize.model.layer import FactLayer, GatheredLayers
-from lib.vectorize.model.reduce import Reduce, UnevenReduce
+from lib.vectorize.model.reduce import UnevenReduce
 from lib.vectorize.model.repr import ModuleDictWrapper, repr_slots
 from lib.vectorize.model.shape import ConcreteShape
 from lib.vectorize.model.source import LayerRefs, RefPool
@@ -13,19 +21,22 @@ from lib.vectorize.model.weight import LearnableWeight
 
 
 class Linear:
-    __slots__ = ("weight",)
+    __slots__ = ("weight_refs", "additional_ops")
     __repr__ = repr_slots
 
-    def __init__(self, weight: GatheredLayers) -> None:
-        self.weight = weight
+    def __init__(self, weight_refs: "LayerRefs", additional_ops: "OperationSeq") -> None:
+        self.weight_refs = weight_refs
+        self.additional_ops = additional_ops
 
 
 class View:
     __slots__ = ("shape",)
-    __repr__ = repr_slots
 
     def __init__(self, shape: ConcreteShape) -> None:
         self.shape = shape
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({repr(self.shape)})"
 
 
 class DimReduce:
@@ -34,10 +45,40 @@ class DimReduce:
 
     def __init__(self, dim: int, reduce: ReductionDef) -> None:
         self.dim = dim
-        self.reduce = reduce
+        self.reduce: ReductionDef = reduce
 
 
 Operation = Linear | Gather | Transform | DimReduce | UnevenReduce | LayerRefs | View
+
+
+def _match_op(op: Operation):
+    match op:
+        case Linear(weight=weight):
+            ...
+        case GenericGather(ordinals=ordinals):
+            ...
+        case TakeSingleValue(ordinal=ordinal):
+            ...
+        case NoopGather():
+            ...
+        case SliceValues(start=start, end=end, step=step):
+            ...
+        case Repeat(times=_, total_length=total_length):
+            ...
+        case GatherPair(a, b):
+            ...
+        case Transform(transform=transform):
+            ...
+        case DimReduce(dim=dim, reduce=reduce):
+            ...
+        case UnevenReduce(counts=counts, reduce=reduce):
+            ...
+        case LayerRefs(facts=facts, weights=weights, layers=layers):
+            ...
+        case View(shape=shape):
+            ...
+        case _:
+            assert False, f"{op}"
 
 
 class OperationSeq:
@@ -47,6 +88,9 @@ class OperationSeq:
         self.operations = operations
 
     def __repr__(self) -> str:
+        if len(self.operations) == 0:
+            return self.__class__.__name__ + "()"
+
         return self.__class__.__name__ + "(\n  " + addindent(",\n".join((repr(o) for o in self.operations)), 2) + "\n)"
 
 
@@ -75,7 +119,7 @@ class VectorizedOpSeqNetwork:
         self,
         fact_layers: dict[str, FactLayer],
         weights: dict[str, LearnableWeight],
-        batches: dict[int, OpSeqBatch],
+        batches: OrderedDict[int, OpSeqBatch],
         ref_pool: RefPool,
     ) -> None:
         self.fact_layers = fact_layers

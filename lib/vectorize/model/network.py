@@ -31,7 +31,7 @@ class VectorizedLayerNetwork:
         self,
         fact_layers: dict[str, FactLayer],
         weights: dict[str, LearnableWeight],
-        batches: dict[int, Batch],
+        batches: OrderedDict[int, Batch],
         ref_pool: RefPool,
     ) -> None:
         self.fact_layers = fact_layers

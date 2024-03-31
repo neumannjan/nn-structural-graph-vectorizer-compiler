@@ -2,12 +2,12 @@ import itertools
 
 import pytest
 import torch
-from lib.benchmarks.runnables.neuralogic_vectorized import NeuralogicVectorizedTorchRunnable
+from lib.benchmarks.runnables.neuralogic_vectorized import NeuralogicLegacyVectorizedTorchRunnable
 from lib.datasets.dataset import MyDataset
 from lib.datasets.mutagenesis import MyMutagenesis
 from lib.datasets.tu_molecular import MyTUDataset
-from lib.nn.topological import network_module
 from lib.nn.definitions.settings import Settings
+from lib.nn.topological import network_module
 from lib.tests.utils.test_params import DEVICE_PARAMS, SETTINGS_PARAMS
 from torch_geometric.data.dataset import warnings
 from torch_geometric.datasets.citation_full import Callable
@@ -66,7 +66,7 @@ def do_test_dataset(dataset: MyDataset, device: str, settings: Settings):
 
     ###### ALGORITHM ######
 
-    runnable = NeuralogicVectorizedTorchRunnable(device=device, settings=settings)
+    runnable = NeuralogicLegacyVectorizedTorchRunnable(device=device, settings=settings)
     runnable.initialize(built_dataset_inst)
 
     print(runnable.network)
