@@ -12,9 +12,9 @@ from lib.nn.gather import (
     build_optimal_multi_layer_gather_and_reshape,
     get_optimal_gather_for_periodic_gather,
 )
-from lib.sources.base import LayerOrdinal, Network, Neurons, WeightDefinition
 from lib.nn.utils import Sequential, ShapeTransformable
 from lib.nn.weight import WeightModuleLike, create_weights_and_gather
+from lib.sources.base import LayerOrdinal, Network, Neurons, WeightDefinition
 
 
 class Linear(torch.nn.Module, ShapeTransformable):

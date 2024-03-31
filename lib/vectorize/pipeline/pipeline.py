@@ -2,6 +2,7 @@ from lib.vectorize.pipeline.build_initial_network import build_initial_network
 from lib.vectorize.pipeline.compute_layer_counts import compute_layer_counts
 from lib.vectorize.pipeline.compute_layer_shapes import compute_layer_shapes
 from lib.vectorize.pipeline.concat_inputs_layers import ConcatInputsLayers
+from lib.vectorize.pipeline.convert_linears_to_unique import ConvertLinearsToUnique
 from lib.vectorize.pipeline.give_unique_names import give_unique_names
 from lib.vectorize.pipeline.layerwise import Layerwise, LayerwiseSeq
 from lib.vectorize.pipeline.materialize_unit_facts import materialize_unit_facts
@@ -34,8 +35,10 @@ build_vectorized_network = (
         ConcatInputsLayers,  # <- gathers are expected starting here
     )
     + _print
-    # + convert_linears_to_unique  # compute just unique pairs, and add final gather
-    + Layerwise(SimplifyLinears)  # <- 'optimize' gather pairs on K_subseq == period
+    + LayerwiseSeq(
+        ConvertLinearsToUnique,
+        SimplifyLinears,  # <- 'optimize' gather pairs on K_subseq == period
+    )
     # + optimize_tail_gathers  # <- those with view at the end might require some special treatment?
     + _print
     + Layerwise(SimplifyGathers)
