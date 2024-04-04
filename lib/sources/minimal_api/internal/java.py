@@ -1,5 +1,5 @@
 from collections import defaultdict, deque
-from typing import Any, OrderedDict, Protocol, Sequence
+from typing import Any, Literal, OrderedDict, Protocol, Sequence
 from typing import get_args as t_get_args
 
 import jpype
@@ -175,8 +175,8 @@ def compute_java_neurons_per_layer(
 
     visited = set()
 
-    neurons_per_layer: dict[tuple[int, LayerType, AggregationDef | None, TransformationDef], list] = defaultdict(
-        lambda: []
+    neurons_per_layer: dict[tuple[int, LayerType, TransformationDef], list] = (
+        defaultdict(lambda: [])
     )
 
     while len(queue) > 0:
@@ -188,7 +188,9 @@ def compute_java_neurons_per_layer(
 
         visited.add(neuron_index)
         neurons_per_layer[
-            int(neuron.getLayer()), _get_layer_type(neuron), get_aggregation(neuron), get_transformation(neuron)
+            int(neuron.getLayer()),
+            _get_layer_type(neuron),
+            get_transformation(neuron) or "identity",
         ].append(neuron)
 
         for inp in neuron.getInputs():
