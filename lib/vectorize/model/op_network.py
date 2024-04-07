@@ -21,12 +21,11 @@ from lib.vectorize.model.weight import LearnableWeight
 
 
 class Linear:
-    __slots__ = ("weight_refs", "additional_ops")
+    __slots__ = ("weight_ops",)
     __repr__ = repr_slots
 
-    def __init__(self, weight_refs: "LayerRefs", additional_ops: "OperationSeq") -> None:
-        self.weight_refs = weight_refs
-        self.additional_ops = additional_ops
+    def __init__(self, weight_ops: "OperationSeq") -> None:
+        self.weight_ops = weight_ops
 
 
 class View:
@@ -48,12 +47,12 @@ class DimReduce:
         self.reduce: ReductionDef = reduce
 
 
-Operation = Linear | Gather | Transform | DimReduce | UnevenReduce | LayerRefs | View
+Operation = Linear | Gather | Transform | DimReduce | UnevenReduce | View
 
 
 def _match_op(op: Operation):
     match op:
-        case Linear(weight=weight):
+        case Linear(weight_ops=weight_ops):
             ...
         case GenericGather(ordinals=ordinals):
             ...
@@ -73,8 +72,6 @@ def _match_op(op: Operation):
             ...
         case UnevenReduce(counts=counts, reduce=reduce):
             ...
-        case LayerRefs(facts=facts, weights=weights, layers=layers):
-            ...
         case View(shape=shape):
             ...
         case _:
@@ -82,16 +79,19 @@ def _match_op(op: Operation):
 
 
 class OperationSeq:
-    __slots__ = ("operations",)
+    __slots__ = ("layer_refs", "operations")
 
-    def __init__(self, operations: list[Operation]) -> None:
+    def __init__(self, layer_refs: LayerRefs | None, operations: list[Operation]) -> None:
+        self.layer_refs = layer_refs
         self.operations = operations
 
     def __repr__(self) -> str:
-        if len(self.operations) == 0:
+        operations = [self.layer_refs] + self.operations
+
+        if len(operations) == 0:
             return self.__class__.__name__ + "()"
 
-        return self.__class__.__name__ + "(\n  " + addindent(",\n".join((repr(o) for o in self.operations)), 2) + "\n)"
+        return self.__class__.__name__ + "(\n  " + addindent(",\n".join((repr(o) for o in operations)), 2) + "\n)"
 
 
 class OpSeqBatch:

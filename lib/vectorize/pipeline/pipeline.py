@@ -4,6 +4,7 @@ from lib.vectorize.pipeline.compute_layer_shapes import compute_layer_shapes
 from lib.vectorize.pipeline.concat_inputs_layers import ConcatInputsLayers
 from lib.vectorize.pipeline.convert_linears_to_unique import ConvertLinearsToUnique
 from lib.vectorize.pipeline.give_unique_names import give_unique_names
+from lib.vectorize.pipeline.join_simple_layer_chains import join_simple_layer_chains
 from lib.vectorize.pipeline.layerwise import Layerwise, LayerwiseSeq
 from lib.vectorize.pipeline.materialize_unit_facts import materialize_unit_facts
 from lib.vectorize.pipeline.merge_unit_facts import merge_unit_facts
@@ -26,10 +27,9 @@ build_vectorized_network = (
     + build_initial_network
     + merge_unit_facts
     # + drop_unused_neurons  # TODO
-    + compute_layer_counts
-    + _print
     # + transpose_fixed_count_linears  # <- optional
     # + extract_unit_ordinals
+    + compute_layer_counts
     + LayerwiseSeq(
         SimplifyPureUnitFactLinears,
         ConcatInputsLayers,  # <- gathers are expected starting here
@@ -49,5 +49,7 @@ build_vectorized_network = (
     + give_unique_names
     + _print
     + to_seq_network
+    + _print
+    + join_simple_layer_chains
     + _print
 )

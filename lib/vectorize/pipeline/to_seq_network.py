@@ -34,33 +34,33 @@ class ToSeqNetwork:
         weight: GatheredLayers,
         out: list[Operation],
     ) -> None:
-        out.append(input.refs)
         if not isinstance(input.gather, NoopGather):
             out.append(input.gather)
 
-        retrieve_weights = OperationSeq([])
+        weight_ops = OperationSeq(layer_refs=weight.refs, operations=[])
 
         if not isinstance(weight.gather, NoopGather):
-            retrieve_weights.operations.append(weight.gather)
+            weight_ops.operations.append(weight.gather)
 
         if period is not None:
             input_shape = self._compute_shapes.compute_input_shape(batch_id, input)
             out.append(self._build_period_view(input_shape, period))
 
             weight_shape = self._compute_shapes.compute_input_shape(batch_id, weight)
-            retrieve_weights.operations.append(self._build_period_view(weight_shape, period))
+            weight_ops.operations.append(self._build_period_view(weight_shape, period))
 
-        out.append(Linear(weight.refs, retrieve_weights))
+        out.append(Linear(weight_ops))
 
     def _map_layer(self, batch_id: int, id: str, layer: Layer) -> OperationSeq:
         try:
+            layer_refs: LayerRefs | None = None
             out: list[Operation] = []
 
             period = self._get_aggregate_period(layer.aggregate)
 
             match layer.base:
                 case InputLayerBase(input=GatheredLayers() as input):
-                    out.append(input.refs)
+                    layer_refs = input.refs
 
                     if not isinstance(input.gather, NoopGather):
                         out.append(input.gather)
@@ -69,6 +69,7 @@ class ToSeqNetwork:
                         shape = self._compute_shapes.compute_layer_base_shape(batch_id, layer.base)
                         out.append(self._build_period_view(shape, period))
                 case LinearLayerBase(input=GatheredLayers() as input, weight=GatheredLayers() as weight):
+                    layer_refs = input.refs
                     self._add_linear_ops(batch_id=batch_id, id=id, period=period, input=input, weight=weight, out=out)
 
                 case LinearGatherLayerBase(
@@ -76,6 +77,7 @@ class ToSeqNetwork:
                     weight=GatheredLayers() as weight,
                     gather=gather,
                 ):
+                    layer_refs = input.refs
                     self._add_linear_ops(batch_id=batch_id, id=id, period=None, input=input, weight=weight, out=out)
 
                     out.append(gather)
@@ -100,7 +102,7 @@ class ToSeqNetwork:
             if layer.transform.transform != "identity":
                 out.append(layer.transform)
 
-            return OperationSeq(out)
+            return OperationSeq(layer_refs, out)
         except Exception as e:
             raise Exception(f"Exception in layer {id} (batch {batch_id})") from e
 

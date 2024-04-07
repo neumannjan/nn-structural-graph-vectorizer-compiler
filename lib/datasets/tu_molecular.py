@@ -18,16 +18,16 @@ class _TemplateProtocol(Protocol):
 def _gcn(activation: Transformation, num_features: int, output_size: int, dim: int = 10):
     template = Template()
 
-    template += (R.atom_embed(V.X)[dim, num_features] <= R.node_feature(V.X)) | [Transformation.IDENTITY]
-    template += R.atom_embed / 1 | [Transformation.IDENTITY]
+    # template += (R.atom_embed(V.X)[dim, num_features] <= R.node_feature(V.X)) | [Transformation.IDENTITY]
+    # template += R.atom_embed / 1 | [Transformation.IDENTITY]
 
-    template += (R.l1_embed(V.X)[dim, dim] <= (R.atom_embed(V.Y), R._edge(V.Y, V.X))) | [
+    template += (R.l1_embed(V.X) <= (R.node_feature(V.Y)[dim, num_features], R._edge(V.Y, V.X))) | [
         Aggregation.SUM,
         Transformation.IDENTITY,
     ]
     template += R.l1_embed / 1 | [Transformation.RELU]
 
-    template += (R.l2_embed(V.X)[dim, dim] <= (R.l1_embed(V.Y), R._edge(V.Y, V.X))) | [
+    template += (R.l2_embed(V.X) <= (R.l1_embed(V.Y)[dim, dim], R._edge(V.Y, V.X))) | [
         Aggregation.SUM,
         Transformation.IDENTITY,
     ]

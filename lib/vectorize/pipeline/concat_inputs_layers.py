@@ -8,6 +8,7 @@ from lib.vectorize.pipeline.layerwise import LayerwiseOperation
 class ConcatInputsLayers(LayerwiseOperation):
     def __init__(self, network: VectorizedLayerNetwork) -> None:
         self.network = network
+        self._compute_layer_counts = ComputeLayerCounts(self.network)
 
     def _get_ref_offset(self, ref: Ref) -> int:
         match ref:
@@ -30,7 +31,7 @@ class ConcatInputsLayers(LayerwiseOperation):
         if layer in layer_refs.layers:
             raise ValueError(f"Layer {layer} expects itself on input.")
 
-        layer_counts = list(ComputeLayerCounts(self.network).iter_layer_refs_counts(batch, layer_refs))
+        layer_counts = list(self._compute_layer_counts.iter_layer_refs_counts(batch, layer_refs))
         layer_offsets: list[int] = np.concatenate([[0], np.cumsum(layer_counts[:-1], dtype=int)], dtype=int).tolist()
 
         fact_offset_map: dict[str, int] = {

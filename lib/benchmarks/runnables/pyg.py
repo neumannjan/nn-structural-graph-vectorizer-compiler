@@ -32,9 +32,3 @@ class PytorchGeometricRunnable(Runnable):
     @property
     def device(self):
         return self._device
-
-
-if __name__ == "__main__":
-    _r = PytorchGeometricRunnable(device='cpu')
-    _r.initialize(MyTUDataset(source='mutag', template='gcn').build())
-    _r.forward_pass()

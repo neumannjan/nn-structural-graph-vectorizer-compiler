@@ -50,7 +50,7 @@ def _get_refs(refs: LayerRefs) -> list[str]:
     return out
 
 
-def _for_op(op: Operation, allow_non_builtin_torch_ops: bool) -> torch.nn.Module:
+def _for_op(op: Operation | LayerRefs, allow_non_builtin_torch_ops: bool) -> torch.nn.Module:
     match op:
         case LayerRefs():
             refs = _get_refs(op)
@@ -67,17 +67,18 @@ def _for_op(op: Operation, allow_non_builtin_torch_ops: bool) -> torch.nn.Module
                 return first_gathers
             else:
                 return torch.nn.Sequential(first_gathers, last_gather)
-        case Linear(weight_refs=weight_refs, additional_ops=additional_ops):
+        case Linear(weight_ops=weight_ops):
             weight_module = torch.nn.Sequential()
 
-            retrieve_refs = _for_op(
-                weight_refs,
-                allow_non_builtin_torch_ops=allow_non_builtin_torch_ops,
-            )
+            if weight_ops.layer_refs is not None:
+                retrieve_refs = _for_op(
+                    weight_ops.layer_refs,
+                    allow_non_builtin_torch_ops=allow_non_builtin_torch_ops,
+                )
 
-            weight_module.append(retrieve_refs)
+                weight_module.append(retrieve_refs)
 
-            for op in additional_ops.operations:
+            for op in weight_ops.operations:
                 op_module = _for_op(op, allow_non_builtin_torch_ops=allow_non_builtin_torch_ops)
                 weight_module.append(op_module)
 
@@ -115,9 +116,13 @@ def _for_batch(
     modules: list[torch.nn.Module] = []
 
     for key, layer in batch_reference.layers.items():
-        layer_modules: list[torch.nn.Module] = [
-            _for_op(op, allow_non_builtin_torch_ops=allow_non_builtin_torch_ops) for op in layer.operations
-        ]
+        layer_modules: list[torch.nn.Module] = []
+
+        if layer.layer_refs is not None:
+            layer_modules.append(_for_op(layer.layer_refs, allow_non_builtin_torch_ops=allow_non_builtin_torch_ops))
+
+        for op in layer.operations:
+            layer_modules.append(_for_op(op, allow_non_builtin_torch_ops=allow_non_builtin_torch_ops))
 
         layer_module = LayerModule(layer_modules, out_key=key, debug=debug)
         modules.append(layer_module)
@@ -125,6 +130,9 @@ def _for_batch(
     assert isinstance(key, str)
     # retrieve last layer ref at batch output
     modules.append(RetrieveRefModule(key))
+
+    if len(modules) == 0:
+        return modules[0]
 
     return torch.nn.Sequential(*modules)
 
