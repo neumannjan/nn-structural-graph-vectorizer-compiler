@@ -74,7 +74,7 @@ def my_repr(self) -> str:
         if len(self) <= n:
             return f"{{{vals}}}"
         else:
-            return f"{{{vals}, ... (size: {len(vals)})}}"
+            return f"{{{vals}, ... (size: {len(self)})}}"
     else:
         return repr(self)
 

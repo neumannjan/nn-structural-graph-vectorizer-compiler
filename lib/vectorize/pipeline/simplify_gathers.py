@@ -103,7 +103,11 @@ class SimplifyGathers(LayerwiseOperation):
                 self._for_input(batch, input)
                 self._for_input(batch, weight)
                 total_size = self._compute_layer_counts.compute_linear_count(batch, input, weight)
-                return LinearGatherLayerBase(input, weight, self.simplify_gather(gather, total_size=total_size))
+                gather = self.simplify_gather(gather, total_size=total_size)
+                if isinstance(gather, NoopGather):
+                    return LinearLayerBase(input, weight)
+                else:
+                    return LinearGatherLayerBase(input, weight, gather)
             case _:
                 assert False
 

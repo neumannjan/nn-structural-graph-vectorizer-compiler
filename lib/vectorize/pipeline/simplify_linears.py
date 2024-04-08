@@ -15,7 +15,10 @@ class SimplifyLinears(LayerwiseOperation):
 
         if a_subseq is not None and b_subseq is not None:
             warnings.warn("Linears could be simplified further")
-            return GenericGather(a_subseq.tolist()), b
+            if len(a.ordinals) + len(b_subseq) < len(a_subseq) + len(b.ordinals):
+                return a, GenericGather(b_subseq.tolist())
+            else:
+                return GenericGather(a_subseq.tolist()), b
         elif a_subseq is not None:
             return GenericGather(a_subseq.tolist()), b
         elif b_subseq is not None:

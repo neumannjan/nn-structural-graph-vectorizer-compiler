@@ -1,9 +1,30 @@
-from collections import OrderedDict
+from collections.abc import Iterable
+
+import numpy as np
 
 from lib.vectorize.model import *
 from lib.vectorize.pipeline.layerwise import LayerwiseOperation
 
 _Refs = Refs | list[int]
+_Ref = int | tuple[int, str, int]
+
+
+_POS_REFS = 1
+_POS_WEIGHT_REFS = 0
+
+
+def _get_pairs(refs: _Refs, weight_refs: _Refs) -> list[tuple[_Ref, _Ref]]:
+    return list(zip(weight_refs, refs))
+
+
+# def _sort_pairs_by_weight_counts(pairs: Iterable[tuple[_Ref, _Ref]]) -> list[tuple[_Ref, _Ref]]:
+#     weight_refs = [p[_POS_WEIGHT_REFS] for p in pairs]
+#     _, uniq_idx, counts = np.unique(weight_refs, axis=0, return_index=True, return_counts=True)
+#     _idx = np.argsort(counts, axis=0)
+#     uniq_idx = uniq_idx[_idx]
+#     uniq_map = {weight_refs[v_idx]: i for i, v_idx in enumerate(uniq_idx)}
+#     out = sorted(pairs, key=lambda p: (-uniq_map[p[_POS_WEIGHT_REFS]], p[_POS_REFS]))
+#     return out
 
 
 class ConvertRefPairsToUnique(LayerwiseOperation):
@@ -15,36 +36,30 @@ class ConvertRefPairsToUnique(LayerwiseOperation):
         refs: _Refs,
         weight_refs: _Refs,
     ) -> tuple[_Refs, _Refs, GenericGather | None]:
-        pairs = list(
-            zip(
-                refs,
-                weight_refs,
-            )
-        )
+        pairs = _get_pairs(refs, weight_refs)
         # new_pairs = list(OrderedDict.fromkeys(pairs))
         new_pairs = sorted(set(pairs))
 
         if len(pairs) == len(new_pairs):
             return refs, weight_refs, None
 
-
         if isinstance(refs, Refs):
             new_refs = Refs(
-                types=[p[0] for p, _ in new_pairs],  # pyright: ignore
-                layer_ids=[p[1] for p, _ in new_pairs],  # pyright: ignore
-                ordinals=[p[2] for p, _ in new_pairs],  # pyright: ignore
+                types=[p[_POS_REFS][0] for p in new_pairs],  # pyright: ignore
+                layer_ids=[p[_POS_REFS][1] for p in new_pairs],  # pyright: ignore
+                ordinals=[p[_POS_REFS][2] for p in new_pairs],  # pyright: ignore
             )
         else:
-            new_refs = [p for p, _ in new_pairs]
+            new_refs = [p[_POS_REFS] for p in new_pairs]
 
         if isinstance(weight_refs, Refs):
             new_weight_refs = Refs(
-                types=[p[0] for _, p in new_pairs],  # pyright: ignore
-                layer_ids=[p[1] for _, p in new_pairs],  # pyright: ignore
-                ordinals=[p[2] for _, p in new_pairs],  # pyright: ignore
+                types=[p[_POS_WEIGHT_REFS][0] for p in new_pairs],  # pyright: ignore
+                layer_ids=[p[_POS_WEIGHT_REFS][1] for p in new_pairs],  # pyright: ignore
+                ordinals=[p[_POS_WEIGHT_REFS][2] for p in new_pairs],  # pyright: ignore
             )
         else:
-            new_weight_refs = [p for _, p in new_pairs]
+            new_weight_refs = [p[_POS_WEIGHT_REFS] for p in new_pairs]
 
         new_ordinal_pairs_idx_map = {pair: i for i, pair in enumerate(new_pairs)}
 
