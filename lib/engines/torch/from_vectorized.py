@@ -42,18 +42,10 @@ def _build_params_module(reference: VectorizedOpSeqNetwork) -> NetworkParams:
     return NetworkParams(params)
 
 
-def _get_refs(refs: LayerRefs) -> list[str]:
-    out = []
-    out.extend(refs.facts)
-    out.extend(refs.weights)
-    out.extend(refs.layers)
-    return out
-
-
 def _for_op(op: Operation | LayerRefs, allow_non_builtin_torch_ops: bool) -> torch.nn.Module:
     match op:
         case LayerRefs():
-            refs = _get_refs(op)
+            refs = op.layer_ids
             if len(refs) == 1:
                 return RetrieveRefModule(refs[0])
             else:

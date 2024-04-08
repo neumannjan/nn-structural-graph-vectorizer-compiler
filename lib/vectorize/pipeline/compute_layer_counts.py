@@ -67,21 +67,23 @@ class ComputeLayerCounts:
         return acc
 
     def iter_layer_refs_counts(self, batch: int, refs: LayerRefs, layers_fresh=False) -> Iterable[int]:
-        for id in refs.facts:
-            cnt = self.network.fact_layers[id].count
-            assert cnt is not None
-            yield cnt
-
-        for id in refs.weights:
-            yield self.compute_weight_count(self.network.weights[id])
-
-        for id in refs.layers:
-            if not layers_fresh:
-                cnt = self.network.batches[batch].layers[id].count
-                assert cnt is not None
-            else:
-                cnt = self.compute_layer_count(batch, self.network.batches[batch].layers[id])
-            yield cnt
+        for t, id in refs:
+            match t:
+                case LayerRefs.TYPE_FACT:
+                    cnt = self.network.fact_layers[id].count
+                    assert cnt is not None
+                    yield cnt
+                case LayerRefs.TYPE_WEIGHT:
+                    yield self.compute_weight_count(self.network.weights[id])
+                case LayerRefs.TYPE_LAYER:
+                    if not layers_fresh:
+                        cnt = self.network.batches[batch].layers[id].count
+                        assert cnt is not None
+                    else:
+                        cnt = self.compute_layer_count(batch, self.network.batches[batch].layers[id])
+                    yield cnt
+                case _:
+                    assert False, f"{t}"
 
     def compute_layer_refs_count(self, batch: int, refs: LayerRefs) -> int:
         return sum(self.iter_layer_refs_counts(batch, refs))

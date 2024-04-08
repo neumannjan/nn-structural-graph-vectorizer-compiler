@@ -11,50 +11,20 @@ class ConcatInputsLayers(LayerwiseOperation):
         self._compute_layer_counts = ComputeLayerCounts(self.network)
 
     def _for_refs(self, batch: int, layer: str, refs: Refs) -> GatheredLayers:
-        layer_refs = LayerRefs(
-            facts=sorted(set((l for t, l in zip(refs.types, refs.layer_ids) if t == Refs.TYPE_FACT))),
-            weights=sorted(set((l for t, l in zip(refs.types, refs.layer_ids) if t == Refs.TYPE_WEIGHT))),
-            layers=sorted(set((l for t, l in zip(refs.types, refs.layer_ids) if t == Refs.TYPE_LAYER))),
-        )
+        refs_uniq = sorted(set(zip(refs.types, refs.layer_ids)))
+        layer_refs = LayerRefs(types=[r[0] for r in refs_uniq], layer_ids=[r[1] for r in refs_uniq])
 
-        if layer in layer_refs.layers:
+        if (LayerRefs.TYPE_LAYER, layer) in zip(layer_refs.types, layer_refs.layer_ids):
             raise ValueError(f"Layer {layer} expects itself on input.")
 
         layer_counts = list(self._compute_layer_counts.iter_layer_refs_counts(batch, layer_refs))
         layer_offsets: list[int] = np.concatenate([[0], np.cumsum(layer_counts[:-1], dtype=int)], dtype=int).tolist()
 
-        fact_offset_map: dict[str, int] = {
-            id: o for id, o in zip(layer_refs.facts, layer_offsets[: len(layer_refs.facts)])
-        }
-        weight_offset_map: dict[str, int] = {
-            id: o
-            for id, o in zip(
-                layer_refs.weights,
-                layer_offsets[len(layer_refs.facts) : len(layer_refs.facts) + len(layer_refs.weights)],
-            )
-        }
-        layer_offset_map: dict[str, int] = {
-            id: o
-            for id, o in zip(
-                layer_refs.layers,
-                layer_offsets[len(layer_refs.facts) + len(layer_refs.weights) :],
-            )
+        offset_map: dict[tuple[int, str], int] = {
+            (t, id): o for t, id, o in zip(layer_refs.types, layer_refs.layer_ids, layer_offsets)
         }
 
-        def get_layer_offset(type: int, id: str):
-            match type:
-                case Refs.TYPE_FACT:
-                    return fact_offset_map[id]
-                case Refs.TYPE_WEIGHT:
-                    return weight_offset_map[id]
-                case Refs.TYPE_LAYER:
-                    return layer_offset_map[id]
-                case _:
-                    assert False, f"{type}"
-
-        gather = GenericGather(
-            [get_layer_offset(t, l) + o for t, l, o in zip(refs.types, refs.layer_ids, refs.ordinals)]
-        )
+        gather = GenericGather([offset_map[t, l] + o for t, l, o in zip(refs.types, refs.layer_ids, refs.ordinals)])
 
         return GatheredLayers(refs=layer_refs, gather=gather)
 

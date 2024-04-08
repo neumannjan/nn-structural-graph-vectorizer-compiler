@@ -7,7 +7,7 @@ class GiveUniqueNames:
     def __init__(self, network: VectorizedLayerNetwork) -> None:
         self.network = network
 
-    def _for_refs(self, refs: Refs):
+    def _for_refs(self, refs: Refs | LayerRefs):
         for i, t in enumerate(refs.types):
             if t == Refs.TYPE_FACT:
                 prefix = "f_"
@@ -20,17 +20,12 @@ class GiveUniqueNames:
 
             refs.layer_ids[i] = prefix + refs.layer_ids[i]
 
-    def _for_layer_refs(self, refs: LayerRefs):
-        refs.facts = ["f_" + f for f in refs.facts]
-        refs.weights = ["w_" + w for w in refs.weights]
-        refs.layers = ["l_" + l for l in refs.layers]
-
     def _for_input(self, input: Input):
         match input:
             case Refs():
                 self._for_refs(input)
             case GatheredLayers(refs=refs):
-                self._for_layer_refs(refs)
+                self._for_refs(refs)
             case _:
                 assert False, f"{input}"
 

@@ -32,11 +32,29 @@ class Refs(Collection[tuple[int, str, int]]):
         return len(self.types)
 
 
-class LayerRefs:
-    __slots__ = ("facts", "weights", "layers")
+class LayerRefs(Collection[tuple[int, str]]):
+    __slots__ = ("types", "layer_ids")
     __repr__ = repr_slots
 
-    def __init__(self, facts: list[str], weights: list[str], layers: list[str]) -> None:
-        self.facts = facts
-        self.weights = weights
-        self.layers = layers
+    TYPE_FACT = 0
+    TYPE_WEIGHT = 1
+    TYPE_LAYER = 2
+
+    def __init__(self, types: list[int], layer_ids: list[str]) -> None:
+        self.types = types
+        self.layer_ids = layer_ids
+
+    def __contains__(self, x: object, /) -> bool:
+        if not isinstance(x, tuple):
+            return False
+
+        if len(x) != 2:
+            return False
+
+        return x in zip(self.types, self.layer_ids)
+
+    def __iter__(self) -> Iterator[tuple[int, str]]:
+        return zip(self.types, self.layer_ids)
+
+    def __len__(self) -> int:
+        return len(self.types)

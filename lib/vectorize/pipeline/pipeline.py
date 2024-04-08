@@ -4,6 +4,7 @@ from lib.vectorize.pipeline.compute_layer_shapes import compute_layer_shapes
 from lib.vectorize.pipeline.concat_inputs_layers import ConcatInputsLayers
 from lib.vectorize.pipeline.convert_ref_pairs_to_unique import ConvertRefPairsToUnique
 from lib.vectorize.pipeline.convert_refs_to_unique import ConvertRefsToUniqueNoOrdRemap, RemapOrdinals
+from lib.vectorize.pipeline.dissolve_identity_layers import dissolve_identity_layers
 from lib.vectorize.pipeline.give_unique_names import give_unique_names
 from lib.vectorize.pipeline.join_simple_layer_chains import join_simple_layer_chains
 from lib.vectorize.pipeline.layerwise import Layerwise, LayerwiseSeq
@@ -47,6 +48,9 @@ build_vectorized_network = (
         SimplifyLinears,  # <- 'optimize' gather pairs on K_subseq == period
     )
     + Layerwise(SimplifyGathers)
+    + _print
+    + dissolve_identity_layers
+    + _print
     + compute_layer_shapes  # <- shapes are expected starting here
     + _print
     # + merge_weights

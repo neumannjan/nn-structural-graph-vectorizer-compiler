@@ -32,14 +32,17 @@ class SimplifyPureUnitFactLinears(LayerwiseOperation):
             (self._is_unit_fact(self.network.fact_layers[l].facts[o]) for l, o in zip(refs.layer_ids, refs.ordinals))
         )
 
+    def _is_unit_fact_layer_refs(self, refs: LayerRefs) -> bool:
+        return all((t == Refs.TYPE_FACT for t in refs.types)) and all(
+            (id in self._unit_fact_layers for id in refs.layer_ids)
+        )
+
     def _is_pure_unit_fact(self, input: Input) -> bool:
         match input:
             case Refs() as refs:
                 return self._is_unit_fact_refs(refs)
-            case GatheredLayers(refs=LayerRefs(facts=facts, weights=weights, layers=layers)):
-                if len(weights) > 0 or len(layers) > 0:
-                    return False
-                return all((id in self._unit_fact_layers for id in facts))
+            case GatheredLayers(refs=LayerRefs() as refs):
+                return self._is_unit_fact_layer_refs(refs)
             case _:
                 assert False, f"{input}"
 

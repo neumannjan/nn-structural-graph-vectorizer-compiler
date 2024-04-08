@@ -88,14 +88,16 @@ class ComputeLayerShapes:
         )
 
     def iter_layer_refs_shapes(self, batch: int, refs: LayerRefs) -> Iterable[Shape]:
-        for id in refs.facts:
-            yield self.network.fact_layers[id].shape
-
-        for id in refs.weights:
-            yield _compute_weight_shape(self.network.weights[id])
-
-        for id in refs.layers:
-            yield self.network.batches[batch].layers[id].shape
+        for t, id in refs:
+            match t:
+                case LayerRefs.TYPE_FACT:
+                    yield self.network.fact_layers[id].shape
+                case LayerRefs.TYPE_WEIGHT:
+                    yield _compute_weight_shape(self.network.weights[id])
+                case LayerRefs.TYPE_LAYER:
+                    yield self.network.batches[batch].layers[id].shape
+                case _:
+                    assert False, f"{t}"
 
     def compute_layer_refs_shape(self, batch: int, refs: LayerRefs) -> Shape:
         return reduce_shapes(

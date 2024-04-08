@@ -22,18 +22,23 @@ class JoinSimpleLayerChains:
     def __init__(self, network: VectorizedOpSeqNetwork) -> None:
         self.network = network
 
-    def _iter_layer_refs(self, ops: OperationSeq) -> Iterable[str]:
+    def _iter_layer_refs(self, layer_refs: LayerRefs) -> Iterable[str]:
+        for t, l in layer_refs:
+            if t == LayerRefs.TYPE_LAYER:
+                yield l
+
+    def _iter_layer_refs_for_ops(self, ops: OperationSeq) -> Iterable[str]:
         if ops.layer_refs is not None:
-            yield from ops.layer_refs.layers
+            yield from self._iter_layer_refs(ops.layer_refs)
 
         for op in ops.operations:
             match op:
-                case Linear(weight_ops=OperationSeq(layer_refs=LayerRefs(layers=layers))):
-                    yield from layers
+                case Linear(weight_ops=OperationSeq(layer_refs=LayerRefs() as refs)):
+                    yield from self._iter_layer_refs(refs)
 
     def _iter_all_layer_refs(self, layers: dict[str, OperationSeq]) -> Iterable[str]:
         for ops in layers.values():
-            yield from self._iter_layer_refs(ops)
+            yield from self._iter_layer_refs_for_ops(ops)
 
     def _compute_chain_graph(self, layers: dict[str, OperationSeq]) -> _ChainGraph:
         v = list(layers.keys())
@@ -41,7 +46,7 @@ class JoinSimpleLayerChains:
 
         for layer_id, ops in layers.items():
             match ops:
-                case OperationSeq(layer_refs=LayerRefs(facts=[], weights=[], layers=[ref_layer_id])):
+                case OperationSeq(layer_refs=LayerRefs(types=[LayerRefs.TYPE_LAYER], layer_ids=[ref_layer_id])):
                     succ[ref_layer_id] = layer_id
 
         visited: set[str] = set()

@@ -40,7 +40,9 @@ class MaterializeUnitFacts:
         if not isinstance(shape, ConcreteShape):
             raise Exception(f"Failed to materialize layer {layer} (batch {batch}): Found shape {shape}.")
 
-        input.refs.facts = [ref if ref != "unit" else self._get_unit_layer_id(shape) for ref in input.refs.facts]
+        for i, (t, l) in enumerate(input.refs):
+            if t == LayerRefs.TYPE_FACT and l == "unit":
+                input.refs.layer_ids[i] = self._get_unit_layer_id(shape)
 
     def _for_layer_base(self, batch: int, layer: str, base: LayerBase) -> LayerBase:
         match base:
