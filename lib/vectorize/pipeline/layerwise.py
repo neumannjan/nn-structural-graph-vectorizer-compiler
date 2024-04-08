@@ -55,3 +55,12 @@ class _LayerwiseOpSeq(LayerwiseOperation):
 class LayerwiseSeq(Layerwise):
     def __init__(self, *op_factories: _LayerwiseOpFactory) -> None:
         super().__init__(_LayerwiseOpSeqFactory(op_factories))
+
+
+class LayerwisePrint(LayerwiseOperation):
+    def __init__(self, network: VectorizedLayerNetwork) -> None:
+        pass
+
+    def __call__(self, batch: int, layer_id: str, layer: Layer) -> Layer:
+        print(layer)
+        return layer

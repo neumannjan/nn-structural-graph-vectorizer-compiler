@@ -1,11 +1,23 @@
-from typing import Collection, Iterator
+from collections.abc import Sequence
+from typing import Iterator, overload
 
 from lib.vectorize.model.repr import repr_slots
 
 
-class Refs(Collection[tuple[int, str, int]]):
+def _type_to_str(type: int):
+    match type:
+        case Refs.TYPE_FACT:
+            return "f"
+        case Refs.TYPE_WEIGHT:
+            return "w"
+        case Refs.TYPE_LAYER:
+            return "l"
+        case _:
+            return str(type)
+
+
+class Refs(Sequence[tuple[int, str, int]]):
     __slots__ = ("types", "layer_ids", "ordinals")
-    __repr__ = repr_slots
 
     TYPE_FACT = 0
     TYPE_WEIGHT = 1
@@ -31,8 +43,28 @@ class Refs(Collection[tuple[int, str, int]]):
     def __len__(self) -> int:
         return len(self.types)
 
+    @overload
+    def __getitem__(self, key: slice) -> "Refs": ...
 
-class LayerRefs(Collection[tuple[int, str]]):
+    @overload
+    def __getitem__(self, key: int) -> tuple[int, str, int]: ...
+
+    def __getitem__(self, key: slice | int) -> "Refs | tuple[int, str, int]":
+        if isinstance(key, slice):
+            return Refs(self.types[key], self.layer_ids[key], self.ordinals[key])
+
+        return self.types[key], self.layer_ids[key], self.ordinals[key]
+
+    def __repr__(self) -> str:
+        n = 5
+        out = ", ".join((f"<{_type_to_str(t)}|{l}|{o}>" for t, l, o in self[:n]))
+        if len(self) > n:
+            out += f", ... (size: {len(self)})"
+
+        return f"{self.__class__.__name__}({out})"
+
+
+class LayerRefs(Sequence[tuple[int, str]]):
     __slots__ = ("types", "layer_ids")
     __repr__ = repr_slots
 
@@ -58,3 +90,23 @@ class LayerRefs(Collection[tuple[int, str]]):
 
     def __len__(self) -> int:
         return len(self.types)
+
+    @overload
+    def __getitem__(self, key: slice) -> "LayerRefs": ...
+
+    @overload
+    def __getitem__(self, key: int) -> tuple[int, str]: ...
+
+    def __getitem__(self, key: slice | int) -> "LayerRefs | tuple[int, str]":
+        if isinstance(key, slice):
+            return LayerRefs(self.types[key], self.layer_ids[key])
+
+        return self.types[key], self.layer_ids[key]
+
+    def __repr__(self) -> str:
+        n = 5
+        out = ", ".join((f"<{_type_to_str(t)}|{l}>" for t, l in self[:n]))
+        if len(self) > n:
+            out += f", ... (size: {len(self)})"
+
+        return f"{self.__class__.__name__}({out})"
