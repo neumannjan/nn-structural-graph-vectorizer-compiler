@@ -53,19 +53,18 @@ class ComputeLayerCounts:
             case _:
                 assert False
 
-    def compute_ref_count(self, batch: int, ref: Ref) -> int:
-        match ref:
-            case FactRef(id=id, ordinal=ordinal):
-                return _compute_fact_count(self.network.fact_layers[id].facts[ordinal])
-            case NeuronRef(id=id, ordinal=ordinal):
-                return 1
-            case WeightRef(id=id):
-                return self.compute_weight_count(self.network.weights[id])
-            case _:
-                assert False, f"{ref}"
+    def compute_refs_count(self, refs: Refs) -> int:
+        acc = 0
 
-    def compute_refs_count(self, batch: int, refs: Refs) -> int:
-        return sum((self.compute_ref_count(batch, ref) for ref in refs.refs))
+        for t, l, o in zip(refs.types, refs.layer_ids, refs.ordinals):
+            if t == Refs.TYPE_FACT:
+                acc += _compute_fact_count(self.network.fact_layers[l].facts[o])
+            elif t == Refs.TYPE_WEIGHT:
+                acc += self.compute_weight_count(self.network.weights[l])
+            else:
+                acc += 1
+
+        return acc
 
     def iter_layer_refs_counts(self, batch: int, refs: LayerRefs, layers_fresh=False) -> Iterable[int]:
         for id in refs.facts:
@@ -89,8 +88,8 @@ class ComputeLayerCounts:
 
     def compute_input_count(self, batch: int, input: Input) -> int:
         match input:
-            case Refs(_) as refs:
-                count = self.compute_refs_count(batch, refs)
+            case Refs() as refs:
+                count = self.compute_refs_count(refs)
             case GatheredLayers(refs=refs, gather=gather):
                 count = self.compute_layer_refs_count(batch, refs)
                 count = self.compute_gather_count(count, gather)

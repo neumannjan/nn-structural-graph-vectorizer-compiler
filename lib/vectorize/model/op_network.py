@@ -11,11 +11,11 @@ from lib.vectorize.model.gather import (
     SliceValues,
     TakeSingleValue,
 )
-from lib.vectorize.model.layer import FactLayer, GatheredLayers
+from lib.vectorize.model.layer import FactLayer
 from lib.vectorize.model.reduce import UnevenReduce
+from lib.vectorize.model.refs import LayerRefs
 from lib.vectorize.model.repr import ModuleDictWrapper, repr_slots
 from lib.vectorize.model.shape import ConcreteShape
-from lib.vectorize.model.source import LayerRefs, RefPool
 from lib.vectorize.model.transform import Transform
 from lib.vectorize.model.weight import LearnableWeight
 
@@ -113,19 +113,17 @@ class OpSeqBatch:
 
 
 class VectorizedOpSeqNetwork:
-    __slots__ = ("fact_layers", "weights", "batches", "ref_pool")
+    __slots__ = ("fact_layers", "weights", "batches")
 
     def __init__(
         self,
         fact_layers: dict[str, FactLayer],
         weights: dict[str, LearnableWeight],
         batches: OrderedDict[int, OpSeqBatch],
-        ref_pool: RefPool,
     ) -> None:
         self.fact_layers = fact_layers
         self.weights = weights
         self.batches = batches
-        self.ref_pool = ref_pool
 
     def __repr__(self) -> str:
         if not isinstance(self.fact_layers, ModuleDictWrapper):
@@ -134,7 +132,6 @@ class VectorizedOpSeqNetwork:
                     fact_layers=ModuleDictWrapper(self.fact_layers),  # pyright: ignore
                     weights=ModuleDictWrapper(self.weights),  # pyright: ignore
                     batches=ModuleDictWrapper(self.batches),  # pyright: ignore
-                    ref_pool=self.ref_pool,
                 )
             )
         else:

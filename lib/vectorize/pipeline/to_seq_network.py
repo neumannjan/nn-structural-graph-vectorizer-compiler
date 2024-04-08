@@ -1,4 +1,4 @@
-from typing import Callable, OrderedDict
+from typing import OrderedDict
 
 from lib.vectorize.model import *
 from lib.vectorize.model.op_network import DimReduce
@@ -115,7 +115,6 @@ class ToSeqNetwork:
             fact_layers=self.network.fact_layers,
             weights=self.network.weights,
             batches=OrderedDict(((id, self._map_batch(id, batch)) for id, batch in self.network.batches.items())),
-            ref_pool=self.network.ref_pool,
         )
 
 

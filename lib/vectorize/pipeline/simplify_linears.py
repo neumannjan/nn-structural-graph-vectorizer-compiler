@@ -28,14 +28,14 @@ class SimplifyLinears(LayerwiseOperation):
             case InputLayerBase():
                 return base
             case LinearLayerBase(
-                input=GatheredLayers(gather=GenericGather(_) as a) as input,
-                weight=GatheredLayers(gather=GenericGather(_) as b) as weight,
+                input=GatheredLayers(gather=GenericGather() as a) as input,
+                weight=GatheredLayers(gather=GenericGather() as b) as weight,
             ):
                 input.gather, weight.gather = self._simplify(a, b, period)
                 return base
             case LinearGatherLayerBase(
-                input=GatheredLayers(gather=GenericGather(_) as a) as input,
-                weight=GatheredLayers(gather=GenericGather(_) as b) as weight,
+                input=GatheredLayers(gather=GenericGather() as a) as input,
+                weight=GatheredLayers(gather=GenericGather() as b) as weight,
             ):
                 input.gather, weight.gather = self._simplify(a, b, period)
                 return base

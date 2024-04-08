@@ -1,5 +1,4 @@
-from collections import defaultdict
-from typing import Collection, Iterable, Literal, Mapping
+from typing import Collection, Iterable, Mapping
 
 from lib.utils import head_and_rest
 from lib.vectorize.model import *

@@ -7,7 +7,6 @@ from lib.nn.definitions.ops import AggregationDef, ReductionDef, TransformationD
 from lib.sources.base import LayerNeurons, Network, Neurons, Ordinals
 from lib.utils import atleast_2d_shape, head_and_rest
 from lib.vectorize.model import *
-from lib.vectorize.model.source import RefPool
 
 _REDUCTIONS: set[ReductionDef] = set(get_args(ReductionDef))
 
@@ -42,21 +41,28 @@ def _assert_all_same_ignore_none(what_plural: str, source: Iterable[_T]) -> _T |
     return first
 
 
-def _build_gather(pool: RefPool, fact_layers: Collection[str], layer_sizes: dict[str, int], input_ordinals: Ordinals):
-    refs: list[Ref] = []
+def _build_gather(fact_layers: Collection[str], layer_sizes: dict[str, int], input_ordinals: Ordinals):
+    ordinals: list[int] = []
+    types: list[int] = []
+    layer_ids: list[str] = []
 
     for ord in input_ordinals:
         layer = str(ord.layer)
+        ordinals.append(ord.ordinal)
+        layer_ids.append(layer)
         if layer in fact_layers:
-            refs.append(pool.fact(layer, ord.ordinal))
+            types.append(Refs.TYPE_FACT)
         else:
-            refs.append(pool.neuron(layer, ord.ordinal))
+            types.append(Refs.TYPE_LAYER)
 
-    return Refs(refs)
+    return Refs(
+        types=types,
+        layer_ids=layer_ids,
+        ordinals=ordinals,
+    )
 
 
 def _build_weights(
-    pool: RefPool,
     neurons: Neurons,
     weights_out: dict[str, LearnableWeight],
     fact_weights_out: list[Fact],
@@ -85,10 +91,25 @@ def _build_weights(
             else:
                 weights_out[w_id] = LearnableWeight(val)
 
-    weight_sources: list[Ref] = [
-        pool.fact(fact_weights_layer, facts_map[id]) if id in facts_map else pool.weight(id) for id in ids
-    ]
-    return Refs(weight_sources)
+    ordinals: list[int] = []
+    types: list[int] = []
+    layer_ids: list[str] = []
+
+    for id in ids:
+        if id in facts_map:
+            ordinals.append(facts_map[id])
+            types.append(Refs.TYPE_FACT)
+            layer_ids.append(fact_weights_layer)
+        else:
+            ordinals.append(0)
+            types.append(Refs.TYPE_WEIGHT)
+            layer_ids.append(id)
+
+    return Refs(
+        types=types,
+        layer_ids=layer_ids,
+        ordinals=ordinals,
+    )
 
 
 def _build_reduce(neurons: Neurons):
@@ -156,8 +177,6 @@ def build_initial_network(network: Network) -> VectorizedLayerNetwork:
 
     FACT_WEIGHTS_LAYER_KEY = "w"
 
-    ref_pool = RefPool()
-
     for layer, neurons in network.items():
         try:
             layer_id = str(layer.id)
@@ -169,9 +188,8 @@ def build_initial_network(network: Network) -> VectorizedLayerNetwork:
                 transform = _build_transform(neurons)
                 reduce = _build_reduce(neurons)
 
-                gather_source = _build_gather(ref_pool, fact_layers, layer_sizes, neurons.inputs.ordinals)
+                gather_source = _build_gather(fact_layers, layer_sizes, neurons.inputs.ordinals)
                 weight_source = _build_weights(
-                    ref_pool,
                     neurons,
                     weights_out=weights,
                     fact_weights_out=fact_weights,
@@ -192,6 +210,6 @@ def build_initial_network(network: Network) -> VectorizedLayerNetwork:
     fact_layers[FACT_WEIGHTS_LAYER_KEY] = fact_weights_layer
 
     vectorized_net = VectorizedLayerNetwork(
-        fact_layers=fact_layers, weights=weights, batches=OrderedDict([(0, Batch(layers))]), ref_pool=ref_pool
+        fact_layers=fact_layers, weights=weights, batches=OrderedDict([(0, Batch(layers))])
     )
     return vectorized_net

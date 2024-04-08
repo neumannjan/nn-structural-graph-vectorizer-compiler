@@ -10,22 +10,11 @@ class ConcatInputsLayers(LayerwiseOperation):
         self.network = network
         self._compute_layer_counts = ComputeLayerCounts(self.network)
 
-    def _get_ref_offset(self, ref: Ref) -> int:
-        match ref:
-            case FactRef(ordinal=o):
-                return o
-            case NeuronRef(ordinal=o):
-                return o
-            case WeightRef():
-                return 0
-            case _:
-                assert False
-
     def _for_refs(self, batch: int, layer: str, refs: Refs) -> GatheredLayers:
         layer_refs = LayerRefs(
-            facts=sorted(set((ref.id for ref in refs.refs if isinstance(ref, FactRef)))),
-            weights=sorted(set((ref.id for ref in refs.refs if isinstance(ref, WeightRef)))),
-            layers=sorted(set((ref.id for ref in refs.refs if isinstance(ref, NeuronRef)))),
+            facts=sorted(set((l for t, l in zip(refs.types, refs.layer_ids) if t == Refs.TYPE_FACT))),
+            weights=sorted(set((l for t, l in zip(refs.types, refs.layer_ids) if t == Refs.TYPE_WEIGHT))),
+            layers=sorted(set((l for t, l in zip(refs.types, refs.layer_ids) if t == Refs.TYPE_LAYER))),
         )
 
         if layer in layer_refs.layers:
@@ -52,25 +41,27 @@ class ConcatInputsLayers(LayerwiseOperation):
             )
         }
 
-        def get_layer_offset(ref: Ref):
-            match ref:
-                case FactRef(id=id, ordinal=_):
+        def get_layer_offset(type: int, id: str):
+            match type:
+                case Refs.TYPE_FACT:
                     return fact_offset_map[id]
-                case WeightRef(id=id):
+                case Refs.TYPE_WEIGHT:
                     return weight_offset_map[id]
-                case NeuronRef(id=id, ordinal=_):
+                case Refs.TYPE_LAYER:
                     return layer_offset_map[id]
                 case _:
-                    assert False, f"{ref}"
+                    assert False, f"{type}"
 
-        gather = GenericGather([get_layer_offset(ref) + self._get_ref_offset(ref) for ref in refs.refs])
+        gather = GenericGather(
+            [get_layer_offset(t, l) + o for t, l, o in zip(refs.types, refs.layer_ids, refs.ordinals)]
+        )
 
         return GatheredLayers(refs=layer_refs, gather=gather)
 
     def _for_input(self, batch: int, layer: str, input: Input):
         match input:
-            case Refs(_) as refs:
-                return self._for_refs(batch, layer, refs)
+            case Refs():
+                return self._for_refs(batch, layer, input)
             case GatheredLayers():
                 return input
             case _:

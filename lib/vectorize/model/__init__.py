@@ -43,14 +43,9 @@ from lib.vectorize.model.reduce import (
     Reduce,
     UnevenReduce,
 )
-from lib.vectorize.model.shape import AnyShape, ConcreteShape, Shape, VariousShape
-from lib.vectorize.model.source import (
-    FactRef,
+from lib.vectorize.model.refs import (
     LayerRefs,
-    NeuronRef,
-    Ref,
-    RefPool,
     Refs,
-    WeightRef,
 )
+from lib.vectorize.model.shape import AnyShape, ConcreteShape, Shape, VariousShape
 from lib.vectorize.model.transform import Transform

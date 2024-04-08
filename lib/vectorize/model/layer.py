@@ -1,9 +1,9 @@
 from lib.vectorize.model.fact import Fact, fact_repr
 from lib.vectorize.model.gather import Gather
 from lib.vectorize.model.reduce import Reduce
+from lib.vectorize.model.refs import LayerRefs, Refs
 from lib.vectorize.model.repr import my_repr, repr_module_like, repr_slots
 from lib.vectorize.model.shape import Shape, VariousShape
-from lib.vectorize.model.source import LayerRefs, Refs
 from lib.vectorize.model.transform import Transform
 
 
@@ -21,7 +21,7 @@ Input = GatheredLayers | Refs
 
 def _match_input(input: Input):
     match input:
-        case Refs(refs):
+        case Refs():
             ...
         case GatheredLayers(refs=refs, gather=gather):
             ...
@@ -75,7 +75,7 @@ _LAYER_MODULE_LIKES = ("base", "aggregate", "transform")
 
 
 class Layer:
-    __slots__ = ("base", "aggregate", "transform", "count", "shape")
+    __slots__ = ("base", "aggregate", "transform", "count", "shape", "ord_map")
     __repr__ = repr_slots
 
     def __init__(
@@ -91,6 +91,7 @@ class Layer:
         self.transform = transform
         self.count = count
         self.shape = shape if shape is not None else VariousShape()
+        self.ord_map: dict[int, int] = {}
 
     def __repr__(self) -> str:
         out = self.__class__.__name__ + "("

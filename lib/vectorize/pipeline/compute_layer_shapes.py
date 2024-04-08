@@ -62,13 +62,13 @@ class ComputeLayerShapes:
             case _:
                 return in_shape
 
-    def compute_ref_shape(self, batch: int, ref: Ref) -> Shape:
-        match ref:
-            case FactRef(id=id, ordinal=ordinal):
+    def compute_ref_shape(self, batch: int, type: int, id: str, ordinal: int) -> Shape:
+        match type:
+            case Refs.TYPE_FACT:
                 return _compute_fact_shape(self.network.fact_layers[id].facts[ordinal])
-            case WeightRef(id=id):
+            case Refs.TYPE_WEIGHT:
                 return _compute_weight_shape(self.network.weights[id])
-            case NeuronRef(id=id, ordinal=ordinal):
+            case Refs.TYPE_LAYER:
                 match self.network.batches[batch].layers[id].shape:
                     case ConcreteShape(_) as shp:
                         return shp
@@ -79,11 +79,11 @@ class ComputeLayerShapes:
                     case _:
                         assert False
             case _:
-                assert False, f"{ref}"
+                assert False, f"{type}"
 
     def compute_refs_shape(self, batch: int, refs: Refs) -> Shape:
         return reduce_shapes(
-            (self.compute_ref_shape(batch, ref) for ref in refs.refs),
+            (self.compute_ref_shape(batch, t, l, o) for t, l, o in zip(refs.types, refs.layer_ids, refs.ordinals)),
             lambda a, b: VARIOUS_SHAPE if a != b else a,
         )
 
@@ -105,7 +105,7 @@ class ComputeLayerShapes:
 
     def compute_input_shape(self, batch: int, input: Input) -> Shape:
         match input:
-            case Refs(_) as refs:
+            case Refs() as refs:
                 shape = self.compute_refs_shape(batch, refs)
             case GatheredLayers(refs=refs, gather=gather):
                 shape = self.compute_layer_refs_shape(batch, refs)

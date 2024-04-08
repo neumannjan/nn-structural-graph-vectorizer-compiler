@@ -2,7 +2,8 @@ from lib.vectorize.pipeline.build_initial_network import build_initial_network
 from lib.vectorize.pipeline.compute_layer_counts import compute_layer_counts
 from lib.vectorize.pipeline.compute_layer_shapes import compute_layer_shapes
 from lib.vectorize.pipeline.concat_inputs_layers import ConcatInputsLayers
-from lib.vectorize.pipeline.convert_linears_to_unique import ConvertLinearsToUnique
+from lib.vectorize.pipeline.convert_ref_pairs_to_unique import ConvertRefPairsToUnique
+from lib.vectorize.pipeline.convert_refs_to_unique import ConvertRefsToUniqueNoOrdRemap, RemapOrdinals
 from lib.vectorize.pipeline.give_unique_names import give_unique_names
 from lib.vectorize.pipeline.join_simple_layer_chains import join_simple_layer_chains
 from lib.vectorize.pipeline.layerwise import Layerwise, LayerwiseSeq
@@ -29,25 +30,29 @@ build_vectorized_network = (
     # + drop_unused_neurons  # TODO
     # + transpose_fixed_count_linears  # <- optional
     # + extract_unit_ordinals
-    + compute_layer_counts
+    + _print
     + LayerwiseSeq(
         SimplifyPureUnitFactLinears,
-        ConcatInputsLayers,  # <- gathers are expected starting here
+        ConvertRefPairsToUnique,
     )
     + _print
     + LayerwiseSeq(
-        ConvertLinearsToUnique,
+        RemapOrdinals,  # this is 'optimize_tail_gathers'
+        ConvertRefsToUniqueNoOrdRemap,  # this is 'optimize_tail_gathers'
+    )
+    + compute_layer_counts
+    + _print
+    + LayerwiseSeq(
+        ConcatInputsLayers,  # <- gathers are expected starting here
         SimplifyLinears,  # <- 'optimize' gather pairs on K_subseq == period
     )
-    # + optimize_tail_gathers  # <- those with view at the end might require some special treatment?
-    + _print
     + Layerwise(SimplifyGathers)
     + compute_layer_shapes  # <- shapes are expected starting here
+    + _print
     # + merge_weights
     + materialize_unit_facts
     # + precompute_pure_fact_layers
     + give_unique_names
-    + _print
     + to_seq_network
     + _print
     + join_simple_layer_chains

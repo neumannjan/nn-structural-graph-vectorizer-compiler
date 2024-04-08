@@ -2,7 +2,6 @@ from typing import OrderedDict
 
 from lib.vectorize.model.layer import FactLayer, Layer
 from lib.vectorize.model.repr import ModuleDictWrapper, repr_slots
-from lib.vectorize.model.source import RefPool
 from lib.vectorize.model.weight import LearnableWeight
 
 
@@ -25,19 +24,17 @@ class Batch:
 
 
 class VectorizedLayerNetwork:
-    __slots__ = ("fact_layers", "weights", "batches", "ref_pool")
+    __slots__ = ("fact_layers", "weights", "batches")
 
     def __init__(
         self,
         fact_layers: dict[str, FactLayer],
         weights: dict[str, LearnableWeight],
         batches: OrderedDict[int, Batch],
-        ref_pool: RefPool,
     ) -> None:
         self.fact_layers = fact_layers
         self.weights = weights
         self.batches = batches
-        self.ref_pool = ref_pool
 
     def __repr__(self) -> str:
         if not isinstance(self.fact_layers, ModuleDictWrapper):
@@ -46,7 +43,6 @@ class VectorizedLayerNetwork:
                     fact_layers=ModuleDictWrapper(self.fact_layers),  # pyright: ignore
                     weights=ModuleDictWrapper(self.weights),  # pyright: ignore
                     batches=ModuleDictWrapper(self.batches),  # pyright: ignore
-                    ref_pool=self.ref_pool,
                 )
             )
         else:
