@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 from lib.vectorize.model import *
 from lib.vectorize.pipeline.layerwise import LayerwiseOperation
 
@@ -19,12 +21,12 @@ class ConvertRefPairsToUnique(LayerwiseOperation):
                 weight_refs,
             )
         )
-        pairs_set = set(pairs)
+        # new_pairs = list(OrderedDict.fromkeys(pairs))
+        new_pairs = sorted(set(pairs))
 
-        if len(pairs) == len(pairs_set):
+        if len(pairs) == len(new_pairs):
             return refs, weight_refs, None
 
-        new_pairs = sorted(pairs_set)
 
         if isinstance(refs, Refs):
             new_refs = Refs(

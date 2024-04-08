@@ -45,7 +45,7 @@ class ConvertRefsToUniqueNoOrdRemap(LayerwiseOperation):
         self._final_layers = {batch: next(reversed(self.network.batches[batch].layers)) for batch in network.batches}
 
     def _rid_tail_ordinals(self, layer: Layer, ordinals: list[int]):
-        layer.ord_map = {o: o_real for o_real, o in enumerate(ordinals) if o_real != o}
+        layer.ord_map = {o: o_real for o, o_real in enumerate(ordinals) if o != o_real}
 
     def _rid_tail_refs(self, layer: Layer, refs: Refs) -> Refs:
         refs_uniq = sorted(set(refs))

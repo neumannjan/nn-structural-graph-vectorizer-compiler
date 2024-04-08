@@ -7,7 +7,7 @@ from lib.vectorize.pipeline.convert_refs_to_unique import ConvertRefsToUniqueNoO
 from lib.vectorize.pipeline.dissolve_identity_layers import dissolve_identity_layers
 from lib.vectorize.pipeline.give_unique_names import give_unique_names
 from lib.vectorize.pipeline.join_simple_layer_chains import join_simple_layer_chains
-from lib.vectorize.pipeline.layerwise import Layerwise, LayerwiseSeq
+from lib.vectorize.pipeline.layerwise import Layerwise, LayerwisePrint, LayerwiseSeq
 from lib.vectorize.pipeline.materialize_unit_facts import materialize_unit_facts
 from lib.vectorize.pipeline.merge_unit_facts import merge_unit_facts
 from lib.vectorize.pipeline.simplify_gathers import SimplifyGathers
@@ -33,13 +33,10 @@ build_vectorized_network = (
     # + extract_unit_ordinals
     + _print
     + LayerwiseSeq(
+        RemapOrdinals,  # this is 'optimize_tail_gathers'
         SimplifyPureUnitFactLinears,
         ConvertRefPairsToUnique,
-    )
-    + _print
-    + LayerwiseSeq(
-        RemapOrdinals,  # this is 'optimize_tail_gathers'
-        ConvertRefsToUniqueNoOrdRemap,  # this is 'optimize_tail_gathers'
+        ConvertRefsToUniqueNoOrdRemap,  # this is 'optimize_tail_gathers' # TODO RUN FOR FixedCountReduce
     )
     + compute_layer_counts
     + _print
