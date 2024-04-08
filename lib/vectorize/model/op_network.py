@@ -14,7 +14,7 @@ from lib.vectorize.model.gather import (
 from lib.vectorize.model.layer import FactLayer
 from lib.vectorize.model.reduce import UnevenReduce
 from lib.vectorize.model.refs import LayerRefs
-from lib.vectorize.model.repr import ModuleDictWrapper, repr_slots
+from lib.vectorize.model.repr import ModuleDictWrapper, my_repr, repr_module_like, repr_slots
 from lib.vectorize.model.shape import ConcreteShape
 from lib.vectorize.model.transform import Transform
 from lib.vectorize.model.weight import LearnableWeight
@@ -89,9 +89,19 @@ class OperationSeq:
         operations = [self.layer_refs] + self.operations
 
         if len(operations) == 0:
-            return self.__class__.__name__ + "()"
+            return self.__class__.__name__ + f"({self.layer_refs})"
 
-        return self.__class__.__name__ + "(\n  " + addindent(",\n".join((repr(o) for o in operations)), 2) + "\n)"
+        out_dict = {}
+        out_dict["layer_refs"] = self.layer_refs
+        for i in range(len(self.operations)):
+            out_dict[i] = self.operations[i]
+
+        return (
+            self.__class__.__name__
+            + "("
+            + repr_module_like(out_dict, module_keys=["layer_refs"] + list(range(len(self.operations))), extra_keys=())
+            + ")"
+        )
 
 
 class OpSeqBatch:

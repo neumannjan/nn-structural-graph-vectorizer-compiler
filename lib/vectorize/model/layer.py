@@ -95,7 +95,11 @@ class Layer:
 
     def __repr__(self) -> str:
         out = self.__class__.__name__ + "("
-        out += repr_module_like(self, is_module=lambda k, _: k in _LAYER_MODULE_LIKES)
+        out += repr_module_like(
+            self,
+            module_keys=_LAYER_MODULE_LIKES,
+            extra_keys=[v for v in self.__class__.__slots__ if v not in _LAYER_MODULE_LIKES],
+        )
         out += ")"
         return out
 
