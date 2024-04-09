@@ -1,5 +1,5 @@
-from collections.abc import Iterable
-from typing import Collection, Hashable, TypeVar
+from collections.abc import Iterable, Sequence
+from typing import Hashable, TypeVar, overload
 
 from lib.vectorize.model import *
 from lib.vectorize.pipeline.layerwise import LayerwiseOperation, LayerwiseSeq
@@ -66,20 +66,16 @@ class ConvertRefsToUniqueNoOrdRemap(LayerwiseOperation):
         self.network = network
         self._final_layers = {batch: next(reversed(self.network.batches[batch].layers)) for batch in network.batches}
 
-    def _remap_tail_refs_to_unique(
-        self, layer: Layer, refs_chunks: Collection[tuple[_TRef, ...]]
-    ) -> list[tuple[_TRef, ...]]:
-        refs_chunks_uniq = sorted(set(refs_chunks))
-        ord_chunk_map = {chunk_ref: o_chunk_real for o_chunk_real, chunk_ref in enumerate(refs_chunks_uniq)}
-        layer.ord_map = {}
+    def _get_refs(self, source: Refs | GenericGather):
+        match source:
+            case Refs():
+                return source
+            case GenericGather():
+                return source.ordinals
+            case _:
+                assert False, f"{source}"
 
-        for o_chunk, chunk_ref in enumerate(refs_chunks):
-            o_chunk_real = ord_chunk_map[chunk_ref]
-            layer.ord_map[o_chunk] = o_chunk_real
-
-        return refs_chunks_uniq
-
-    def _get_ref_chunks(self, aggregate: Reduce, refs: Collection[_TRef]) -> Collection[tuple[_TRef, ...]]:
+    def _get_ref_groups(self, aggregate: Reduce, refs: Sequence[_TRef]) -> Sequence[tuple[_TRef, ...]]:
         match aggregate:
             case Noop():
                 return [(r,) for r in refs]
@@ -90,7 +86,20 @@ class ConvertRefsToUniqueNoOrdRemap(LayerwiseOperation):
             case _:
                 assert False, f"{aggregate}"
 
-    def _get_new_aggregate(self, aggregate: Reduce, refs_chunks_uniq: Collection[tuple[_TRef, ...]]) -> Reduce:
+    def _remap_ref_groups_to_unique(
+        self, layer: Layer, ref_groups: Sequence[tuple[_TRef, ...]]
+    ) -> Sequence[tuple[_TRef, ...]]:
+        ref_groups_uniq = sorted(set(ref_groups))
+        group_ord_map = {group_ref: o_group_new for o_group_new, group_ref in enumerate(ref_groups_uniq)}
+        layer.ord_map = {}
+
+        for o_group, group_ref in enumerate(ref_groups):
+            o_group_new = group_ord_map[group_ref]
+            layer.ord_map[o_group] = o_group_new
+
+        return ref_groups_uniq
+
+    def _get_new_aggregate(self, aggregate: Reduce, refs_chunks_uniq: Sequence[tuple[_TRef, ...]]) -> Reduce:
         match aggregate:
             case Noop():
                 return aggregate
@@ -101,6 +110,37 @@ class ConvertRefsToUniqueNoOrdRemap(LayerwiseOperation):
             case _:
                 assert False, f"{aggregate}"
 
+    @overload
+    def _compute_ref_groups_uniq(self, layer: Layer, target: Refs) -> Sequence[tuple[tuple[int, str, int], ...]]:
+        pass
+
+    @overload
+    def _compute_ref_groups_uniq(self, layer: Layer, target: GenericGather) -> Sequence[tuple[int, ...]]:
+        pass
+
+    def _compute_ref_groups_uniq(self, layer: Layer, target: Refs | GenericGather):
+        refs = self._get_refs(target)
+        ref_groups = self._get_ref_groups(layer.aggregate, refs)
+        ref_groups_uniq = self._remap_ref_groups_to_unique(layer, ref_groups)
+        return ref_groups_uniq
+
+    def _apply_to_target(self, layer: Layer, target: Refs | GenericGather):
+        match target:
+            case Refs():
+                ref_groups_uniq = self._compute_ref_groups_uniq(layer, target)
+                refs_uniq = [o for os in ref_groups_uniq for o in os]
+                target.types = [r[0] for r in refs_uniq]
+                target.layer_ids = [r[1] for r in refs_uniq]
+                target.ordinals = [r[2] for r in refs_uniq]
+            case GenericGather():
+                ref_groups_uniq = self._compute_ref_groups_uniq(layer, target)
+                refs_uniq = [o for os in ref_groups_uniq for o in os]
+                target.ordinals = refs_uniq
+            case _:
+                assert False, f"{target}"
+
+        layer.aggregate = self._get_new_aggregate(layer.aggregate, ref_groups_uniq)
+
     def __call__(self, batch: int, layer_id: str, layer: Layer) -> Layer:
         if layer_id == self._final_layers[batch]:
             # skip the final layer
@@ -109,37 +149,23 @@ class ConvertRefsToUniqueNoOrdRemap(LayerwiseOperation):
         # # TODO: find a solution for when aggregate has a value
         match layer:
             case Layer(
-                base=InputLayerBase(input=Refs() as input) as base,
-                aggregate=aggregate,
+                base=InputLayerBase(input=Refs() as input),
             ):
-                ref_chunks = self._get_ref_chunks(aggregate, input)
-
-                refs_chunks_uniq = self._remap_tail_refs_to_unique(layer, ref_chunks)
-                refs_uniq = [o for os in refs_chunks_uniq for o in os]
-
-                base.input = Refs(
-                    types=[r[0] for r in refs_uniq],
-                    layer_ids=[r[1] for r in refs_uniq],
-                    ordinals=[r[2] for r in refs_uniq],
-                )
-
-                layer.aggregate = self._get_new_aggregate(aggregate, refs_chunks_uniq)
-                return layer
+                self._apply_to_target(layer, input)
             case Layer(
-                base=LinearGatherLayerBase(input=input, weight=weight, gather=GenericGather(ordinals) as gather),
-                aggregate=aggregate,
+                base=LinearLayerBase(input=Refs() as input, weight=Refs() as weight),
+                aggregate=FixedCountReduce(period=period),
+            ) if period == len(weight) or period == len(input):
+                if period != len(weight):
+                    self._apply_to_target(layer, weight)
+                elif period != len(input):
+                    self._apply_to_target(layer, input)
+            case Layer(
+                base=LinearGatherLayerBase(input=input, weight=weight, gather=GenericGather() as gather),
             ):
-                ref_chunks = self._get_ref_chunks(aggregate, ordinals)
+                self._apply_to_target(layer, gather)
 
-                refs_chunks_uniq = self._remap_tail_refs_to_unique(layer, ref_chunks)
-                refs_uniq = [o for os in refs_chunks_uniq for o in os]
-
-                gather.ordinals = refs_uniq
-
-                layer.aggregate = self._get_new_aggregate(aggregate, refs_chunks_uniq)
-                return layer
-            case _:
-                return layer
+        return layer
 
 
 def convert_refs_to_unique(network: VectorizedLayerNetwork):

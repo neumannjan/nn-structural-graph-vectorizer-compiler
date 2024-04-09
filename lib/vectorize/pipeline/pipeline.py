@@ -32,6 +32,7 @@ build_vectorized_network = (
     # + transpose_fixed_count_linears  # <- optional
     # + extract_unit_ordinals
     + _print
+    + Layerwise(SimplifyLinears)  # <- 'optimize' gather pairs on K_subseq == period
     + LayerwiseSeq(
         RemapOrdinals,  # this is 'optimize_tail_gathers'
         SimplifyPureUnitFactLinears,
@@ -42,8 +43,7 @@ build_vectorized_network = (
     + _print
     + Layerwise(ClearOrdinalsMap)
     + LayerwiseSeq(
-        ConcatInputsLayers,  # <- gathers are expected starting here
-        SimplifyLinears,  # <- 'optimize' gather pairs on K_subseq == period
+        ConcatInputsLayers  # <- gathers are expected starting here
     )
     + Layerwise(SimplifyGathers)
     + _print

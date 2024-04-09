@@ -10,14 +10,7 @@ class ConcatInputsLayers(LayerwiseOperation):
         self.network = network
         self._compute_layer_counts = ComputeLayerCounts(self.network)
 
-    def _for_refs(self, batch: int, layer: str, refs: Refs) -> GatheredLayers:
-        refs_uniq = sorted(set(zip(refs.types, refs.layer_ids)))
-        layer_refs = LayerRefs(types=[r[0] for r in refs_uniq], layer_ids=[r[1] for r in refs_uniq])
-
-        if (LayerRefs.TYPE_LAYER, layer) in zip(layer_refs.types, layer_refs.layer_ids):
-            raise ValueError(f"Layer {layer} expects itself on input.")
-
-        layer_counts = list(self._compute_layer_counts.iter_layer_refs_counts(batch, layer_refs))
+    def _for_refs_with_gather(self, refs: Refs, layer_refs: LayerRefs, layer_counts: list[int]) -> GatheredLayers:
         layer_offsets: list[int] = np.concatenate([[0], np.cumsum(layer_counts[:-1], dtype=int)], dtype=int).tolist()
 
         offset_map: dict[tuple[int, str], int] = {
@@ -27,6 +20,22 @@ class ConcatInputsLayers(LayerwiseOperation):
         gather = GenericGather([offset_map[t, l] + o for t, l, o in zip(refs.types, refs.layer_ids, refs.ordinals)])
 
         return GatheredLayers(refs=layer_refs, gather=gather)
+
+    def _for_refs(self, batch: int, layer: str, refs: Refs) -> GatheredLayers:
+        refs_uniq = sorted(set(zip(refs.types, refs.layer_ids)))
+        layer_refs_uniq = LayerRefs(types=[r[0] for r in refs_uniq], layer_ids=[r[1] for r in refs_uniq])
+
+        if (LayerRefs.TYPE_LAYER, layer) in zip(layer_refs_uniq.types, layer_refs_uniq.layer_ids):
+            raise ValueError(f"Layer {layer} expects itself on input.")
+
+        layer_counts = list(self._compute_layer_counts.iter_layer_refs_counts(batch, layer_refs_uniq))
+
+        # TODO: parametrize this heuristic
+        if len(refs) < 20 and all((c == 1 for c in layer_counts)):
+            layer_refs = LayerRefs(types=refs.types, layer_ids=refs.layer_ids)
+            return GatheredLayers(refs=layer_refs, gather=NoopGather())
+
+        return self._for_refs_with_gather(refs, layer_refs_uniq, layer_counts)
 
     def _for_input(self, batch: int, layer: str, input: Input):
         match input:

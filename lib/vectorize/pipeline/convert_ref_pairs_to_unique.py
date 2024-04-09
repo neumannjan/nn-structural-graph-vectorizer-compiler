@@ -86,18 +86,18 @@ class ConvertRefPairsToUnique(LayerwiseOperation):
                 assert False, f"{refs, input}"
 
     def __call__(self, batch: int, layer_id: str, layer: Layer) -> Layer:
-        match layer.base:
-            case InputLayerBase(input=input):
+        match layer:
+            case Layer(base=InputLayerBase(input=input)):
                 # nothing to do
                 return layer
-            case LinearLayerBase(input=input, weight=weight):
+            case Layer(base=LinearLayerBase(input=input, weight=weight)):
                 refs, weight_refs, final_gather = self._for_pairs(self._extract_refs(input), self._extract_refs(weight))
                 if final_gather is not None:
                     input = self._apply_refs(refs, input)
                     weight = self._apply_refs(weight_refs, weight)
                     layer.base = LinearGatherLayerBase(input=input, weight=weight, gather=final_gather)
                 return layer
-            case LinearGatherLayerBase():
+            case Layer(base=LinearGatherLayerBase()):
                 raise NotImplementedError("Concatenation of multiple gathers not yet implemented.")
             case _:
                 assert False, f"{layer.base}"
