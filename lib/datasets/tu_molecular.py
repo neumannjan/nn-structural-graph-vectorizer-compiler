@@ -8,7 +8,7 @@ from torch_geometric.datasets import TUDataset
 
 from lib.datasets.dataset import BuiltDatasetInstance, MyDataset
 from lib.datasets.pyg.tu_molecular import build_pyg_module
-from lib.nn.definitions.settings import Settings
+from lib.sources.neuralogic_settings import NeuralogicSettings
 
 
 class _TemplateProtocol(Protocol):
@@ -116,7 +116,7 @@ def _gsage(activation: Transformation, num_features: int, output_size: int, dim:
     template += (R.l1_embed(V.X)[dim, dim] <= R.atom_embed(V.X)) | [Transformation.IDENTITY]
     template += (R.l1_embed(V.X)[dim, dim] <= (R.atom_embed(V.Y), R._edge(V.Y, V.X))) | [
         Aggregation.AVG,
-        Transformation.IDENTITY,
+        Transformation.TANH, # TODO: revert to IDENTITY
     ]
     template += R.l1_embed / 1 | [Transformation.RELU]
 
@@ -145,7 +145,7 @@ TUDatasetSource = Literal["mutag", "enzymes", "proteins", "collab", "imdb-binary
 
 
 class MyTUDataset(MyDataset):
-    def __init__(self, settings: Settings, source: TUDatasetSource, template: TUDatasetTemplate) -> None:
+    def __init__(self, settings: NeuralogicSettings, source: TUDatasetSource, template: TUDatasetTemplate) -> None:
         self.source_name = source
         self.template_name = template
         root = Path("./datasets")
@@ -166,7 +166,7 @@ class MyTUDataset(MyDataset):
                 activation=Transformation.SIGMOID, num_features=num_node_features, output_size=output_size, dim=dim
             )
 
-        match settings.neuralogic.initializer:
+        match settings.initializer:
             case Uniform(scale=2):
                 pass
             case Glorot(scale=2):
@@ -174,7 +174,7 @@ class MyTUDataset(MyDataset):
             case _:
                 assert False
 
-        settings.neuralogic.initializer = Glorot()
+        settings.initializer = Glorot()
 
         super().__init__(f"TU_{source}", _build_template, dataset, settings)
         self.pyg_dataset = pyg_dataset

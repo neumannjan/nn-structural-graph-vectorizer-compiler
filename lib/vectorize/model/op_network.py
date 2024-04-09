@@ -1,7 +1,6 @@
 from typing import OrderedDict
 
-from lib.nn.definitions.ops import ReductionDef
-from lib.utils import addindent
+from lib.model.ops import ReductionDef
 from lib.vectorize.model.gather import (
     Gather,
     GatherPair,
@@ -14,7 +13,7 @@ from lib.vectorize.model.gather import (
 from lib.vectorize.model.layer import FactLayer
 from lib.vectorize.model.reduce import UnevenReduce
 from lib.vectorize.model.refs import LayerRefs
-from lib.vectorize.model.repr import ModuleDictWrapper, my_repr, repr_module_like, repr_slots
+from lib.vectorize.model.repr import ModuleDictWrapper, repr_module_like, repr_slots
 from lib.vectorize.model.shape import ConcreteShape
 from lib.vectorize.model.transform import Transform
 from lib.vectorize.model.weight import LearnableWeight

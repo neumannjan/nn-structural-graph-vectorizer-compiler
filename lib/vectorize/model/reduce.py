@@ -1,4 +1,4 @@
-from lib.nn.definitions.ops import ReductionDef
+from lib.model.ops import ReductionDef
 from lib.vectorize.model.noop import Noop
 from lib.vectorize.model.repr import repr_slots
 

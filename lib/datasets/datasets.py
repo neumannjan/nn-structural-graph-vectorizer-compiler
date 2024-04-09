@@ -5,7 +5,7 @@ from typing import get_args as t_get_args
 
 from lib.datasets.mutagenesis import MutagenesisSource, MutagenesisTemplate, MyMutagenesis
 from lib.datasets.tu_molecular import MyTUDataset, TUDatasetSource, TUDatasetTemplate
-from lib.nn.definitions.settings import Settings
+from lib.sources.neuralogic_settings import NeuralogicSettings
 
 
 @dataclass
@@ -49,7 +49,7 @@ def get_dataset_info_from_args(args: argparse.Namespace) -> DatasetInfo:
         raise ValueError()
 
 
-def build_dataset(dataset_info: DatasetInfo, settings: Settings):
+def build_dataset(dataset_info: DatasetInfo, settings: NeuralogicSettings):
     if dataset_info[0] == "mutagenesis":
         return MyMutagenesis(settings, template=dataset_info[1].template, source=dataset_info[1].source)
     elif dataset_info[0] == "tu_molecular":

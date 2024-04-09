@@ -1,9 +1,9 @@
 from typing import Type
 
-from lib.nn.definitions.ops import ReductionDef
-
 import torch
 import torch.nn.functional as F
+
+from lib.model.ops import ReductionDef
 
 
 class _DimReduceModule(torch.nn.Module):

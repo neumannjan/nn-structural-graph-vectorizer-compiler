@@ -2,7 +2,7 @@ from collections.abc import Iterable, Sequence
 from typing import Hashable, TypeVar, overload
 
 from lib.vectorize.model import *
-from lib.vectorize.pipeline.layerwise import LayerwiseOperation, LayerwiseSeq
+from lib.vectorize.pipeline.layerwise import LayerwiseOperation
 
 
 class RemapOrdinals(LayerwiseOperation):
@@ -61,7 +61,7 @@ def _uneven_grouper(iterable: Iterable[_TRef], counts: list[int]) -> Iterable[tu
         yield tuple((next(it) for _ in range(c)))
 
 
-class ConvertRefsToUniqueNoOrdRemap(LayerwiseOperation):
+class OptimizeTailRefsToUniqueNoOrdRemap(LayerwiseOperation):
     def __init__(self, network: VectorizedLayerNetwork) -> None:
         self.network = network
         self._final_layers = {batch: next(reversed(self.network.batches[batch].layers)) for batch in network.batches}
@@ -87,7 +87,7 @@ class ConvertRefsToUniqueNoOrdRemap(LayerwiseOperation):
                 assert False, f"{aggregate}"
 
     def _remap_ref_groups_to_unique(
-        self, layer: Layer, ref_groups: Sequence[tuple[_TRef, ...]]
+            self, layer: Layer, ref_groups: Sequence[tuple[_TRef, ...]]
     ) -> Sequence[tuple[_TRef, ...]]:
         ref_groups_uniq = sorted(set(ref_groups))
         group_ord_map = {group_ref: o_group_new for o_group_new, group_ref in enumerate(ref_groups_uniq)}
@@ -166,10 +166,3 @@ class ConvertRefsToUniqueNoOrdRemap(LayerwiseOperation):
                 self._apply_to_target(layer, gather)
 
         return layer
-
-
-def convert_refs_to_unique(network: VectorizedLayerNetwork):
-    return LayerwiseSeq(
-        RemapOrdinals,
-        ConvertRefsToUniqueNoOrdRemap,
-    )

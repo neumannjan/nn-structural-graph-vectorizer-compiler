@@ -7,7 +7,7 @@ from neuralogic.dataset import BaseDataset
 from neuralogic.nn.java import NeuraLogic
 from torch_geometric.data.dataset import Dataset
 
-from lib.nn.definitions.settings import Settings
+from lib.sources.neuralogic_settings import NeuralogicSettings
 
 
 @dataclass
@@ -22,16 +22,22 @@ class BuiltDatasetInstance:
 
 
 class MyDataset:
-    def __init__(self, name: str, template: Callable[[], Template], dataset: BaseDataset, settings: Settings) -> None:
+    def __init__(
+        self,
+        name: str,
+        template: Callable[[], Template],
+        dataset: BaseDataset,
+        neuralogic_settings: NeuralogicSettings,
+    ) -> None:
         self.name = name
         self.template = template
         self.dataset = dataset
-        self._settings = settings
+        self._n_settings = neuralogic_settings
 
     def build(self, sample_run=False) -> BuiltDatasetInstance:
-        assert self._settings.neuralogic.compute_neuron_layer_indices
+        assert self._n_settings.compute_neuron_layer_indices
 
-        neuralogic = self.template().build(self._settings.neuralogic)
+        neuralogic = self.template().build(self._n_settings)
         built_dataset = neuralogic.build_dataset(self.dataset)
 
         if sample_run:

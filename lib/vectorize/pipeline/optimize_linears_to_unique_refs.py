@@ -27,7 +27,7 @@ def _get_pairs(refs: _Refs, weight_refs: _Refs) -> list[tuple[_Ref, _Ref]]:
 #     return out
 
 
-class ConvertRefPairsToUnique(LayerwiseOperation):
+class OptimizeLinearsUniqueRefPairs(LayerwiseOperation):
     def __init__(self, network: VectorizedLayerNetwork) -> None:
         self.network = network
 
@@ -109,5 +109,5 @@ class ConvertRefPairsToUnique(LayerwiseOperation):
 
 
 def convert_linears_to_unique(network: VectorizedLayerNetwork):
-    ConvertRefPairsToUnique(network).convert_linears_to_unique()
+    OptimizeLinearsUniqueRefPairs(network).convert_linears_to_unique()
     return network

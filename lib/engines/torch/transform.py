@@ -1,8 +1,8 @@
 from typing import Type
 
-from lib.nn.definitions.ops import TransformationDef
-
 import torch
+
+from lib.model.ops import TransformationDef
 
 
 class Sqrt(torch.nn.Module):

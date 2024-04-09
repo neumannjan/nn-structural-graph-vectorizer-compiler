@@ -1,6 +1,6 @@
-from lib.engines.torch.model import LayeredInputType
-
 import torch
+
+from lib.engines.torch.model import LayeredInputType
 
 
 class ConcatRefsModule(torch.nn.Module):

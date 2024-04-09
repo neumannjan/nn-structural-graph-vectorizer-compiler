@@ -4,7 +4,7 @@ from typing import Collection, Iterable, Mapping, Sequence
 import numpy as np
 import torch
 
-from lib.nn.definitions.ops import AggregationDef, TransformationDef
+from lib.model.ops import AggregationDef, TransformationDef
 from lib.sources.base import LayerDefinition, WeightDefinition
 from lib.sources.base_impl import BaseWeightDefinition
 from lib.sources.minimal_api.base import MinimalAPINetwork

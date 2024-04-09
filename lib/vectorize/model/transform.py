@@ -1,4 +1,4 @@
-from lib.nn.definitions.ops import TransformationDef
+from lib.model.ops import TransformationDef
 from lib.vectorize.model.repr import repr_slots
 
 

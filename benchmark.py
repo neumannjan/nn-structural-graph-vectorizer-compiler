@@ -4,13 +4,15 @@ from typing import Any, Literal, OrderedDict, Sequence
 from typing import get_args as t_get_args
 
 from lib.benchmarks.runnables.neuralogic_cpu import NeuraLogicCPURunnable
-from lib.benchmarks.runnables.neuralogic_vectorized import NeuralogicLegacyVectorizedTorchRunnable
+from lib.benchmarks.runnables.neuralogic_vectorized import NeuralogicVectorizedTorchRunnable
 from lib.benchmarks.runnables.pyg import PytorchGeometricRunnable
 from lib.benchmarks.runnables.runnable import Runnable
 from lib.benchmarks.runner import MultiRunner
 from lib.datasets.datasets import add_parser_args_for_dataset, build_dataset, get_dataset_info_from_args
 from lib.datasets.mutagenesis import MutagenesisSource, MutagenesisTemplate
-from lib.nn.definitions.settings import Compilation, Settings
+from lib.engines.torch.settings import Compilation, TorchModuleSettings
+from lib.sources.neuralogic_settings import NeuralogicSettings
+from lib.vectorize.model.settings import VectorizeSettings
 from tqdm.auto import tqdm
 
 Device = Literal["mps", "cuda", "cpu"]
@@ -68,7 +70,9 @@ class CommaSeparatedListAction(argparse.Action):
         setattr(namespace, self.dest, out)
 
 
-DEFAULT_SETTINGS = Settings()
+DEFAULT_TORCH_SETTINGS = TorchModuleSettings()
+DEFAULT_NEURALOGIC_SETTINGS = NeuralogicSettings(compute_neuron_layer_indices=True)
+DEFAULT_VECTORIZE_SETTINGS = VectorizeSettings()
 
 
 if __name__ == "__main__":
@@ -78,21 +82,35 @@ if __name__ == "__main__":
     parser.add_argument("--models", "-m", action=CommaSeparatedListAction, choices=t_get_args(Model), required=True)
     parser.add_argument("--repeats", "-n", "-r", type=int, default=10)
     parser.add_argument("--results-dict", action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument("--compilation", "-c", choices=t_get_args(Compilation), default=DEFAULT_SETTINGS.compilation)
     parser.add_argument(
-        "--iso", action=argparse.BooleanOptionalAction, default=DEFAULT_SETTINGS.neuralogic.iso_value_compression
+        "--compilation", "-c", choices=t_get_args(Compilation), default=DEFAULT_TORCH_SETTINGS.compilation
     )
-    parser.add_argument("--tail", action=argparse.BooleanOptionalAction, default=DEFAULT_SETTINGS.optimize_tail_gathers)
     parser.add_argument(
-        "--uniq", action=argparse.BooleanOptionalAction, default=DEFAULT_SETTINGS.use_unique_pre_gathers
+        "--iso", action=argparse.BooleanOptionalAction, default=DEFAULT_NEURALOGIC_SETTINGS.iso_value_compression
+    )
+    parser.add_argument(
+        "--chain", action=argparse.BooleanOptionalAction, default=DEFAULT_NEURALOGIC_SETTINGS.chain_pruning
+    )
+    parser.add_argument(
+        "--tail", action=argparse.BooleanOptionalAction, default=DEFAULT_VECTORIZE_SETTINGS.optimize_tail_refs
+    )
+    parser.add_argument(
+        "--uniq",
+        action=argparse.BooleanOptionalAction,
+        default=DEFAULT_VECTORIZE_SETTINGS.linears_optimize_unique_ref_pairs,
     )
     args = parser.parse_args()
 
-    settings = Settings()
-    settings.optimize_tail_gathers = args.tail
-    settings.use_unique_pre_gathers = args.uniq
-    settings.compilation = args.compilation
-    settings.neuralogic.iso_value_compression = args.iso
+    v_settings = VectorizeSettings()
+    v_settings.optimize_tail_refs = args.tail
+    v_settings.linears_optimize_unique_ref_pairs = args.uniq
+
+    t_settings = TorchModuleSettings()
+    t_settings.compilation = args.compilation
+
+    n_settings = NeuralogicSettings()
+    n_settings.iso_value_compression = args.iso
+    n_settings.chain_pruning = args.chain
 
     print("------")
     print()
@@ -122,14 +140,20 @@ if __name__ == "__main__":
                 elif model == "torch_geometric":
                     runnables[model, device] = PytorchGeometricRunnable(device=device)
                 elif model == "neuralogic_torch":
-                    runnables[model, device] = NeuralogicLegacyVectorizedTorchRunnable(device=device, settings=settings)
+                    runnables[model, device] = NeuralogicVectorizedTorchRunnable(
+                        device=device,
+                        neuralogic_settings=n_settings,
+                        torch_settings=t_settings,
+                        vectorize_settings=v_settings,
+                        debug=False,
+                    )
 
     runner = MultiRunner(n_repeats=args.repeats)
 
     source: MutagenesisSource = args.source
     template: MutagenesisTemplate = args.template
 
-    dataset = build_dataset(dataset_info, settings).build()
+    dataset = build_dataset(dataset_info, n_settings).build()
 
     with tqdm(runnables.keys(), desc="Runners") as p:
         for model, device in p:

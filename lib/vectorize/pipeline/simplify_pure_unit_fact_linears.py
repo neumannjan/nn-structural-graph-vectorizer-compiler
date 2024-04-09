@@ -60,11 +60,15 @@ class SimplifyPureUnitFactLinears(LayerwiseOperation):
             case LinearLayerBase(input=input, weight=weight):
                 if self._is_pure_unit_fact(input):
                     return InputLayerBase(weight)
+                elif self._is_pure_unit_fact(weight):
+                    return InputLayerBase(input)
                 else:
                     return base
             case LinearGatherLayerBase(input=input, weight=weight, gather=gather):
                 if self._is_pure_unit_fact(input):
                     return InputLayerBase(self._add_gather_to_input(weight, gather))
+                elif self._is_pure_unit_fact(weight):
+                    return InputLayerBase(self._add_gather_to_input(input, gather))
                 else:
                     return base
             case _:

@@ -4,7 +4,7 @@ from typing import Generic, Iterable, Mapping, Protocol, TypeVar
 import numpy as np
 import torch
 
-from lib.nn.definitions.ops import AggregationDef, TransformationDef
+from lib.model.ops import AggregationDef, TransformationDef
 from lib.sources.base import LayerDefinition, WeightDefinition
 
 TNeurons = TypeVar("TNeurons")

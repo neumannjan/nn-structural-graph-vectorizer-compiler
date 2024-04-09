@@ -7,7 +7,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import networkx as nx
 from lib.datasets import MyMutagenesis
-from lib.nn.definitions.settings import Settings
+from lib.sources.neuralogic_settings import NeuralogicSettings
 from neuralogic.core.builder.builder import NeuralSample
 
 
@@ -234,7 +234,7 @@ def do_sample(neural_sample: NeuralSample, reindex=True, stage: Literal[0, 1] = 
 
 if __name__ == "__main__":
     try:
-        settings = Settings()
+        settings = NeuralogicSettings()
         dataset = MyMutagenesis(settings)
         # settings.neuralogic.iso_value_compression = False
         # settings.neuralogic.chain_pruning = False

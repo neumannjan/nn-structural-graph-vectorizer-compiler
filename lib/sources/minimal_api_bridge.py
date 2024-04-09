@@ -3,7 +3,7 @@ from typing import Collection, Generic, Iterable, Iterator, Sequence
 import numpy as np
 import torch
 
-from lib.nn.definitions.ops import AggregationDef, TransformationDef
+from lib.model.ops import AggregationDef, TransformationDef
 from lib.sources.base import LayerDefinition, LayerOrdinal, Ordinals, WeightDefinition, get_layer_id
 from lib.sources.base_impl import BaseLayerNeurons, BaseNetwork, BaseNeurons, BaseOrdinals
 from lib.sources.minimal_api.base import MinimalAPINetwork, TNeurons

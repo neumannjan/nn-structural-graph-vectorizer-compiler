@@ -1,14 +1,15 @@
+import torch
+
 from lib.engines.torch.dim_reduce import build_dim_reduce_module
 from lib.engines.torch.gather import GenericGatherModule, RepeatModule, SliceValuesModule, TakeValueModule
 from lib.engines.torch.linear import LinearModule
 from lib.engines.torch.network import LayerModule, NetworkModule, NetworkParams
 from lib.engines.torch.refs import ConcatRefsModule, RetrieveRefModule
 from lib.engines.torch.scatter import build_scatter_module, counts_to_index
+from lib.engines.torch.settings import TorchModuleSettings
 from lib.engines.torch.transform import build_transformation
 from lib.engines.torch.view import ViewModule
 from lib.vectorize.model import *
-
-import torch
 
 
 def _get_fact_value(fact: Fact, shape: ConcreteShape) -> torch.Tensor:
@@ -42,7 +43,7 @@ def _build_params_module(reference: VectorizedOpSeqNetwork) -> NetworkParams:
     return NetworkParams(params)
 
 
-def _for_op(op: Operation | LayerRefs, allow_non_builtin_torch_ops: bool) -> torch.nn.Module:
+def _for_op(op: Operation | LayerRefs, settings: TorchModuleSettings) -> torch.nn.Module:
     match op:
         case LayerRefs():
             refs = op.layer_ids
@@ -51,8 +52,8 @@ def _for_op(op: Operation | LayerRefs, allow_non_builtin_torch_ops: bool) -> tor
             else:
                 return ConcatRefsModule(refs)
         case GatherPair(a, b):
-            first_gathers = _for_op(a, allow_non_builtin_torch_ops=allow_non_builtin_torch_ops)
-            last_gather = _for_op(b, allow_non_builtin_torch_ops=allow_non_builtin_torch_ops)
+            first_gathers = _for_op(a, settings)
+            last_gather = _for_op(b, settings)
 
             if isinstance(first_gathers, torch.nn.Sequential):
                 first_gathers.append(last_gather)
@@ -63,15 +64,12 @@ def _for_op(op: Operation | LayerRefs, allow_non_builtin_torch_ops: bool) -> tor
             weight_module = torch.nn.Sequential()
 
             if weight_ops.layer_refs is not None:
-                retrieve_refs = _for_op(
-                    weight_ops.layer_refs,
-                    allow_non_builtin_torch_ops=allow_non_builtin_torch_ops,
-                )
+                retrieve_refs = _for_op(weight_ops.layer_refs, settings)
 
                 weight_module.append(retrieve_refs)
 
             for op in weight_ops.operations:
-                op_module = _for_op(op, allow_non_builtin_torch_ops=allow_non_builtin_torch_ops)
+                op_module = _for_op(op, settings)
                 weight_module.append(op_module)
 
             return LinearModule(weight_module)
@@ -92,7 +90,7 @@ def _for_op(op: Operation | LayerRefs, allow_non_builtin_torch_ops: bool) -> tor
             return build_scatter_module(
                 index=index,
                 reduce=reduce,
-                allow_non_builtin_torch_ops=allow_non_builtin_torch_ops,
+                allow_non_builtin_torch_ops=settings.allow_non_builtin_torch_ops,
             )
         case View(shape=shape):
             return ViewModule(shape.dims)
@@ -103,7 +101,7 @@ def _for_op(op: Operation | LayerRefs, allow_non_builtin_torch_ops: bool) -> tor
 def _for_batch(
     batch_reference: OpSeqBatch,
     debug: bool,
-    allow_non_builtin_torch_ops: bool,
+    settings: TorchModuleSettings,
 ) -> torch.nn.Module:
     modules: list[torch.nn.Module] = []
 
@@ -111,10 +109,10 @@ def _for_batch(
         layer_modules: list[torch.nn.Module] = []
 
         if layer.layer_refs is not None:
-            layer_modules.append(_for_op(layer.layer_refs, allow_non_builtin_torch_ops=allow_non_builtin_torch_ops))
+            layer_modules.append(_for_op(layer.layer_refs, settings))
 
         for op in layer.operations:
-            layer_modules.append(_for_op(op, allow_non_builtin_torch_ops=allow_non_builtin_torch_ops))
+            layer_modules.append(_for_op(op, settings))
 
         layer_module = LayerModule(layer_modules, out_key=key, debug=debug)
         modules.append(layer_module)
@@ -132,7 +130,7 @@ def _for_batch(
 def build_torch_network(
     reference: VectorizedOpSeqNetwork,
     debug: bool,
-    allow_non_builtin_torch_ops: bool,
+    settings: TorchModuleSettings,
 ) -> torch.nn.Module:
     params_module = _build_params_module(reference)
 
@@ -140,11 +138,7 @@ def build_torch_network(
 
     for i, (batch_id, batch_ref) in enumerate(reference.batches.items()):
         assert i == batch_id
-        batch_module = _for_batch(
-            batch_ref,
-            debug=debug,
-            allow_non_builtin_torch_ops=allow_non_builtin_torch_ops,
-        )
+        batch_module = _for_batch(batch_ref, debug=debug, settings=settings)
 
         batch_modules.append(batch_module)
 

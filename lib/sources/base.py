@@ -1,7 +1,6 @@
 from collections.abc import Collection
 from dataclasses import dataclass
 from typing import (
-    TYPE_CHECKING,
     Iterable,
     Iterator,
     Literal,
@@ -15,11 +14,7 @@ from typing import (
 import numpy as np
 import torch
 
-from lib.nn.definitions.ops import AggregationDef, TransformationDef
-
-if TYPE_CHECKING:
-    from lib.sources.minimal_api.base import MinimalAPINetwork
-    from lib.sources.minimal_api.ordinals import MinimalAPIOrdinals
+from lib.model.ops import AggregationDef, TransformationDef
 
 LayerType = Literal["FactLayer", "WeightedAtomLayer", "WeightedRuleLayer", "AtomLayer", "RuleLayer", "AggregationLayer"]
 

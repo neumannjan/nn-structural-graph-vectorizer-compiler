@@ -5,66 +5,45 @@ from lib.benchmarks.runnables.runnable import Runnable
 from lib.benchmarks.utils.timer import Timer
 from lib.datasets.dataset import BuiltDatasetInstance
 from lib.engines.torch.from_vectorized import build_torch_network
-from lib.nn.definitions.settings import Settings
-from lib.nn.topological.network_module import NetworkModule
+from lib.engines.torch.settings import TorchModuleSettings
 from lib.sources import from_java
-from lib.vectorize.pipeline.pipeline import build_vectorized_network
-
-
-class NeuralogicLegacyVectorizedTorchRunnable(Runnable):
-    def __init__(self, device: str, settings: Settings) -> None:
-        self._device = device
-        self.settings = settings
-
-    def initialize(self, dataset: BuiltDatasetInstance, samples: list[NeuralSample] | None = None):
-        if samples is None:
-            self.samples = dataset.samples
-
-        print("Layers discovery...")
-        self.network = from_java(self.samples, self.settings)
-
-        self.model = NetworkModule(self.network, self.settings)
-
-        if self.settings.compilation == "trace":
-            self.model = torch.jit.trace_module(self.model, {"forward": ()}, strict=False)
-        elif self.settings.compilation == "script":
-            self.model = torch.jit.script(self.model)
-        self.model.to(self.device)  # pyright: ignore
-
-    def forward_pass(self):
-        return self.model()  # pyright: ignore
-
-    @property
-    def device(self):
-        return self._device
+from lib.sources.neuralogic_settings import NeuralogicSettings
+from lib.vectorize.model.settings import VectorizeSettings
+from lib.vectorize.pipeline.pipeline import create_vectorized_network_compiler
 
 
 class NeuralogicVectorizedTorchRunnable(Runnable):
-    def __init__(self, device: str, settings: Settings, debug: bool) -> None:
+    def __init__(
+        self,
+        device: str,
+        neuralogic_settings: NeuralogicSettings,
+        vectorize_settings: VectorizeSettings,
+        torch_settings: TorchModuleSettings,
+        debug: bool,
+    ) -> None:
         self._device = device
-        self.settings = settings
+        self.n_settings = neuralogic_settings
+        self.t_settings = torch_settings
+        self.v_settings = vectorize_settings
         self.debug = debug
+        self.build_vectorized_network = create_vectorized_network_compiler(vectorize_settings)
 
     def _initialize(self, dataset: BuiltDatasetInstance, samples: list[NeuralSample] | None = None):
         if samples is None:
             self.samples = dataset.samples
 
         yield "Retrieving input information..."
-        self.network = from_java(self.samples, self.settings)
+        self.network = from_java(self.samples, self.n_settings)
 
         yield "Vectorizing..."
-        self.vectorized_network = build_vectorized_network(self.network)
+        self.vectorized_network = self.build_vectorized_network(self.network)
 
         yield "Building PyTorch modules..."
-        self.model = build_torch_network(
-            self.vectorized_network,
-            debug=self.debug,
-            allow_non_builtin_torch_ops=self.settings.allow_non_builtin_torch_ops,
-        )
+        self.model = build_torch_network(self.vectorized_network, debug=self.debug, settings=self.t_settings)
 
-        if self.settings.compilation == "trace":
+        if self.t_settings.compilation == "trace":
             self.model = torch.jit.trace_module(self.model, {"forward": ()}, strict=False)
-        elif self.settings.compilation == "script":
+        elif self.t_settings.compilation == "script":
             self.model = torch.jit.script(self.model)
         self.model.to(self.device)  # pyright: ignore
 

@@ -8,7 +8,7 @@ from lib.vectorize.model import *
 from lib.vectorize.pipeline.layerwise import LayerwiseOperation
 
 
-class SimplifyLinears(LayerwiseOperation):
+class OptimizeKSeqRefsInLinears(LayerwiseOperation):
     def __init__(self, network: VectorizedLayerNetwork) -> None:
         self.network = network
 
@@ -72,5 +72,5 @@ class SimplifyLinears(LayerwiseOperation):
 
 
 def simplify_linears(network: VectorizedLayerNetwork):
-    SimplifyLinears(network).simplify_linears()
+    OptimizeKSeqRefsInLinears(network).simplify_linears()
     return network

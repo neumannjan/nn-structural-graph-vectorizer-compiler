@@ -3,7 +3,7 @@ from typing import Collection, Iterable, Sequence, TypeGuard, TypeVar, get_args
 
 import numpy as np
 
-from lib.nn.definitions.ops import AggregationDef, ReductionDef, TransformationDef
+from lib.model.ops import AggregationDef, ReductionDef, TransformationDef
 from lib.sources.base import LayerNeurons, Network, Neurons, Ordinals
 from lib.utils import atleast_2d_shape, head_and_rest
 from lib.vectorize.model import *

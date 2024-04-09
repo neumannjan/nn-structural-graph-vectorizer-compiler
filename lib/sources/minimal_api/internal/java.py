@@ -1,5 +1,5 @@
 from collections import defaultdict, deque
-from typing import Any, Literal, OrderedDict, Protocol, Sequence
+from typing import Any, Protocol, Sequence
 from typing import get_args as t_get_args
 
 import jpype
@@ -7,11 +7,10 @@ import numpy as np
 import torch
 from neuralogic.core.builder.builder import NeuralSample
 from neuralogic.core.template import Iterable
-from tqdm.auto import tqdm
 
-from lib.nn.definitions.ops import AggregationDef, TransformationDef
-from lib.other_utils import camel_to_snake
+from lib.model.ops import AggregationDef, TransformationDef
 from lib.sources.base import LayerDefinition, LayerType
+from lib.utils import camel_to_snake
 
 
 class JavaValue(Protocol):

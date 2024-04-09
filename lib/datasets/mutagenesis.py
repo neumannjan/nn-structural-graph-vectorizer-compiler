@@ -5,7 +5,7 @@ from typing import Literal
 from neuralogic.core import R, Template, V
 from neuralogic.dataset.file import FileDataset
 
-from lib.nn.definitions.settings import Settings
+from lib.sources.neuralogic_settings import NeuralogicSettings
 
 from .dataset import MyDataset
 
@@ -72,8 +72,6 @@ def simple_template_no_bond_embed():
     )
     template += R.predict[1, 3] <= R.layer_3(V.X)
 
-    # GCN se zapnutejma self-loopama a bez normalizace ?
-
     return template
 
 
@@ -97,7 +95,10 @@ SOURCE_DIRECTORY_MAP: dict[MutagenesisSource, Path] = {
 
 class MyMutagenesis(MyDataset):
     def __init__(
-        self, settings: Settings, template: MutagenesisTemplate = "simple", source: MutagenesisSource = "original"
+        self,
+        settings: NeuralogicSettings,
+        template: MutagenesisTemplate = "simple",
+        source: MutagenesisSource = "original",
     ) -> None:
         self.source_name = source
         self.template_name = template

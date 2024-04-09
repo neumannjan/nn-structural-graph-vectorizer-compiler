@@ -9,7 +9,7 @@ from lib.sources.minimal_api.internal.java import JavaNeuron
 from lib.sources.minimal_api.java import MinimalAPIJavaNetwork
 from lib.sources.minimal_api.ordinals import MinimalAPIOrdinals
 from lib.sources.minimal_api_bridge import NetworkImpl
-from lib.nn.definitions.settings import Settings
+from lib.sources.neuralogic_settings import NeuralogicSettings
 
 
 def from_minimal_api(minimal_api: MinimalAPINetwork, custom_ordinals: MinimalAPIOrdinals | None = None):
@@ -23,7 +23,7 @@ def from_minimal_api(minimal_api: MinimalAPINetwork, custom_ordinals: MinimalAPI
     return NetworkImpl(minimal_api=minimal_api, custom_ordinals=custom_ordinals)
 
 
-def from_java(samples: Sequence[NeuralSample | JavaNeuron], settings: Settings):
+def from_java(samples: Sequence[NeuralSample | JavaNeuron], settings: NeuralogicSettings):
     """
     Get a Network from a set of NeuraLogic neural (built) samples.
 

@@ -1,7 +1,7 @@
 from typing import Any, Literal, Protocol, Sequence
 
 import numpy as np
-from lib.nn.definitions.ops import ReductionDef
+import torch
 from torch_scatter import (
     scatter_max,
     scatter_mean,
@@ -13,7 +13,7 @@ from torch_scatter import (
     segment_sum_csr,
 )
 
-import torch
+from lib.model.ops import ReductionDef
 
 _StrictReductionRef = Literal["min", "max", "sum", "mean"]
 

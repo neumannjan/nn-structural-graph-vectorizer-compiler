@@ -2,18 +2,32 @@ import torch
 from lib.benchmarks.runnables.neuralogic_vectorized import NeuralogicVectorizedTorchRunnable
 from lib.datasets.mutagenesis import MyMutagenesis
 from lib.datasets.tu_molecular import MyTUDataset
-from lib.nn.definitions.settings import Settings
+from lib.engines.torch.settings import TorchModuleSettings
+from lib.sources.neuralogic_settings import NeuralogicSettings
+from lib.vectorize.model.settings import VectorizeSettings
 
 if __name__ == "__main__":
     device = "cpu"
-    settings = Settings()
-    settings.neuralogic.iso_value_compression = False
-    dataset = MyMutagenesis(settings, "simple", "original")
-    # dataset = MyTUDataset(settings, "mutag", "gin")
+    n_settings = NeuralogicSettings()
+    n_settings.iso_value_compression = False
+    n_settings.chain_pruning = True
+
+    t_settings = TorchModuleSettings()
+
+    v_settings = VectorizeSettings()
+
+    v_settings.linears_optimize_repeating_seq = True
+    v_settings.linears_optimize_unique_ref_pairs = True
+    v_settings.optimize_tail_refs = True
+
+    v_settings.linears_optimize_unique_ref_pairs_aggressively = False
+
+    dataset = MyMutagenesis(n_settings, "simple", "original")
+    # dataset = MyTUDataset(n_settings, "mutag", "gsage")
 
     print("Dataset:", dataset)
     print("Device:", device)
-    print("Settings:", settings)
+    print("Settings:", n_settings)
 
     built_dataset_inst = dataset.build(sample_run=True)
 
@@ -32,7 +46,13 @@ if __name__ == "__main__":
 
     ###### ALGORITHM ######
 
-    runnable = NeuralogicVectorizedTorchRunnable(device=device, settings=settings, debug=DEBUG)
+    runnable = NeuralogicVectorizedTorchRunnable(
+        device=device,
+        neuralogic_settings=n_settings,
+        torch_settings=t_settings,
+        vectorize_settings=v_settings,
+        debug=DEBUG,
+    )
     runnable.initialize(built_dataset_inst)
 
     print(runnable.network)
