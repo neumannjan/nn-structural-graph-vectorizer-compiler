@@ -275,7 +275,7 @@ def detect_repeating_sequence_in_list(
 
 
 def detect_repeating_K_sequence_in_list(
-    inp: Sequence[int] | np.ndarray, period: int, allow_last_incomplete=False
+    inp: Sequence | np.ndarray, period: int, allow_last_incomplete=False
 ) -> np.ndarray | None:
     """
     Find the smallest repeating subsequence `s` of length `period` that the input sequence `t` is made from.
@@ -429,13 +429,24 @@ def detect_repeating_K_sequence_in_list(
     >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0, 3], 4, allow_last_incomplete=True)
     >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 3], 4, allow_last_incomplete=True)
     >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 2, 3], 4, allow_last_incomplete=True)
+    >>> detect_repeating_K_sequence_in_list([['1', '14', 0], ['1', '15', 0], ['0', 'unit', '0'],
+    ... ['1', '14', 0], ['1', '15', 0], ['0', 'unit', '0']], 3)
+    array([['1', '14', '0'],
+           ['1', '15', '0'],
+           ['0', 'unit', '0']], dtype='<U21')
+    >>> detect_repeating_K_sequence_in_list([['1', '14', 0], ['1', '15', 0], ['0', 'unit', '0'],
+    ... ['1', '14', 0], ['1', '15', 0]], 3, allow_last_incomplete=True)
+    array([['1', '14', '0'],
+           ['1', '15', '0'],
+           ['0', 'unit', '0']], dtype='<U21')
     """
     k = period
 
     if len(inp) <= k:
         return None
 
-    inp = np.array(inp)
+    if not isinstance(inp, np.ndarray):
+        inp = np.array(inp)
     max_len = (inp.shape[0] // k) * k
 
     if not allow_last_incomplete and max_len < inp.shape[0]:
@@ -443,7 +454,7 @@ def detect_repeating_K_sequence_in_list(
 
     inp_first, inp_last = inp[:max_len], inp[max_len:]
 
-    if np.all(inp_first.reshape([-1, k]) == inp_first[:k]) and (
+    if np.all(inp_first.reshape([-1, k, *inp_first.shape[1:]]) == inp_first[:k]) and (
         len(inp_last) == 0 or np.all(inp_last == inp_first[: len(inp_last)])
     ):
         return inp_first[:k]
