@@ -10,7 +10,7 @@ if __name__ == "__main__":
     device = "cpu"
     n_settings = NeuralogicSettings()
     n_settings.iso_value_compression = False
-    n_settings.chain_pruning = True
+    n_settings.chain_pruning = False
 
     t_settings = TorchModuleSettings()
 
@@ -19,11 +19,13 @@ if __name__ == "__main__":
     v_settings.linears_optimize_repeating_seq = True
     v_settings.linears_optimize_unique_ref_pairs = True
     v_settings.optimize_tail_refs = True
+    v_settings.optimize_single_use_gathers = True
 
     v_settings.linears_optimize_unique_ref_pairs_aggressively = False
+    v_settings.optimize_single_use_gathers_aggressive_max_chain_length = 1000
 
-    dataset = MyMutagenesis(n_settings, "simple", "original")
-    # dataset = MyTUDataset(n_settings, "mutag", "gsage")
+    # dataset = MyMutagenesis(n_settings, "simple", "original")
+    dataset = MyTUDataset(n_settings, "mutag", "gcn")
 
     print("Dataset:", dataset)
     print("Device:", device)

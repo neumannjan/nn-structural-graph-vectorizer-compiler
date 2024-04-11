@@ -1,8 +1,11 @@
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 from typing import Hashable, TypeVar, overload
 
 from lib.vectorize.model import *
 from lib.vectorize.pipeline.layerwise import LayerwiseOperation
+from lib.vectorize.pipeline.utils.ref_groups import get_ref_groups, get_refs
+
+_TRef = TypeVar("_TRef", bound=Hashable)
 
 
 class RemapOrdinals(LayerwiseOperation):
@@ -42,52 +45,13 @@ class ClearOrdinalsMap(LayerwiseOperation):
         return layer
 
 
-_TRef = TypeVar("_TRef", bound=Hashable)
-
-
-def _grouper(iterable: Iterable[_TRef], n: int, fillvalue=None) -> Iterable[tuple[_TRef, ...]]:
-    it = iter(iterable)
-    while True:
-        try:
-            yield tuple([next(it) for _ in range(n)])
-        except StopIteration:
-            break
-
-
-def _uneven_grouper(iterable: Iterable[_TRef], counts: list[int]) -> Iterable[tuple[_TRef, ...]]:
-    it = iter(iterable)
-
-    for c in counts:
-        yield tuple((next(it) for _ in range(c)))
-
-
 class OptimizeTailRefsToUniqueNoOrdRemap(LayerwiseOperation):
     def __init__(self, network: VectorizedLayerNetwork) -> None:
         self.network = network
         self._final_layers = {batch: next(reversed(self.network.batches[batch].layers)) for batch in network.batches}
 
-    def _get_refs(self, source: Refs | GenericGather):
-        match source:
-            case Refs():
-                return source
-            case GenericGather():
-                return source.ordinals
-            case _:
-                assert False, f"{source}"
-
-    def _get_ref_groups(self, aggregate: Reduce, refs: Sequence[_TRef]) -> Sequence[tuple[_TRef, ...]]:
-        match aggregate:
-            case Noop():
-                return [(r,) for r in refs]
-            case FixedCountReduce(period=period):
-                return list(_grouper(refs, n=period))
-            case UnevenReduce(counts=counts):
-                return list(_uneven_grouper(refs, counts=counts))
-            case _:
-                assert False, f"{aggregate}"
-
     def _remap_ref_groups_to_unique(
-            self, layer: Layer, ref_groups: Sequence[tuple[_TRef, ...]]
+        self, layer: Layer, ref_groups: Sequence[tuple[_TRef, ...]]
     ) -> Sequence[tuple[_TRef, ...]]:
         ref_groups_uniq = sorted(set(ref_groups))
         group_ord_map = {group_ref: o_group_new for o_group_new, group_ref in enumerate(ref_groups_uniq)}
@@ -119,8 +83,8 @@ class OptimizeTailRefsToUniqueNoOrdRemap(LayerwiseOperation):
         pass
 
     def _compute_ref_groups_uniq(self, layer: Layer, target: Refs | GenericGather):
-        refs = self._get_refs(target)
-        ref_groups = self._get_ref_groups(layer.aggregate, refs)
+        refs = get_refs(target)
+        ref_groups = get_ref_groups(layer.aggregate, refs)
         ref_groups_uniq = self._remap_ref_groups_to_unique(layer, ref_groups)
         return ref_groups_uniq
 
@@ -146,7 +110,6 @@ class OptimizeTailRefsToUniqueNoOrdRemap(LayerwiseOperation):
             # skip the final layer
             return layer
 
-        # # TODO: find a solution for when aggregate has a value
         match layer:
             case Layer(
                 base=InputLayerBase(input=Refs() as input),

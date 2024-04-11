@@ -42,7 +42,11 @@ def build_optimal_gather(ordinals: list[int], total_size: int | None, allow_subs
             if total_length == len(subseq):
                 return subseq_gather
 
-            return GatherPair(subseq_gather, Repeat(times=repeats, total_length=total_length))
+            match subseq_gather:
+                case NoopGather():
+                    return Repeat(times=repeats, total_length=total_length)
+                case _:
+                    return GatherPair(subseq_gather, Repeat(times=repeats, total_length=total_length))
 
     ###### generic fallback implementation ######
 
@@ -67,7 +71,14 @@ class SimplifyGathers(LayerwiseOperation):
             case GatherPair(a, b):
                 a = self.simplify_gather(a, total_size=total_size)
                 b = self.simplify_gather(b, total_size=total_size)
-                return GatherPair(a, b)
+
+                match (a, b):
+                    case (NoopGather(), _):
+                        return b
+                    case (_, NoopGather()):
+                        return a
+                    case _:
+                        return GatherPair(a, b)
             case TakeSingleValue():
                 return gather
             case NoopGather():

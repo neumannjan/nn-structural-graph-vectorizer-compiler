@@ -16,6 +16,9 @@ from lib.vectorize.pipeline.materialize_unit_transforms import materialize_unit_
 from lib.vectorize.pipeline.merge_unit_facts import merge_unit_facts
 from lib.vectorize.pipeline.optimize_k_sequence_refs_in_linears import OptimizeKSeqRefsInLinears
 from lib.vectorize.pipeline.optimize_linears_to_unique_refs import OptimizeLinearsUniqueRefPairs
+from lib.vectorize.pipeline.optimize_single_use_gathers import (
+    build_optimize_single_use_gathers,
+)
 from lib.vectorize.pipeline.optimize_tail_refs_to_unique import (
     ClearOrdinalsMap,
     OptimizeTailRefsToUniqueNoOrdRemap,
@@ -105,6 +108,24 @@ def create_vectorized_network_compiler(
         # + preorder_single_use_outputs
         + compute_layer_shapes  # <- shapes are expected starting here
         + _debug
+    )
+
+    if settings.optimize_single_use_gathers:
+        build_vectorized_network += (
+            PIPE
+            + build_optimize_single_use_gathers(
+                max_chain_length=settings.optimize_single_use_gathers_aggressive_max_chain_length,
+                debug=debug_prints,
+            )
+            + _debug
+            + Layerwise(SimplifyGathers)
+            + _debug
+            + dissolve_identity_layers
+            + _debug
+        )
+
+    build_vectorized_network += (
+        PIPE
         + materialize_unit_transforms
         + drop_unused_layers
         + _debug
