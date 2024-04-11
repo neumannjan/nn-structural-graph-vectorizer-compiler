@@ -63,6 +63,15 @@ class Refs(Sequence[tuple[int, str, int]]):
 
         return f"{self.__class__.__name__}({out})"
 
+    def __eq__(self, value: object, /) -> bool:
+        return (
+            isinstance(value, Refs)
+            and len(self) == len(value)
+            and all((a == b for a, b in zip(self.types, value.types)))
+            and all((a == b for a, b in zip(self.layer_ids, value.layer_ids)))
+            and all((a == b for a, b in zip(self.ordinals, value.ordinals)))
+        )
+
 
 class LayerRefs(Sequence[tuple[int, str]]):
     __slots__ = ("types", "layer_ids")
@@ -110,3 +119,11 @@ class LayerRefs(Sequence[tuple[int, str]]):
             out += f", ... (size: {len(self)})"
 
         return f"{self.__class__.__name__}({out})"
+
+    def __eq__(self, value: object, /) -> bool:
+        return (
+            isinstance(value, LayerRefs)
+            and len(self) == len(value)
+            and all((a == b for a, b in zip(self.types, value.types)))
+            and all((a == b for a, b in zip(self.layer_ids, value.layer_ids)))
+        )

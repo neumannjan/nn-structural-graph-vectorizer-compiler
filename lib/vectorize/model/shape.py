@@ -7,10 +7,16 @@ class VariousShape:
     __slots__ = ()
     __repr__ = repr_slots
 
+    def __eq__(self, value: object, /) -> bool:
+        return isinstance(value, VariousShape)
+
 
 class AnyShape:
     __slots__ = ()
     __repr__ = repr_slots
+
+    def __eq__(self, value: object, /) -> bool:
+        return isinstance(value, VariousShape)
 
 
 class ConcreteShape(Sequence[int]):
@@ -40,9 +46,7 @@ class ConcreteShape(Sequence[int]):
         return hash(self.dims)
 
     def __eq__(self, value: object, /) -> bool:
-        return (
-            isinstance(value, ConcreteShape) and len(self) == len(value) and all((a == b for a, b in zip(self, value)))
-        )
+        return isinstance(value, ConcreteShape) and self.dims == value.dims
 
     def __repr__(self) -> str:
         return f"[{', '.join((str(d) for d in self.dims))}]"

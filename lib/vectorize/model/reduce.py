@@ -11,6 +11,9 @@ class FixedCountReduce:
         self.period = period
         self.reduce: ReductionDef = reduce
 
+    def __eq__(self, value: object, /) -> bool:
+        return isinstance(value, FixedCountReduce) and self.period == value.period and self.reduce == value.reduce
+
 
 class UnevenReduce:
     __slots__ = ("counts", "reduce")
@@ -19,6 +22,14 @@ class UnevenReduce:
     def __init__(self, counts: list[int], reduce: ReductionDef) -> None:
         self.counts = counts
         self.reduce: ReductionDef = reduce
+
+    def __eq__(self, value: object, /) -> bool:
+        return (
+            isinstance(value, UnevenReduce)
+            and self.reduce == value.reduce
+            and len(self.counts) == len(value.counts)
+            and all((a == b for a, b in zip(self.counts, value.counts)))
+        )
 
 
 Reduce = FixedCountReduce | UnevenReduce | Noop

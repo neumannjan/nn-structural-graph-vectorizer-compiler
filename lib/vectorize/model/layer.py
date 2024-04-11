@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+
 from lib.vectorize.model.fact import Fact, fact_repr
 from lib.vectorize.model.gather import Gather
 from lib.vectorize.model.reduce import Reduce
@@ -15,6 +16,9 @@ class GatheredLayers:
     def __init__(self, refs: LayerRefs, gather: Gather) -> None:
         self.refs = refs
         self.gather = gather
+
+    def __eq__(self, value: object, /) -> bool:
+        return isinstance(value, GatheredLayers) and self.refs == value.refs and self.gather == value.gather
 
 
 Input = GatheredLayers | Refs
@@ -37,6 +41,9 @@ class InputLayerBase:
     def __init__(self, input: Input) -> None:
         self.input = input
 
+    def __eq__(self, value: object, /) -> bool:
+        return isinstance(value, InputLayerBase) and self.input == value.input
+
 
 class LinearLayerBase:
     __slots__ = ("input", "weight")
@@ -45,6 +52,9 @@ class LinearLayerBase:
     def __init__(self, input: Input, weight: Input) -> None:
         self.input = input
         self.weight = weight
+
+    def __eq__(self, value: object, /) -> bool:
+        return isinstance(value, LinearLayerBase) and self.input == value.input and self.weight == value.weight
 
 
 class LinearGatherLayerBase:
@@ -55,6 +65,14 @@ class LinearGatherLayerBase:
         self.input = input
         self.weight = weight
         self.gather = gather
+
+    def __eq__(self, value: object, /) -> bool:
+        return (
+            isinstance(value, LinearGatherLayerBase)
+            and self.input == value.input
+            and self.weight == value.weight
+            and self.gather == value.gather
+        )
 
 
 LayerBase = InputLayerBase | LinearLayerBase | LinearGatherLayerBase
@@ -104,6 +122,14 @@ class Layer:
         out += ")"
         return out
 
+    def __eq__(self, value: object, /) -> bool:
+        return (
+            isinstance(value, Layer)
+            and value.base == self.base
+            and value.aggregate == self.aggregate
+            and value.transform == self.transform
+        )
+
 
 class FactLayer:
     __slots__ = ("facts", "count", "shape")
@@ -119,3 +145,10 @@ class FactLayer:
         if len(self.facts) > n:
             items_repr += f", ... (size: {len(self.facts)})"
         return f"{self.__class__.__name__}({items_repr}, count={self.count}, shape={my_repr(self.shape)})"
+
+    def __eq__(self, value: object, /) -> bool:
+        return (
+            isinstance(value, FactLayer)
+            and len(self.facts) == len(value.facts)
+            and all(((a == b) for a, b in zip(self.facts, value.facts)))
+        )

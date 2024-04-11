@@ -10,10 +10,16 @@ class ValueFact:
     def __init__(self, value: np.ndarray) -> None:
         self.value = value
 
+    def __eq__(self, value: object, /) -> bool:
+        return isinstance(value, ValueFact) and self.value == value.value
+
 
 class UnitFact:
     __slots__ = ()
     __repr__ = repr_slots
+
+    def __eq__(self, value: object, /) -> bool:
+        return isinstance(value, UnitFact)
 
 
 class EyeFact:
@@ -22,6 +28,9 @@ class EyeFact:
 
     def __init__(self, dim: int) -> None:
         self.dim = dim
+
+    def __eq__(self, value: object, /) -> bool:
+        return isinstance(value, EyeFact) and self.dim == value.dim
 
 
 Fact = ValueFact | UnitFact | EyeFact
