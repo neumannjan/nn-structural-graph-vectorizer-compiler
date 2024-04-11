@@ -116,10 +116,7 @@ class ComputeLayerShapes:
                 assert False, f"{input}"
         return shape
 
-    def compute_linear_shape(self, batch: int, input: Input, weight: Input) -> Shape:
-        weight_shape = self.compute_input_shape(batch, weight)
-        input_shape = self.compute_input_shape(batch, input)
-
+    def compute_linear_shape_from_shapes(self, input_shape: Shape, weight_shape: Shape) -> Shape:
         match (weight_shape, input_shape):
             case (ConcreteShape(_), ConcreteShape(_)):
                 begin_shape = [max(a, b) for a, b in zip(weight_shape[:-2], input_shape[:-2])]
@@ -134,6 +131,12 @@ class ComputeLayerShapes:
                 return input_shape
             case _:
                 return ANY_SHAPE
+
+    def compute_linear_shape(self, batch: int, input: Input, weight: Input) -> Shape:
+        weight_shape = self.compute_input_shape(batch, weight)
+        input_shape = self.compute_input_shape(batch, input)
+
+        return self.compute_linear_shape_from_shapes(input_shape, weight_shape)
 
     def compute_layer_base_shape(self, batch: int, base: LayerBase) -> Shape:
         match base:

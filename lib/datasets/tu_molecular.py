@@ -116,7 +116,7 @@ def _gsage(activation: Transformation, num_features: int, output_size: int, dim:
     template += (R.l1_embed(V.X)[dim, dim] <= R.atom_embed(V.X)) | [Transformation.IDENTITY]
     template += (R.l1_embed(V.X)[dim, dim] <= (R.atom_embed(V.Y), R._edge(V.Y, V.X))) | [
         Aggregation.AVG,
-        Transformation.TANH, # TODO: revert to IDENTITY
+        Transformation.IDENTITY,  # TODO: revert to IDENTITY
     ]
     template += R.l1_embed / 1 | [Transformation.RELU]
 

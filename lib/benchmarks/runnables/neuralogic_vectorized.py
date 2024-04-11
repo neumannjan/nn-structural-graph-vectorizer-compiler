@@ -26,7 +26,7 @@ class NeuralogicVectorizedTorchRunnable(Runnable):
         self.t_settings = torch_settings
         self.v_settings = vectorize_settings
         self.debug = debug
-        self.build_vectorized_network = create_vectorized_network_compiler(vectorize_settings)
+        self.build_vectorized_network = create_vectorized_network_compiler(vectorize_settings, debug_prints=debug)
 
     def _initialize(self, dataset: BuiltDatasetInstance, samples: list[NeuralSample] | None = None):
         if samples is None:

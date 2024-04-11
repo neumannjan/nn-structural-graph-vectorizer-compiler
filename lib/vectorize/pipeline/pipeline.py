@@ -8,10 +8,11 @@ from lib.vectorize.pipeline.compute_layer_counts import compute_layer_counts
 from lib.vectorize.pipeline.compute_layer_shapes import compute_layer_shapes
 from lib.vectorize.pipeline.concat_inputs_layers import ConcatInputsLayers
 from lib.vectorize.pipeline.dissolve_identity_layers import dissolve_identity_layers
+from lib.vectorize.pipeline.drop_unused_layers import drop_unused_layers
 from lib.vectorize.pipeline.give_unique_names import give_unique_names
 from lib.vectorize.pipeline.join_simple_layer_chains import join_simple_layer_chains
 from lib.vectorize.pipeline.layerwise import Layerwise
-from lib.vectorize.pipeline.materialize_unit_facts import materialize_unit_facts
+from lib.vectorize.pipeline.materialize_unit_transforms import materialize_unit_transforms
 from lib.vectorize.pipeline.merge_unit_facts import merge_unit_facts
 from lib.vectorize.pipeline.optimize_k_sequence_refs_in_linears import OptimizeKSeqRefsInLinears
 from lib.vectorize.pipeline.optimize_linears_to_unique_refs import OptimizeLinearsUniqueRefPairs
@@ -45,7 +46,7 @@ def _create_printer(enabled: bool):
 def create_vectorized_network_compiler(
     settings: VectorizeSettings, debug_prints: bool = False
 ) -> Callable[[Network], VectorizedOpSeqNetwork]:
-    _print = _create_printer(debug_prints)
+    _debug = _create_printer(debug_prints)
 
     # ------
 
@@ -56,7 +57,7 @@ def create_vectorized_network_compiler(
         # + drop_unused_neurons  # TODO
         # + transpose_fixed_count_linears  # <- optional
         # + extract_unit_ordinals
-        + _print
+        + _debug
         + Layerwise(SimplifyPureUnitFactLinears)
     )
 
@@ -93,23 +94,26 @@ def create_vectorized_network_compiler(
     build_vectorized_network += (
         PIPE
         + compute_layer_counts
-        + _print
+        + _debug
         + Layerwise(ClearOrdinalsMap)
         + Layerwise(ConcatInputsLayers)  # <- gathers are expected starting here
         + Layerwise(SimplifyGathers)
-        + _print
+        + _debug
         + dissolve_identity_layers
-        + _print
-        + compute_layer_shapes  # <- shapes are expected starting here
-        + _print
-        # + merge_weights
-        + materialize_unit_facts
+        + _debug
         # + precompute_pure_fact_layers
+        # + preorder_single_use_outputs
+        + compute_layer_shapes  # <- shapes are expected starting here
+        + _debug
+        + materialize_unit_transforms
+        + drop_unused_layers
+        + _debug
+        # + merge_weights
         + give_unique_names
         + to_seq_network
-        + _print
+        + _debug
         + join_simple_layer_chains
-        + _print
+        + _debug
     )
 
     return build_vectorized_network

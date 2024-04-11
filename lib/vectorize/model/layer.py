@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from lib.vectorize.model.fact import Fact, fact_repr
 from lib.vectorize.model.gather import Gather
 from lib.vectorize.model.reduce import Reduce
@@ -107,7 +108,7 @@ class Layer:
 class FactLayer:
     __slots__ = ("facts", "count", "shape")
 
-    def __init__(self, facts: list[Fact], count: int | None = None, shape: Shape | None = None) -> None:
+    def __init__(self, facts: Sequence[Fact], count: int | None = None, shape: Shape | None = None) -> None:
         self.facts = facts
         self.count = count
         self.shape = shape if shape is not None else VariousShape()
