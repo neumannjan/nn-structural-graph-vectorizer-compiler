@@ -13,6 +13,7 @@ from torch_scatter import (
     segment_sum_csr,
 )
 
+from lib.engines.torch.settings import TorchReduceMethod
 from lib.model.ops import ReductionDef
 
 _StrictReductionRef = Literal["min", "max", "sum", "mean"]
@@ -54,9 +55,8 @@ class _SegmentCSRFunc(Protocol):
 
 
 class _ScatterBase(torch.nn.Module):
-    def __init__(self, index: torch.Tensor, reduce: ReductionDef) -> None:
+    def __init__(self, reduce: ReductionDef) -> None:
         super().__init__()
-        self.index = torch.nn.Parameter(index, requires_grad=False)
         self.reduce: _StrictReductionRef = _to_strict(reduce)
 
     def extra_repr(self) -> str:
@@ -73,7 +73,8 @@ _SCATTER_FUNC: dict[_StrictReductionRef, _ScatterFunc] = {
 
 class Scatter(_ScatterBase):
     def __init__(self, index: torch.Tensor, reduce: ReductionDef) -> None:
-        super().__init__(index, reduce)
+        super().__init__(reduce)
+        self.index = torch.nn.Parameter(index, requires_grad=False)
         self.reduce_func = _SCATTER_FUNC[self.reduce]
 
     def forward(self, x: torch.Tensor):
@@ -89,8 +90,8 @@ _SEGMENT_CSR_FUNC: dict[_StrictReductionRef, _SegmentCSRFunc] = {
 
 
 class SegmentCSR(_ScatterBase):
-    def __init__(self, index: torch.Tensor, indptr: torch.Tensor, reduce: ReductionDef) -> None:
-        super().__init__(index, reduce)
+    def __init__(self, indptr: torch.Tensor, reduce: ReductionDef) -> None:
+        super().__init__(reduce)
         self.indptr = torch.nn.Parameter(indptr, requires_grad=False)
         self.reduce_func = _SEGMENT_CSR_FUNC[self.reduce]
 
@@ -120,14 +121,20 @@ def counts_to_index(counts: torch.Tensor | np.ndarray | list[int]):
 
 
 def build_scatter_module(
-    index: torch.Tensor | Sequence[int] | np.ndarray, reduce: ReductionDef, allow_non_builtin_torch_ops: bool
+    index: torch.Tensor | Sequence[int] | np.ndarray,
+    counts: torch.Tensor | Sequence[int] | np.ndarray,
+    reduce: ReductionDef,
+    reduce_method: TorchReduceMethod,
 ):
     if not isinstance(index, torch.Tensor):
         index = torch.tensor(index, dtype=torch.int32)
 
-    if allow_non_builtin_torch_ops:
+    if reduce_method != "scatter":
         if ((index[1:] - index[:-1]) >= 0).all().item():
-            indptr = coo_to_csr_dim0(index, do_assert=False)
-            return SegmentCSR(index, indptr, reduce)
+            if reduce_method == "segment_csr":
+                indptr = coo_to_csr_dim0(index, do_assert=False)
+                return SegmentCSR(indptr, reduce)
+            else:
+                assert False
 
     return Scatter(index, reduce)

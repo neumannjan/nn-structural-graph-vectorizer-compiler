@@ -89,8 +89,9 @@ def _for_op(op: Operation | LayerRefs, settings: TorchModuleSettings) -> torch.n
             index = counts_to_index(counts)
             return build_scatter_module(
                 index=index,
+                counts=counts,
                 reduce=reduce,
-                allow_non_builtin_torch_ops=settings.allow_non_builtin_torch_ops,
+                reduce_method=settings.reduce_method,
             )
         case View(shape=shape):
             return ViewModule(shape.dims)
