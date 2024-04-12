@@ -44,6 +44,11 @@ def reduce_shapes(shapes: Iterable[Shape], func: Callable[[ConcreteShape, Concre
     return acc
 
 
+def assert_shapes_equal(a: ConcreteShape, b: ConcreteShape) -> ConcreteShape:
+    assert a.dims == b.dims
+    return a
+
+
 class ComputeLayerShapes:
     def __init__(self, network: VectorizedLayerNetwork) -> None:
         self.network = network

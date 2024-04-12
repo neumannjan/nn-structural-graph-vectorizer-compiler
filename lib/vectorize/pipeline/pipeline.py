@@ -13,6 +13,7 @@ from lib.vectorize.pipeline.give_unique_names import give_unique_names
 from lib.vectorize.pipeline.join_simple_layer_chains import join_simple_layer_chains
 from lib.vectorize.pipeline.layerwise import Layerwise
 from lib.vectorize.pipeline.materialize_unit_transforms import materialize_unit_transforms
+from lib.vectorize.pipeline.merge_trivial_layer_concats import merge_trivial_layer_concats
 from lib.vectorize.pipeline.merge_unit_facts import merge_unit_facts
 from lib.vectorize.pipeline.optimize_k_sequence_refs_in_linears import OptimizeKSeqRefsInLinears
 from lib.vectorize.pipeline.optimize_linears_to_unique_refs import OptimizeLinearsUniqueRefPairs
@@ -125,11 +126,22 @@ def create_vectorized_network_compiler(
         )
 
     build_vectorized_network += (
-        PIPE
+        PIPE  #
         + materialize_unit_transforms
+        + _debug
+    )
+
+    if settings.merge_trivial_layer_concats:
+        build_vectorized_network += (
+            PIPE  #
+            + merge_trivial_layer_concats
+            + _debug
+        )
+
+    build_vectorized_network += (
+        PIPE
         + drop_unused_layers
         + _debug
-        # + merge_weights
         + give_unique_names
         + to_seq_network
         + _debug

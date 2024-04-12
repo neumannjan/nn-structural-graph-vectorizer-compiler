@@ -22,9 +22,10 @@ if __name__ == "__main__":
     v_settings.linears_optimize_unique_ref_pairs = True
     v_settings.optimize_tail_refs = True
     v_settings.optimize_single_use_gathers = True
+    v_settings.merge_trivial_layer_concats = True
 
     v_settings.linears_optimize_unique_ref_pairs_aggressively = False
-    v_settings.optimize_single_use_gathers_aggressive_max_chain_length = 'unlimited'
+    v_settings.optimize_single_use_gathers_aggressive_max_chain_length = 0
 
     dataset = MyMutagenesis(n_settings, "simple", "original")
     # dataset = MyTUDataset(n_settings, "mutag", "gsage")
