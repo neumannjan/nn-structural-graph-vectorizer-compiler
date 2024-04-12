@@ -6,21 +6,21 @@ from lib.vectorize.pipeline.utils.chain_graph import ComputeChainGraph
 class JoinSimpleLayerChains:
     def __init__(self, network: VectorizedOpSeqNetwork) -> None:
         self.network = network
-        self._compute_chain_graph = ComputeChainGraph(network)
+        self._compute_chain_graph = ComputeChainGraph(network, types=(LayerRefs.TYPE_LAYER,))
 
     def _for_layers(self, layers: dict[str, OperationSeq]):
         g = self._compute_chain_graph(layers)
 
-        for chain in g.iter_chains(g):
+        for chain in g.iter_chains():
             try:
-                head, rest = head_and_rest(chain)
+                (_, head), rest = head_and_rest(chain)
             except StopIteration:
                 continue
 
             vals = layers[head]
 
             prev_r = head
-            for r in rest:
+            for (_, r) in rest:
                 vals.operations.extend(layers[r].operations)
                 layers[r] = vals
                 del layers[prev_r]

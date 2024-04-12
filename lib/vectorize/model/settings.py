@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Literal
 
 
 @dataclass
@@ -16,4 +17,4 @@ class VectorizeSettings:
 
     optimize_single_use_gathers: bool = True
 
-    optimize_single_use_gathers_aggressive_max_chain_length: int = 0
+    optimize_single_use_gathers_aggressive_max_chain_length: int | Literal["unlimited"] = 0

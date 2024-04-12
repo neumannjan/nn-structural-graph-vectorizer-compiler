@@ -1,4 +1,4 @@
-from typing import Iterable
+from typing import Collection, Iterable
 
 from lib.vectorize.model import *
 
@@ -52,6 +52,9 @@ class ComputeLayerCounts:
                 return in_count
             case _:
                 assert False
+
+    def compute_facts_count(self, facts: Collection[Fact]) -> int:
+        return sum((_compute_fact_count(f) for f in facts))
 
     def compute_refs_count(self, refs: Refs) -> int:
         acc = 0

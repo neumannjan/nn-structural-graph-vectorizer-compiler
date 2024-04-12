@@ -7,7 +7,9 @@ from lib.sources.neuralogic_settings import NeuralogicSettings
 from lib.vectorize.model.settings import VectorizeSettings
 
 if __name__ == "__main__":
+    debug = True
     device = "cpu"
+
     n_settings = NeuralogicSettings()
     n_settings.iso_value_compression = False
     n_settings.chain_pruning = False
@@ -22,10 +24,10 @@ if __name__ == "__main__":
     v_settings.optimize_single_use_gathers = True
 
     v_settings.linears_optimize_unique_ref_pairs_aggressively = False
-    v_settings.optimize_single_use_gathers_aggressive_max_chain_length = 1000
+    v_settings.optimize_single_use_gathers_aggressive_max_chain_length = 'unlimited'
 
-    # dataset = MyMutagenesis(n_settings, "simple", "original")
-    dataset = MyTUDataset(n_settings, "mutag", "gcn")
+    dataset = MyMutagenesis(n_settings, "simple", "original")
+    # dataset = MyTUDataset(n_settings, "mutag", "gsage")
 
     print("Dataset:", dataset)
     print("Device:", device)
@@ -44,8 +46,6 @@ if __name__ == "__main__":
         tolerance = 1e-8
         torch.set_default_dtype(torch.float64)
 
-    DEBUG = True
-
     ###### ALGORITHM ######
 
     runnable = NeuralogicVectorizedTorchRunnable(
@@ -53,7 +53,7 @@ if __name__ == "__main__":
         neuralogic_settings=n_settings,
         torch_settings=t_settings,
         vectorize_settings=v_settings,
-        debug=DEBUG,
+        debug=debug,
     )
     runnable.initialize(built_dataset_inst)
 

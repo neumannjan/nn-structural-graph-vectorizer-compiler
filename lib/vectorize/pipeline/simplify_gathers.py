@@ -7,11 +7,11 @@ from lib.vectorize.pipeline.compute_layer_counts import ComputeLayerCounts
 from lib.vectorize.pipeline.layerwise import LayerwiseOperation
 
 
-def build_optimal_gather(ordinals: list[int], total_size: int | None, allow_subseq=True) -> Gather:
+def build_optimal_gather(ordinals: list[int], total_refs_count: int | None, allow_subseq=True) -> Gather:
     all_inputs_the_same = all((ordinals[0] == o for o in ordinals[1:]))
 
     if all_inputs_the_same:
-        if total_size == 1:
+        if total_refs_count == 1:
             return NoopGather()
         return TakeSingleValue(ordinals[0])
 
@@ -23,7 +23,7 @@ def build_optimal_gather(ordinals: list[int], total_size: int | None, allow_subs
     if all_ordinals_differ_by_step:
         start = ordinals[0]
         end = ordinals[-1] + 1
-        if step == 1 and start == 0 and end == total_size:
+        if step == 1 and start == 0 and end == total_refs_count:
             return NoopGather()
         return SliceValues(step=step, start=start, end=end)
 
@@ -35,7 +35,7 @@ def build_optimal_gather(ordinals: list[int], total_size: int | None, allow_subs
             subseq = detect_repeating_sequence_in_list(ordinals, allow_last_incomplete=True)
 
         if subseq is not None and len(subseq) <= len(ordinals) // 2:
-            subseq_gather = build_optimal_gather(subseq.tolist(), total_size=total_size, allow_subseq=False)
+            subseq_gather = build_optimal_gather(subseq.tolist(), total_refs_count=total_refs_count, allow_subseq=False)
             repeats = -(-len(ordinals) // len(subseq))
             total_length = len(ordinals)
 
@@ -59,18 +59,18 @@ class SimplifyGathers(LayerwiseOperation):
         self._compute_layer_counts = ComputeLayerCounts(network)
 
     @overload
-    def simplify_gather(self, gather: OneGather, total_size: int | None) -> OneGather: ...
+    def simplify_gather(self, gather: OneGather, total_refs_count: int | None) -> OneGather: ...
 
     @overload
-    def simplify_gather(self, gather: Gather, total_size: int | None) -> Gather: ...
+    def simplify_gather(self, gather: Gather, total_refs_count: int | None) -> Gather: ...
 
-    def simplify_gather(self, gather: Gather, total_size: int | None) -> Gather:
+    def simplify_gather(self, gather: Gather, total_refs_count: int | None) -> Gather:
         match gather:
             case GenericGather(ordinals=ordinals):
-                return build_optimal_gather(ordinals, total_size=total_size)
+                return build_optimal_gather(ordinals, total_refs_count=total_refs_count)
             case GatherPair(a, b):
-                a = self.simplify_gather(a, total_size=total_size)
-                b = self.simplify_gather(b, total_size=total_size)
+                a = self.simplify_gather(a, total_refs_count=total_refs_count)
+                b = self.simplify_gather(b, total_refs_count=total_refs_count)
 
                 match (a, b):
                     case (NoopGather(), _):
@@ -83,21 +83,32 @@ class SimplifyGathers(LayerwiseOperation):
                 return gather
             case NoopGather():
                 return gather
-            case SliceValues(start=start, end=end, step=step):
+            case SliceValues(start=_, end=_, step=_):
                 return gather
-            case Repeat(times=_, total_length=total_length):
+            case Repeat(times=_, total_length=_):
                 return gather
             case _:
                 assert False, f"{gather}"
 
-    def _get_lrefs_size(self, batch: int, lrefs: LayerRefs):
-        return self._compute_layer_counts.compute_layer_refs_count(batch, lrefs)
+    def _reorder_refs(self, refs: LayerRefs, ordinals: list[int]):
+        refs.types = [refs.types[o] for o in ordinals]
+        refs.layer_ids = [refs.layer_ids[o] for o in ordinals]
 
     def _for_input(self, batch: int, input: Input):
         match input:
-            case GatheredLayers(refs=refs, gather=gather):
-                total_size = self._get_lrefs_size(batch, refs)
-                input.gather = self.simplify_gather(gather, total_size=total_size)
+            case GatheredLayers(refs=refs):
+                total_count = self._compute_layer_counts.compute_layer_refs_count(batch, refs)
+
+                input.gather = self.simplify_gather(input.gather, total_refs_count=total_count)
+
+                # if the gather remained non-simple (generic), then if the total no. of ordinals
+                # is low and the references are trivial, we may just preorder the references themselves
+                # TODO parametrize the len() threshold
+                if isinstance(input.gather, GenericGather) and len(input.gather.ordinals) <= 20:
+                    refs_len1 = all((v == 1 for v in self._compute_layer_counts.iter_layer_refs_counts(batch, refs)))
+                    if refs_len1:
+                        self._reorder_refs(refs, input.gather.ordinals)
+                        input.gather = NoopGather()
             case _:
                 assert False, f"{input}"
 
@@ -113,8 +124,8 @@ class SimplifyGathers(LayerwiseOperation):
             case LinearGatherLayerBase(input=input, weight=weight, gather=gather):
                 self._for_input(batch, input)
                 self._for_input(batch, weight)
-                total_size = self._compute_layer_counts.compute_linear_count(batch, input, weight)
-                gather = self.simplify_gather(gather, total_size=total_size)
+                total_count = self._compute_layer_counts.compute_linear_count(batch, input, weight)
+                gather = self.simplify_gather(gather, total_refs_count=total_count)
                 if isinstance(gather, NoopGather):
                     return LinearLayerBase(input, weight)
                 else:

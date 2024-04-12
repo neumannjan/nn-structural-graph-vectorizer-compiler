@@ -30,11 +30,6 @@ class ConcatInputsLayers(LayerwiseOperation):
 
         layer_counts = list(self._compute_layer_counts.iter_layer_refs_counts(batch, layer_refs_uniq))
 
-        # TODO: parametrize this heuristic
-        if len(refs) < 20 and all((c == 1 for c in layer_counts)):
-            layer_refs = LayerRefs(types=refs.types, layer_ids=refs.layer_ids)
-            return GatheredLayers(refs=layer_refs, gather=NoopGather())
-
         return self._for_refs_with_gather(refs, layer_refs_uniq, layer_counts)
 
     def _for_input(self, batch: int, layer: str, input: Input):
