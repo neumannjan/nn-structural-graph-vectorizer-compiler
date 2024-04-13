@@ -1,7 +1,7 @@
+import warnings
 from typing import Sequence
 
 import numpy as np
-from torch_geometric.utils.sparse import warnings
 
 from lib.utils import detect_repeating_K_sequence_in_list
 from lib.vectorize.model import *
