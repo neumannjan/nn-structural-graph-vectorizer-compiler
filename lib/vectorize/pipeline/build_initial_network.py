@@ -41,13 +41,17 @@ def _assert_all_same_ignore_none(what_plural: str, source: Iterable[_T]) -> _T |
     return first
 
 
+def _get_layer_id(layer: int) -> str:
+    return "%03d" % layer
+
+
 def _build_gather(fact_layers: Collection[str], layer_sizes: dict[str, int], input_ordinals: Ordinals):
     ordinals: list[int] = []
     types: list[int] = []
     layer_ids: list[str] = []
 
     for ord in input_ordinals:
-        layer = str(ord.layer)
+        layer = _get_layer_id(ord.layer)
         ordinals.append(ord.ordinal)
         layer_ids.append(layer)
         if layer in fact_layers:
@@ -70,14 +74,12 @@ def _build_weights(
     fact_weights_layer: str,
 ):
     weights = list(neurons.input_weights)
-    ids = [str(w.id) for w in weights]
+    ids = [_get_layer_id(w.id) for w in weights]
 
     if len(ids) == 0:
         return None
 
-    for w in weights:
-        w_id = str(w.id)
-
+    for w, w_id in zip(weights, ids):
         if w_id not in weights_out and w_id not in facts_map:
             val = w.get_value_numpy()
             val = np.reshape(val, [1, *atleast_2d_shape(val.shape)])
@@ -179,7 +181,7 @@ def build_initial_network(network: Network) -> VectorizedLayerNetwork:
 
     for layer, neurons in network.items():
         try:
-            layer_id = str(layer.id)
+            layer_id = _get_layer_id(layer.id)
 
             if layer.type == "FactLayer":
                 fact_layers[layer_id] = _build_fact_layer(neurons)

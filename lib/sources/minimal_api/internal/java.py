@@ -8,6 +8,8 @@ import torch
 from neuralogic.core.builder.builder import NeuralSample
 from neuralogic.core.template import Iterable
 
+from lib.facts.model import get_rule_or_fact_main_name
+from lib.facts.parser import ParserError, parse_rule_or_fact
 from lib.model.ops import AggregationDef, TransformationDef
 from lib.sources.base import LayerDefinition, LayerType
 from lib.utils import camel_to_snake
@@ -47,6 +49,9 @@ class JavaNeuron(Protocol):
     def getTransformation(self) -> Any: ...
 
     def getCombination(self) -> Any: ...
+
+    @property
+    def name(self) -> str: ...
 
 
 DTYPE_TORCH_TO_NUMPY = {
@@ -165,6 +170,15 @@ def _iter_neurons_from_sample(sample: NeuralSample | JavaNeuron):
     yield from _iter_neurons(_get_neuron(sample))
 
 
+def _layer_order_key(key: tuple[int, str, LayerType]):
+    layer_ord, _, layer_type = key
+
+    a = 0 if layer_type == "FactLayer" else 1
+    b = -layer_ord
+
+    return a, b
+
+
 def compute_java_neurons_per_layer(
     samples: Sequence[NeuralSample | JavaNeuron],
 ) -> tuple[dict[int, list[JavaNeuron]], list[LayerDefinition]]:
@@ -174,31 +188,47 @@ def compute_java_neurons_per_layer(
 
     visited = set()
 
-    neurons_per_layer: dict[tuple[int, LayerType, TransformationDef], list] = (
-        defaultdict(lambda: [])
-    )
+    neurons_per_layer: dict[tuple[int, str, LayerType], list[JavaNeuron]] = defaultdict(lambda: [])
 
-    while len(queue) > 0:
-        neuron = queue.popleft()
+    names = set()
 
-        neuron_index = int(neuron.getIndex())
-        if neuron_index in visited:
-            continue
+    try:
+        while len(queue) > 0:
+            neuron = queue.popleft()
 
-        visited.add(neuron_index)
-        neurons_per_layer[
-            int(neuron.getLayer()),
-            _get_layer_type(neuron),
-            get_transformation(neuron) or "identity",
-        ].append(neuron)
+            neuron_index = int(neuron.getIndex())
+            if neuron_index in visited:
+                continue
 
-        for inp in neuron.getInputs():
-            inp_index = int(inp.getIndex())
-            if inp_index not in visited:
-                queue.append(inp)
+            visited.add(neuron_index)
+            neuron_rule_name = get_rule_or_fact_main_name(parse_rule_or_fact(str(neuron.name)))
+            names.add(neuron_rule_name)
+            neurons_per_layer[int(neuron.getLayer()), neuron_rule_name, _get_layer_type(neuron)].append(neuron)
 
-    layers = sorted(neurons_per_layer.keys(), reverse=True)
+            for inp in neuron.getInputs():
+                inp_index = int(inp.getIndex())
+                if inp_index not in visited:
+                    queue.append(inp)
+    except ParserError as e:
+        raise ValueError(f"Failed to parse rule name from '{str(neuron.name)}'") from e
 
-    out: dict[int, list] = {i: neurons_per_layer[k] for i, k in enumerate(layers)}
-    layer_defs = [LayerDefinition(id=i, type=k[1]) for i, k in enumerate(layers)]
+    layers = sorted(neurons_per_layer.keys(), key=_layer_order_key)
+    n_fact_layers = sum((1 if k[-1] == "FactLayer" else 0 for k in layers))
+
+    layers_numbered = list(enumerate(layers, -n_fact_layers))
+
+    out: dict[int, list] = {}
+    layer_defs: list[LayerDefinition] = []
+
+    for i, k in layers_numbered:
+        _, _, t = k
+
+        if t == "FactLayer":
+            assert i < 0
+        else:
+            assert i >= 0
+
+        out[i] = neurons_per_layer[k]
+        layer_defs.append(LayerDefinition(id=i, type=t))
+
     return out, layer_defs
