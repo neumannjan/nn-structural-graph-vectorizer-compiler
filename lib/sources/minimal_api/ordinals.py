@@ -19,12 +19,12 @@ class MinimalAPIOrdinals(Protocol):
     """
 
     @overload
-    def get_ordinal(self, layer: int | None, id: int, /) -> LayerOrdinal: ...
+    def get_ordinal(self, layer: str | None, id: int, /) -> LayerOrdinal: ...
 
     @overload
     def get_ordinal(self, id: int, /) -> LayerOrdinal: ...
 
-    def get_ordinal(self, *kargs: int | None) -> LayerOrdinal: ...
+    def get_ordinal(self, *kargs: str | int | None) -> LayerOrdinal: ...
 
     def get_id(self, o: LayerOrdinal) -> int: ...
 
@@ -33,12 +33,15 @@ class MinimalAPIOrdinals(Protocol):
     def get_all_ordinals(self) -> dict[int, LayerOrdinal]: ...
 
 
-def get_ordinal_args(*kargs: int | None) -> tuple[int | None, int]:
+def get_ordinal_args(*kargs: str | int | None) -> tuple[str | None, int]:
     if len(kargs) == 1:
         layer = None
         (id,) = kargs
+        assert isinstance(id, int)
     elif len(kargs) == 2:
         layer, id = kargs
+        assert layer is None or isinstance(layer, str)
+        assert isinstance(id, int)
     else:
         raise RuntimeError()
     assert id is not None
@@ -52,13 +55,13 @@ class MinimalAPIOrdinalsImpl(MinimalAPIOrdinals):
         self._minimal_api = minimal_api
 
     @overload
-    def get_ordinal(self, layer: int | None, id: int, /) -> LayerOrdinal: ...
+    def get_ordinal(self, layer: str | None, id: int, /) -> LayerOrdinal: ...
 
     @overload
     def get_ordinal(self, id: int, /) -> LayerOrdinal: ...
 
     @cache
-    def get_ordinals_for_layer(self, layer_id: int) -> Mapping[int, LayerOrdinal]:
+    def get_ordinals_for_layer(self, layer_id: str) -> Mapping[int, LayerOrdinal]:
         neurons = self._minimal_api.get_layer_neurons(layer_id)
         ids = self._minimal_api.get_ids(neurons)
         return OrderedDict(((id, LayerOrdinal(layer=layer_id, ordinal=o)) for o, id in enumerate(ids)))
@@ -72,7 +75,7 @@ class MinimalAPIOrdinalsImpl(MinimalAPIOrdinals):
 
         return out
 
-    def get_ordinal(self, *kargs: int | None) -> LayerOrdinal:
+    def get_ordinal(self, *kargs: str | int | None) -> LayerOrdinal:
         layer, id = get_ordinal_args(*kargs)
 
         if layer is not None:
@@ -81,7 +84,7 @@ class MinimalAPIOrdinalsImpl(MinimalAPIOrdinals):
             return self.get_all_ordinals()[id]
 
     @cache
-    def _reverse_ordinals_for_layer(self, layer_id: int) -> dict[LayerOrdinal, int]:
+    def _reverse_ordinals_for_layer(self, layer_id: str) -> dict[LayerOrdinal, int]:
         ofl = self.get_ordinals_for_layer(layer_id)
         return {o: id for id, o in ofl.items()}
 

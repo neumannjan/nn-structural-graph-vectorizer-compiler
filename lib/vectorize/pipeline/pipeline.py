@@ -57,12 +57,15 @@ def create_vectorized_network_compiler(
     build_vectorized_network = (
         PIPE  #
         + build_initial_network
+        + _debug
         + merge_unit_facts
         # + drop_unused_neurons  # TODO
         # + transpose_fixed_count_linears  # <- optional
         # + extract_unit_ordinals
         + _debug
         + Layerwise(SimplifyPureUnitFactLinears)
+        + compute_layer_shapes  # <- shapes are expected starting here
+        + _debug
     )
 
     # ------
@@ -104,10 +107,6 @@ def create_vectorized_network_compiler(
         + Layerwise(SimplifyGathers)
         + _debug
         + dissolve_identity_layers
-        + _debug
-        # + precompute_pure_fact_layers
-        # + preorder_single_use_outputs
-        + compute_layer_shapes  # <- shapes are expected starting here
         + _debug
     )
 

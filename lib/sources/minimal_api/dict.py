@@ -98,12 +98,12 @@ class MinimalAPIDictNetwork(MinimalAPINetwork[Sequence[Neuron]]):
     def __init__(
         self,
         layers: Sequence[LayerDefinition],
-        neurons: Sequence[Sequence[Neuron]] | Mapping[int, Sequence[Neuron]],
+        neurons: Sequence[Sequence[Neuron]] | Mapping[str, Sequence[Neuron]],
     ) -> None:
         self._layers = layers
         self._layers_map = {l.id: l for l in self.get_layers()}
 
-        self._neurons_per_layer: Mapping[int, Sequence[Neuron]]
+        self._neurons_per_layer: Mapping[str, Sequence[Neuron]]
         if isinstance(neurons, Sequence):
             self._neurons_per_layer = {ld.id: ns for ld, ns in zip(self._layers, neurons)}
         else:
@@ -114,10 +114,10 @@ class MinimalAPIDictNetwork(MinimalAPINetwork[Sequence[Neuron]]):
     def get_layers(self) -> Sequence[LayerDefinition]:
         return self._layers
 
-    def get_layers_map(self) -> Mapping[int, LayerDefinition]:
+    def get_layers_map(self) -> Mapping[str, LayerDefinition]:
         return self._layers_map
 
-    def get_layer_neurons(self, layer_id: int) -> Sequence[Neuron]:
+    def get_layer_neurons(self, layer_id: str) -> Sequence[Neuron]:
         return self._neurons_per_layer[layer_id]
 
     def get_ids(self, neurons: Sequence[Neuron]) -> Sequence[int]:

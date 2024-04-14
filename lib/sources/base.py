@@ -1,6 +1,7 @@
 from collections.abc import Collection
 from dataclasses import dataclass
 from typing import (
+    TYPE_CHECKING,
     Iterable,
     Iterator,
     Literal,
@@ -16,6 +17,10 @@ import torch
 
 from lib.model.ops import AggregationDef, TransformationDef
 
+if TYPE_CHECKING:
+    from lib.sources.minimal_api.base import MinimalAPINetwork
+    from lib.sources.minimal_api.ordinals import MinimalAPIOrdinals
+
 LayerType = Literal["FactLayer", "WeightedAtomLayer", "WeightedRuleLayer", "AtomLayer", "RuleLayer", "AggregationLayer"]
 
 
@@ -27,11 +32,11 @@ def is_weighted(layer_type: LayerType):
 class LayerDefinition:
     """Definition of a neural network layer. Contains the layer ID and the layer type."""
 
-    id: int
+    id: str
     type: LayerType
 
 
-def get_layer_id(layer: int | LayerDefinition):
+def get_layer_id(layer: str | LayerDefinition):
     if isinstance(layer, LayerDefinition):
         layer_id = layer.id
     else:
@@ -42,7 +47,7 @@ def get_layer_id(layer: int | LayerDefinition):
 class LayerOrdinal(NamedTuple):
     """Representation of a position of a neuron within a network."""
 
-    layer: int
+    layer: str
     ordinal: int
 
     def __repr__(self) -> str:
@@ -91,8 +96,8 @@ class LayerDefinitions(Protocol):
         """Get total no. of layers."""
         ...
 
-    def __getitem__(self, layer_id: int) -> LayerDefinition:
-        """Get the layer definition for a given layer ID. (ID can be an arbitrary integer)."""
+    def __getitem__(self, layer_id: str) -> LayerDefinition:
+        """Get the layer definition for a given layer ID."""
         ...
 
     def __iter__(self) -> Iterator[LayerDefinition]:
@@ -103,7 +108,7 @@ class LayerDefinitions(Protocol):
 
     def as_list(self) -> list[LayerDefinition]: ...
 
-    def as_dict(self) -> OrderedDict[int, LayerDefinition]: ...
+    def as_dict(self) -> OrderedDict[str, LayerDefinition]: ...
 
 
 @runtime_checkable
@@ -230,7 +235,7 @@ class Network(Protocol):
         """Get the ordinals of all neurons in the network. Useful as an `id` -> `LayerOrdinal` mapping."""
         ...
 
-    def __getitem__(self, layer: int | LayerDefinition) -> LayerNeurons:
+    def __getitem__(self, layer: str | LayerDefinition) -> LayerNeurons:
         """View the neurons contained in a specific layer."""
         ...
 

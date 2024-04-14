@@ -5,7 +5,7 @@ from lib.sources.base_impl import BaseLayerDefinitions
 
 
 class LayerDefinitionsImpl(BaseLayerDefinitions):
-    def __init__(self, data: OrderedDict[int, LayerDefinition]) -> None:
+    def __init__(self, data: OrderedDict[str, LayerDefinition]) -> None:
         self._data = data
 
     @classmethod
@@ -16,7 +16,7 @@ class LayerDefinitionsImpl(BaseLayerDefinitions):
     def __len__(self) -> int:
         return len(self._data)
 
-    def __getitem__(self, layer_id: int) -> LayerDefinition:
+    def __getitem__(self, layer_id: str) -> LayerDefinition:
         return self._data[layer_id]
 
     def __iter__(self) -> Iterator[LayerDefinition]:

@@ -88,6 +88,16 @@ CLASS_TO_LAYER_TYPE_MAP: dict[str, LayerType] = {
 }
 
 
+_LAYER_TYPE_TO_ABBREV: dict[LayerType, str] = {
+    "FactLayer": "f",
+    "AtomLayer": "a",
+    "RuleLayer": "r",
+    "WeightedRuleLayer": "wr",
+    "WeightedAtomLayer": "wa",
+    "AggregationLayer": "ag",
+}
+
+
 def _get_layer_type(java_neuron: JavaNeuron) -> LayerType:
     class_name = str(java_neuron.getClass().getSimpleName())
 
@@ -142,22 +152,10 @@ def get_aggregation(java_neuron: JavaNeuron) -> AggregationDef | None:
     return out
 
 
-def _get_neuron(sample: NeuralSample | JavaNeuron) -> JavaNeuron:
-    if isinstance(sample, NeuralSample):
-        neuron = sample.java_sample.query.neuron
-    else:
-        neuron = sample
-    return neuron
-
-
 def _iter_neuron_pairs_from_neuron(neuron: JavaNeuron) -> Iterable[tuple[JavaNeuron, JavaNeuron]]:
     for n in neuron.getInputs():
         yield from _iter_neuron_pairs_from_neuron(n)
         yield n, neuron
-
-
-def _iter_neuron_pairs_from_sample(sample: NeuralSample | JavaNeuron):
-    yield from _iter_neuron_pairs_from_neuron(_get_neuron(sample))
 
 
 def _iter_neurons(neuron: JavaNeuron) -> Iterable[JavaNeuron]:
@@ -166,11 +164,10 @@ def _iter_neurons(neuron: JavaNeuron) -> Iterable[JavaNeuron]:
         yield from _iter_neurons(n)
 
 
-def _iter_neurons_from_sample(sample: NeuralSample | JavaNeuron):
-    yield from _iter_neurons(_get_neuron(sample))
+_Key = tuple[int, str, LayerType]
 
 
-def _layer_order_key(key: tuple[int, str, LayerType]):
+def _layer_order_key(key: _Key):
     layer_ord, _, layer_type = key
 
     a = 0 if layer_type == "FactLayer" else 1
@@ -181,14 +178,14 @@ def _layer_order_key(key: tuple[int, str, LayerType]):
 
 def compute_java_neurons_per_layer(
     samples: Sequence[NeuralSample | JavaNeuron],
-) -> tuple[dict[int, list[JavaNeuron]], list[LayerDefinition]]:
+) -> tuple[dict[str, list[JavaNeuron]], list[LayerDefinition]]:
     queue = deque(
         (sample.java_sample.query.neuron if isinstance(sample, NeuralSample) else sample for sample in samples)
     )
 
     visited = set()
 
-    neurons_per_layer: dict[tuple[int, str, LayerType], list[JavaNeuron]] = defaultdict(lambda: [])
+    neurons_per_layer: dict[_Key, list[JavaNeuron]] = defaultdict(lambda: [])
 
     names = set()
 
@@ -213,22 +210,16 @@ def compute_java_neurons_per_layer(
         raise ValueError(f"Failed to parse rule name from '{str(neuron.name)}'") from e
 
     layers = sorted(neurons_per_layer.keys(), key=_layer_order_key)
-    n_fact_layers = sum((1 if k[-1] == "FactLayer" else 0 for k in layers))
 
-    layers_numbered = list(enumerate(layers, -n_fact_layers))
-
-    out: dict[int, list] = {}
+    out: dict[str, list] = {}
     layer_defs: list[LayerDefinition] = []
 
-    for i, k in layers_numbered:
-        _, _, t = k
+    for k in layers:
+        _, n, t = k
 
-        if t == "FactLayer":
-            assert i < 0
-        else:
-            assert i >= 0
+        id: str = n + "__" + _LAYER_TYPE_TO_ABBREV[t]
 
-        out[i] = neurons_per_layer[k]
-        layer_defs.append(LayerDefinition(id=i, type=t))
+        out[id] = neurons_per_layer[k]
+        layer_defs.append(LayerDefinition(id=id, type=t))
 
     return out, layer_defs

@@ -29,7 +29,7 @@ class MinimalAPINetwork(Generic[TNeurons], Protocol):
     The idea is as follows:
     1) The author of a neural network definition implements the minimal API, i.e. subclasses of `MinimalAPINetwork` and
     `MinimalAPIOrdinals`.
-    2) The end-user uses NetworkImpl(TheMinimalAPINetwork(), TheMinimalAPIOrdinals()), which provides a more convenient
+    2) The end-user uses NetworkImpl(MinimalAPINetwork(), MinimalAPIOrdinals()), which provides a more convenient
     and more feature-complete API.
 
     (Note: Universal implementation `MinimalAPIOrdinalsImpl` should suffice, so all that needs to be implemented is
@@ -40,11 +40,11 @@ class MinimalAPINetwork(Generic[TNeurons], Protocol):
         """Return all layer definitions in order from input to output."""
         ...
 
-    def get_layers_map(self) -> Mapping[int, LayerDefinition]:
+    def get_layers_map(self) -> Mapping[str, LayerDefinition]:
         """Return a mapping from layer IDs to layer definitions."""
         ...
 
-    def get_layer_neurons(self, layer_id: int) -> TNeurons:
+    def get_layer_neurons(self, layer_id: str) -> TNeurons:
         """Return a representation of all neurons from a particular layer."""
         ...
 

@@ -13,7 +13,7 @@ from lib.utils import MapCollection, cache
 
 
 class _Ordinals(BaseOrdinals):
-    def __init__(self, minimal_ordinals: MinimalAPIOrdinals, ids: Collection[int], layer_id: int | None) -> None:
+    def __init__(self, minimal_ordinals: MinimalAPIOrdinals, ids: Collection[int], layer_id: str | None) -> None:
         self._minimal_ordinals = minimal_ordinals
         self._ids = ids
         self._layer_id = layer_id
@@ -57,7 +57,7 @@ class _Neurons(BaseNeurons, Generic[TNeurons]):
         minimal_api: MinimalAPINetwork[TNeurons],
         minimal_ordinals: MinimalAPIOrdinals,
         neurons: TNeurons,
-        layer_id: int | None,
+        layer_id: str | None,
     ) -> None:
         self._minimal_api = minimal_api
         self._minimal_ordinals = minimal_ordinals
@@ -127,7 +127,7 @@ class _LayerNeurons(_Neurons, BaseLayerNeurons):
         minimal_api: MinimalAPINetwork[TNeurons],
         minimal_ordinals: MinimalAPIOrdinals,
         neurons: TNeurons,
-        layer_id: int,
+        layer_id: str,
     ) -> None:
         super().__init__(minimal_api, minimal_ordinals, neurons, layer_id)
         assert self._layer_id is not None
@@ -159,7 +159,7 @@ class NetworkImpl(BaseNetwork):
         )
 
     @cache
-    def __getitem__(self, layer: int | LayerDefinition) -> _LayerNeurons:
+    def __getitem__(self, layer: str | LayerDefinition) -> _LayerNeurons:
         layer_id = get_layer_id(layer)
 
         return _LayerNeurons(

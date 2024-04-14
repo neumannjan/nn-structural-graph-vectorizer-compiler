@@ -74,10 +74,10 @@ class MinimalAPIJavaNetwork(MinimalAPINetwork[_JavaNeuronsPointer]):
         return self._layers
 
     @cache
-    def get_layers_map(self) -> Mapping[int, LayerDefinition]:
+    def get_layers_map(self) -> Mapping[str, LayerDefinition]:
         return {l.id: l for l in self.get_layers()}
 
-    def get_layer_neurons(self, layer_id: int) -> _JavaNeuronsPointer:
+    def get_layer_neurons(self, layer_id: str) -> _JavaNeuronsPointer:
         return _JavaNeuronsPointer(self.get_layers_map()[layer_id].type, self._java_neurons_per_layer[layer_id])
 
     def get_ids(self, neurons: _JavaNeuronsPointer) -> Sequence[int]:

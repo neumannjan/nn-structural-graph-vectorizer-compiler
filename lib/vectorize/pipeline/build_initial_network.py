@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from typing import Collection, Iterable, Sequence, TypeGuard, TypeVar, get_args
+from typing import Collection, Iterable, TypeGuard, TypeVar, get_args
 
 import numpy as np
 
@@ -16,10 +16,6 @@ UNIT_FACT = UnitFact()
 
 def _is_reduction_def(agg: AggregationDef | None) -> TypeGuard[ReductionDef | None]:
     return agg is None or agg in _REDUCTIONS
-
-
-def _is_reduction_defs(aggs: Sequence[AggregationDef | None]) -> TypeGuard[ReductionDef | None]:
-    return all((_is_reduction_def(a) for a in aggs))
 
 
 _T = TypeVar("_T")
@@ -41,20 +37,19 @@ def _assert_all_same_ignore_none(what_plural: str, source: Iterable[_T]) -> _T |
     return first
 
 
-def _get_layer_id(layer: int) -> str:
+def _get_str_id_from_int(layer: int) -> str:
     return "%03d" % layer
 
 
-def _build_gather(fact_layers: Collection[str], layer_sizes: dict[str, int], input_ordinals: Ordinals):
+def _build_gather(fact_layers: Collection[str], input_ordinals: Ordinals):
     ordinals: list[int] = []
     types: list[int] = []
     layer_ids: list[str] = []
 
     for ord in input_ordinals:
-        layer = _get_layer_id(ord.layer)
         ordinals.append(ord.ordinal)
-        layer_ids.append(layer)
-        if layer in fact_layers:
+        layer_ids.append(ord.layer)
+        if ord.layer in fact_layers:
             types.append(Refs.TYPE_FACT)
         else:
             types.append(Refs.TYPE_LAYER)
@@ -74,7 +69,7 @@ def _build_weights(
     fact_weights_layer: str,
 ):
     weights = list(neurons.input_weights)
-    ids = [_get_layer_id(w.id) for w in weights]
+    ids = [_get_str_id_from_int(w.id) for w in weights]
 
     if len(ids) == 0:
         return None
@@ -168,8 +163,6 @@ def _build_fact_layer(neurons: LayerNeurons):
 
 
 def build_initial_network(network: Network) -> VectorizedLayerNetwork:
-    layer_sizes: dict[str, int] = {}
-
     fact_layers: dict[str, FactLayer] = {}
     weights: dict[str, LearnableWeight] = {}
     layers: OrderedDict[str, Layer] = OrderedDict()
@@ -181,16 +174,14 @@ def build_initial_network(network: Network) -> VectorizedLayerNetwork:
 
     for layer, neurons in network.items():
         try:
-            layer_id = _get_layer_id(layer.id)
-
             if layer.type == "FactLayer":
-                fact_layers[layer_id] = _build_fact_layer(neurons)
+                fact_layers[layer.id] = _build_fact_layer(neurons)
             else:
                 # TODO: support multiple different transforms/aggregations/shapes here ?
                 transform = _build_transform(neurons)
                 reduce = _build_reduce(neurons)
 
-                gather_source = _build_gather(fact_layers, layer_sizes, neurons.inputs.ordinals)
+                gather_source = _build_gather(fact_layers, neurons.inputs.ordinals)
                 weight_source = _build_weights(
                     neurons,
                     weights_out=weights,
@@ -202,9 +193,7 @@ def build_initial_network(network: Network) -> VectorizedLayerNetwork:
                 layer_base = _build_layer_base(gather_source, weight_source)
                 the_layer = _build_layer(layer_base, reduce, transform)
 
-                layers[layer_id] = the_layer
-
-            layer_sizes[layer_id] = len(neurons)
+                layers[layer.id] = the_layer
         except Exception as e:
             raise Exception(f"Exception in layer {layer.id}") from e
 

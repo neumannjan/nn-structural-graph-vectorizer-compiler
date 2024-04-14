@@ -33,7 +33,7 @@ def from_java(samples: Sequence[NeuralSample | JavaNeuron], settings: Neuralogic
     return from_minimal_api(minimal_api=minimal, custom_ordinals=None)
 
 
-def from_dict(layers: Sequence[LayerDefinition], neurons: Sequence[Sequence[Neuron]] | Mapping[int, Sequence[Neuron]]):
+def from_dict(layers: Sequence[LayerDefinition], neurons: Sequence[Sequence[Neuron]] | Mapping[str, Sequence[Neuron]]):
     """Get a Network from a pure Python data representation."""
     minimal = MinimalAPIDictNetwork(layers=layers, neurons=neurons)
     return from_minimal_api(minimal_api=minimal, custom_ordinals=None)
