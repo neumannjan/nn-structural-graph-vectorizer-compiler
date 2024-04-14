@@ -8,6 +8,9 @@ class DatasetPrinter:
         self._out = out
 
     def print_fact(self, fact: Fact):
+        if fact.shape is not None:
+            self._out.write("{" + ", ".join((str(v) for v in fact.shape)) + "} ")
+
         self._out.write(fact.name + '(' + ', '.join(fact.terms) + ')')
 
     def print_sample(self, sample: Iterable[Fact]):

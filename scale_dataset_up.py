@@ -1,7 +1,7 @@
 import argparse
 
 from lib.facts.duplicator import DatasetDuplicator
-from lib.facts.parser import DatasetParser
+from lib.facts.parser import parse_file
 from lib.facts.printer import DatasetPrinter
 
 if __name__ == "__main__":
@@ -13,8 +13,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     with open(args.in_examples, "r") as inp, open(args.out_examples, "w") as outp:
-        parser = DatasetParser()
-        dataset_iter = parser.parse_file(inp)
+        dataset_iter = parse_file(inp)
         duplicator = DatasetDuplicator(term_prefix="newterm")
         new_dataset_iter = duplicator.duplicate_samples(dataset_iter, times=args.times, include_orig=True)
         printer = DatasetPrinter(outp)
