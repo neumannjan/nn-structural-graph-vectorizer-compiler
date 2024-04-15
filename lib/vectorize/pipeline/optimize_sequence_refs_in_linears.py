@@ -8,7 +8,7 @@ from lib.vectorize.model import *
 from lib.vectorize.pipeline.layerwise import LayerwiseOperation
 
 
-class OptimizeKSeqRefsInLinears(LayerwiseOperation):
+class OptimizeSequenceRefsInLinears(LayerwiseOperation):
     def __init__(self, network: VectorizedLayerNetwork) -> None:
         self.network = network
 
@@ -30,23 +30,27 @@ class OptimizeKSeqRefsInLinears(LayerwiseOperation):
                 input.layer_ids = input.layer_ids[:period]
                 input.ordinals = input.ordinals[:period]
 
-    def _simplify(self, a: Input, b: Input, period: int):
+    def _simplify(self, a: Input, b: Input, preferred_period: int | None):
         a_refs = self._get_refs(a)
         b_refs = self._get_refs(b)
 
-        a_subseq = detect_repeating_K_sequence_in_list(a_refs, period=period, allow_last_incomplete=False)
-        b_subseq = detect_repeating_K_sequence_in_list(b_refs, period=period, allow_last_incomplete=False)
+        if preferred_period is None:
+            # TODO
+            return
 
-        if a_subseq is not None and b_subseq is not None:
+        a_subseq_len = detect_repeating_K_sequence_in_list(a_refs, period=preferred_period, allow_last_incomplete=False)
+        b_subseq_len = detect_repeating_K_sequence_in_list(b_refs, period=preferred_period, allow_last_incomplete=False)
+
+        if a_subseq_len is not None and b_subseq_len is not None:
             warnings.warn("Linears could be simplified further")
-            if len(a_refs) + len(b_subseq) < len(a_subseq) + len(b_refs):
-                self._apply_subseq_refs(b, period)
+            if len(a_refs) + b_subseq_len < a_subseq_len + len(b_refs):
+                self._apply_subseq_refs(b, preferred_period)
             else:
-                self._apply_subseq_refs(a, period)
-        elif a_subseq is not None:
-            self._apply_subseq_refs(a, period)
-        elif b_subseq is not None:
-            self._apply_subseq_refs(b, period)
+                self._apply_subseq_refs(a, preferred_period)
+        elif a_subseq_len is not None:
+            self._apply_subseq_refs(a, preferred_period)
+        elif b_subseq_len is not None:
+            self._apply_subseq_refs(b, preferred_period)
 
     def _for_layer_base(self, base: LayerBase, period: int):
         match base:
@@ -60,17 +64,28 @@ class OptimizeKSeqRefsInLinears(LayerwiseOperation):
                 assert False
 
     def __call__(self, batch: int, layer_id: str, layer: Layer) -> Layer:
-        match layer.aggregate:
-            case FixedCountReduce(period=period):
-                self._for_layer_base(layer.base, period)
+        match layer:
+            case Layer(base=InputLayerBase()):
+                pass
+            case Layer(
+                base=(LinearLayerBase(input=input, weight=weight) | LinearGatherLayerBase(input=input, weight=weight)),
+                aggregate=FixedCountReduce(period=period),
+            ):
+                self._simplify(input, weight, preferred_period=period)
+            case Layer(
+                base=(LinearLayerBase(input=input, weight=weight) | LinearGatherLayerBase(input=input, weight=weight))
+            ):
+                self._simplify(input, weight, preferred_period=None)
+            case _:
+                assert False, f"{layer}"
         return layer
 
-    def simplify_linears(self):
+    def optimize_sequence_refs_in_linears(self):
         for bid, batch in self.network.batches.items():
             for lid, layer in batch.layers.items():
                 self(bid, lid, layer)
 
 
-def simplify_linears(network: VectorizedLayerNetwork):
-    OptimizeKSeqRefsInLinears(network).simplify_linears()
+def optimize_sequence_refs_in_linears(network: VectorizedLayerNetwork):
+    OptimizeSequenceRefsInLinears(network).optimize_sequence_refs_in_linears()
     return network

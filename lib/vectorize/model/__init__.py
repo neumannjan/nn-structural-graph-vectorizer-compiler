@@ -10,6 +10,7 @@ from lib.vectorize.model.gather import (
     GenericGather,
     NoopGather,
     Repeat,
+    RepeatInterleave,
     SliceValues,
     TakeSingleValue,
 )

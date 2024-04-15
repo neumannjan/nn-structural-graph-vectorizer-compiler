@@ -64,7 +64,23 @@ class Repeat:
         return isinstance(value, Repeat) and self.times == value.times and self.total_length == value.total_length
 
 
-OneGather = GenericGather | TakeSingleValue | NoopGather | SliceValues | Repeat
+class RepeatInterleave:
+    __slots__ = ("times", "total_length")
+    __repr__ = repr_slots
+
+    def __init__(self, times: int, total_length: int) -> None:
+        self.times = times
+        self.total_length = total_length
+
+    def __eq__(self, value: object, /) -> bool:
+        return (
+            isinstance(value, RepeatInterleave)
+            and self.times == value.times
+            and self.total_length == value.total_length
+        )
+
+
+OneGather = GenericGather | TakeSingleValue | NoopGather | SliceValues | Repeat | RepeatInterleave
 
 
 class GatherPair:
@@ -80,7 +96,7 @@ class GatherPair:
         return isinstance(value, GatherPair) and self.a == value.a and self.b == value.b
 
 
-Gather = GenericGather | TakeSingleValue | NoopGather | SliceValues | Repeat | GatherPair
+Gather = GenericGather | TakeSingleValue | NoopGather | SliceValues | Repeat | RepeatInterleave | GatherPair
 
 
 def _match_all(gather: Gather):
@@ -94,6 +110,8 @@ def _match_all(gather: Gather):
         case SliceValues(start=start, end=end, step=step):
             ...
         case Repeat(times=_, total_length=total_length):
+            ...
+        case RepeatInterleave(times=_, total_length=total_length):
             ...
         case GatherPair(a, b):
             ...

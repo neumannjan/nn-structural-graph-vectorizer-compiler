@@ -1,7 +1,7 @@
 import torch
 
 from lib.engines.torch.dim_reduce import build_dim_reduce_module
-from lib.engines.torch.gather import GenericGatherModule, RepeatModule, SliceValuesModule, TakeValueModule
+from lib.engines.torch.gather import GenericGatherModule, RepeatInterleaveModule, RepeatModule, SliceValuesModule, TakeValueModule
 from lib.engines.torch.linear import LinearModule
 from lib.engines.torch.network import LayerModule, NetworkModule, NetworkParams
 from lib.engines.torch.refs import ConcatRefsModule, RetrieveRefModule
@@ -81,6 +81,8 @@ def _for_op(op: Operation | LayerRefs, settings: TorchModuleSettings) -> torch.n
             return SliceValuesModule(start, end, step)
         case Repeat(times=times, total_length=total_length):
             return RepeatModule(repeats=times, total_length=total_length)
+        case RepeatInterleave(times=times, total_length=total_length):
+            return RepeatInterleaveModule(repeats=times, total_length=total_length)
         case Transform(transform=transform):
             return build_transformation(transform)
         case DimReduce(dim=dim, reduce=reduce):

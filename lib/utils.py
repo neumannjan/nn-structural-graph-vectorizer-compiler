@@ -33,7 +33,7 @@ def _argmax_last(a: np.ndarray):
 
 def _detect_possible_last_incomplete(inp: np.ndarray) -> tuple[np.ndarray, np.ndarray | None]:
     # find last occurrence of the initial string
-    last_idx = _argmax_last(inp == inp[0])
+    last_idx = _argmax_last((inp == inp[0]).reshape([inp.shape[0], -1]).all(axis=-1))
 
     if last_idx <= len(inp) // 2:
         return inp, None
@@ -52,7 +52,6 @@ def cache(func):
 
 _T = TypeVar("_T")
 _S = TypeVar("_S")
-_R = TypeVar("_R")
 
 
 class KeySortable(Generic[_T, _S]):
@@ -75,9 +74,7 @@ class KeySortable(Generic[_T, _S]):
         return self.__class__.__name__ + f"({self.key}, {self.value})"
 
 
-def detect_repeating_sequence_in_list(
-        inp: Sequence[int] | np.ndarray, allow_last_incomplete=False
-) -> np.ndarray | None:
+def detect_repeating_sequence_in_list(inp: Sequence | np.ndarray, allow_last_incomplete=False) -> int | None:
     """
     Find the smallest repeating subsequence `s` that the input sequence `t` is made from (such that `t = ss...s`).
 
@@ -93,42 +90,42 @@ def detect_repeating_sequence_in_list(
     >>> detect_repeating_sequence_in_list([0, 1, 2, 2, 0, 1], allow_last_incomplete=False)
     >>> detect_repeating_sequence_in_list([0, 1, 2, 2, 0, 1, 2], allow_last_incomplete=False)
     >>> detect_repeating_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2], allow_last_incomplete=False)
-    array([0, 1, 2, 2])
+    4
     >>> detect_repeating_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0], allow_last_incomplete=False)
     >>> detect_repeating_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0, 1], allow_last_incomplete=False)
     >>> detect_repeating_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 2], allow_last_incomplete=False)
     >>> detect_repeating_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 2, 2], allow_last_incomplete=False)
-    array([0, 1, 2, 2])
+    4
     >>> detect_repeating_sequence_in_list([0], allow_last_incomplete=True)
     >>> detect_repeating_sequence_in_list([0, 1], allow_last_incomplete=True)
     >>> detect_repeating_sequence_in_list([0, 1, 2], allow_last_incomplete=True)
     >>> detect_repeating_sequence_in_list([0, 1, 2, 2], allow_last_incomplete=True)
     >>> detect_repeating_sequence_in_list([0, 1, 2, 2, 0], allow_last_incomplete=True)
-    array([0, 1, 2, 2])
+    4
     >>> detect_repeating_sequence_in_list([0, 1, 2, 2, 0, 1], allow_last_incomplete=True)
-    array([0, 1, 2, 2])
+    4
     >>> detect_repeating_sequence_in_list([0, 1, 2, 2, 0, 1, 2], allow_last_incomplete=True)
-    array([0, 1, 2, 2])
+    4
     >>> detect_repeating_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2], allow_last_incomplete=True)
-    array([0, 1, 2, 2])
+    4
     >>> detect_repeating_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0], allow_last_incomplete=True)
-    array([0, 1, 2, 2])
+    4
     >>> detect_repeating_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0, 1], allow_last_incomplete=True)
-    array([0, 1, 2, 2])
+    4
     >>> detect_repeating_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 2], allow_last_incomplete=True)
-    array([0, 1, 2, 2])
+    4
     >>> detect_repeating_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 2, 2], allow_last_incomplete=True)
-    array([0, 1, 2, 2])
+    4
     >>> detect_repeating_sequence_in_list([0], allow_last_incomplete=False)
     >>> detect_repeating_sequence_in_list([0, 0], allow_last_incomplete=False)
-    array([0])
+    1
     >>> detect_repeating_sequence_in_list([0, 0, 0], allow_last_incomplete=False)
-    array([0])
+    1
     >>> detect_repeating_sequence_in_list([0], allow_last_incomplete=True)
     >>> detect_repeating_sequence_in_list([0, 0], allow_last_incomplete=True)
-    array([0])
+    1
     >>> detect_repeating_sequence_in_list([0, 0, 0], allow_last_incomplete=True)
-    array([0])
+    1
     >>> detect_repeating_sequence_in_list([2, 0], allow_last_incomplete=False)
     >>> detect_repeating_sequence_in_list([2, 0, 1], allow_last_incomplete=False)
     >>> detect_repeating_sequence_in_list([2, 0, 1, 2], allow_last_incomplete=False)
@@ -136,32 +133,32 @@ def detect_repeating_sequence_in_list(
     >>> detect_repeating_sequence_in_list([2, 0, 1, 2, 2, 0], allow_last_incomplete=False)
     >>> detect_repeating_sequence_in_list([2, 0, 1, 2, 2, 0, 1], allow_last_incomplete=False)
     >>> detect_repeating_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2], allow_last_incomplete=False)
-    array([2, 0, 1, 2])
+    4
     >>> detect_repeating_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2], allow_last_incomplete=False)
     >>> detect_repeating_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0], allow_last_incomplete=False)
     >>> detect_repeating_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0, 1], allow_last_incomplete=False)
     >>> detect_repeating_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 2], allow_last_incomplete=False)
-    array([2, 0, 1, 2])
+    4
     >>> detect_repeating_sequence_in_list([2, 0], allow_last_incomplete=True)
     >>> detect_repeating_sequence_in_list([2, 0, 1], allow_last_incomplete=True)
     >>> detect_repeating_sequence_in_list([2, 0, 1, 2], allow_last_incomplete=True)
-    array([2, 0, 1])
+    3
     >>> detect_repeating_sequence_in_list([2, 0, 1, 2, 2], allow_last_incomplete=True)
-    array([2, 0, 1, 2])
+    4
     >>> detect_repeating_sequence_in_list([2, 0, 1, 2, 2, 0], allow_last_incomplete=True)
-    array([2, 0, 1, 2])
+    4
     >>> detect_repeating_sequence_in_list([2, 0, 1, 2, 2, 0, 1], allow_last_incomplete=True)
-    array([2, 0, 1, 2])
+    4
     >>> detect_repeating_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2], allow_last_incomplete=True)
-    array([2, 0, 1, 2])
+    4
     >>> detect_repeating_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2], allow_last_incomplete=True)
-    array([2, 0, 1, 2])
+    4
     >>> detect_repeating_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0], allow_last_incomplete=True)
-    array([2, 0, 1, 2])
+    4
     >>> detect_repeating_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0, 1], allow_last_incomplete=True)
-    array([2, 0, 1, 2])
+    4
     >>> detect_repeating_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 2], allow_last_incomplete=True)
-    array([2, 0, 1, 2])
+    4
     >>> detect_repeating_sequence_in_list([2, 0, 1, 3], allow_last_incomplete=True)
     >>> detect_repeating_sequence_in_list([2, 0, 1, 2, 3], allow_last_incomplete=True)
     >>> detect_repeating_sequence_in_list([2, 0, 1, 2, 2, 3], allow_last_incomplete=True)
@@ -171,6 +168,12 @@ def detect_repeating_sequence_in_list(
     >>> detect_repeating_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 3], allow_last_incomplete=True)
     >>> detect_repeating_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0, 3], allow_last_incomplete=True)
     >>> detect_repeating_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 3], allow_last_incomplete=True)
+    >>> detect_repeating_sequence_in_list([['1', '14', 0], ['1', '15', 0], ['0', 'unit', '0'],
+    ... ['1', '14', 0], ['1', '15', 0], ['0', 'unit', '0']])
+    3
+    >>> detect_repeating_sequence_in_list([['1', '14', 0], ['1', '15', 0], ['0', 'unit', '0'],
+    ... ['1', '14', 0], ['1', '15', 0]], allow_last_incomplete=True)
+    3
     """
     inp = np.array(inp)
 
@@ -178,7 +181,10 @@ def detect_repeating_sequence_in_list(
 
     # find only Ks up to the middle of the sequence (because the string is repeated at least twice), which are also
     # equal to the initial value
-    (candidate_Ks,) = np.where(inp[: len(inp) // 2 + 1] == inp[0])
+    mask = inp[: len(inp) // 2 + 1] == inp[0]
+    mask = mask.reshape([mask.shape[0], -1]).all(axis=-1)
+
+    (candidate_Ks,) = np.where(mask)
 
     # skip the index 0
     candidate_Ks = candidate_Ks[1:]
@@ -196,7 +202,10 @@ def detect_repeating_sequence_in_list(
         inp_first, inp_last = _detect_possible_last_incomplete(inp)
         if inp_last is not None:
             # find only Ks equal to the initial value
-            (candidate_Ks,) = np.where(inp_first == inp_first[0])
+            mask = inp_first[: len(inp_first) // 2 + 1] == inp_first[0]
+            mask = mask.reshape([mask.shape[0], -1]).all(axis=-1)
+
+            (candidate_Ks,) = np.where(mask)
 
             # skip the index 0
             candidate_Ks = candidate_Ks[1:]
@@ -223,17 +232,17 @@ def detect_repeating_sequence_in_list(
         k = candidate.key
         inp_first, inp_last = candidate.value
 
-        if np.all(inp_first.reshape([-1, k]) == inp_first[:k]) and (
-                inp_last is None or np.all(inp_last == inp_first[: len(inp_last)])
+        if np.all(inp_first.reshape([-1, k, *inp_first.shape[1:]]) == inp_first[:k]) and (
+            inp_last is None or np.all(inp_last == inp_first[: len(inp_last)])
         ):
-            return inp_first[:k]
+            return k
 
     return None
 
 
 def detect_repeating_K_sequence_in_list(
-        inp: Sequence | np.ndarray, period: int, allow_last_incomplete=False
-) -> np.ndarray | None:
+    inp: Sequence | np.ndarray, period: int, allow_last_incomplete=False
+) -> int | None:
     """
     Find the smallest repeating subsequence `s` of length `period` that the input sequence `t` is made from.
 
@@ -252,12 +261,12 @@ def detect_repeating_K_sequence_in_list(
     >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1], 4, allow_last_incomplete=False)
     >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2], 4, allow_last_incomplete=False)
     >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2], 4, allow_last_incomplete=False)
-    array([0, 1, 2, 2])
+    4
     >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0], 4, allow_last_incomplete=False)
     >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0, 1], 4, allow_last_incomplete=False)
     >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 2], 4, allow_last_incomplete=False)
     >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 2, 2], 4, allow_last_incomplete=False)
-    array([0, 1, 2, 2])
+    4
     >>> detect_repeating_K_sequence_in_list([0], 3, allow_last_incomplete=False)
     >>> detect_repeating_K_sequence_in_list([0, 1], 3, allow_last_incomplete=False)
     >>> detect_repeating_K_sequence_in_list([0, 1, 2], 3, allow_last_incomplete=False)
@@ -275,21 +284,21 @@ def detect_repeating_K_sequence_in_list(
     >>> detect_repeating_K_sequence_in_list([0, 1, 2], 4, allow_last_incomplete=True)
     >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2], 4, allow_last_incomplete=True)
     >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0], 4, allow_last_incomplete=True)
-    array([0, 1, 2, 2])
+    4
     >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1], 4, allow_last_incomplete=True)
-    array([0, 1, 2, 2])
+    4
     >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2], 4, allow_last_incomplete=True)
-    array([0, 1, 2, 2])
+    4
     >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2], 4, allow_last_incomplete=True)
-    array([0, 1, 2, 2])
+    4
     >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0], 4, allow_last_incomplete=True)
-    array([0, 1, 2, 2])
+    4
     >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0, 1], 4, allow_last_incomplete=True)
-    array([0, 1, 2, 2])
+    4
     >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 2], 4, allow_last_incomplete=True)
-    array([0, 1, 2, 2])
+    4
     >>> detect_repeating_K_sequence_in_list([0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 2, 2], 4, allow_last_incomplete=True)
-    array([0, 1, 2, 2])
+    4
     >>> detect_repeating_K_sequence_in_list([0], 3, allow_last_incomplete=True)
     >>> detect_repeating_K_sequence_in_list([0, 1], 3, allow_last_incomplete=True)
     >>> detect_repeating_K_sequence_in_list([0, 1, 2], 3, allow_last_incomplete=True)
@@ -308,19 +317,19 @@ def detect_repeating_K_sequence_in_list(
     >>> detect_repeating_K_sequence_in_list([0, 0, 0, 0], 3, allow_last_incomplete=False)
     >>> detect_repeating_K_sequence_in_list([0, 0, 0, 0, 0], 3, allow_last_incomplete=False)
     >>> detect_repeating_K_sequence_in_list([0, 0, 0, 0, 0, 0], 3, allow_last_incomplete=False)
-    array([0, 0, 0])
+    3
     >>> detect_repeating_K_sequence_in_list([0, 0, 0, 0, 0, 0, 0], 3, allow_last_incomplete=False)
     >>> detect_repeating_K_sequence_in_list([0], 3, allow_last_incomplete=True)
     >>> detect_repeating_K_sequence_in_list([0, 0], 3, allow_last_incomplete=True)
     >>> detect_repeating_K_sequence_in_list([0, 0, 0], 3, allow_last_incomplete=True)
     >>> detect_repeating_K_sequence_in_list([0, 0, 0, 0], 3, allow_last_incomplete=True)
-    array([0, 0, 0])
+    3
     >>> detect_repeating_K_sequence_in_list([0, 0, 0, 0, 0], 3, allow_last_incomplete=True)
-    array([0, 0, 0])
+    3
     >>> detect_repeating_K_sequence_in_list([0, 0, 0, 0, 0, 0], 3, allow_last_incomplete=True)
-    array([0, 0, 0])
+    3
     >>> detect_repeating_K_sequence_in_list([0, 0, 0, 0, 0, 0, 0], 3, allow_last_incomplete=True)
-    array([0, 0, 0])
+    3
     >>> detect_repeating_K_sequence_in_list([2, 0], 4, allow_last_incomplete=False)
     >>> detect_repeating_K_sequence_in_list([2, 0, 1], 4, allow_last_incomplete=False)
     >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2], 4, allow_last_incomplete=False)
@@ -328,12 +337,12 @@ def detect_repeating_K_sequence_in_list(
     >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0], 4, allow_last_incomplete=False)
     >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1], 4, allow_last_incomplete=False)
     >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2], 4, allow_last_incomplete=False)
-    array([2, 0, 1, 2])
+    4
     >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2], 4, allow_last_incomplete=False)
     >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0], 4, allow_last_incomplete=False)
     >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0, 1], 4, allow_last_incomplete=False)
     >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 2], 4, allow_last_incomplete=False)
-    array([2, 0, 1, 2])
+    4
     >>> detect_repeating_K_sequence_in_list([2, 0], 3, allow_last_incomplete=False)
     >>> detect_repeating_K_sequence_in_list([2, 0, 1], 3, allow_last_incomplete=False)
     >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2], 3, allow_last_incomplete=False)
@@ -349,25 +358,25 @@ def detect_repeating_K_sequence_in_list(
     >>> detect_repeating_K_sequence_in_list([2, 0, 1], 4, allow_last_incomplete=True)
     >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2], 4, allow_last_incomplete=True)
     >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2], 4, allow_last_incomplete=True)
-    array([2, 0, 1, 2])
+    4
     >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0], 4, allow_last_incomplete=True)
-    array([2, 0, 1, 2])
+    4
     >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1], 4, allow_last_incomplete=True)
-    array([2, 0, 1, 2])
+    4
     >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2], 4, allow_last_incomplete=True)
-    array([2, 0, 1, 2])
+    4
     >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2], 4, allow_last_incomplete=True)
-    array([2, 0, 1, 2])
+    4
     >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0], 4, allow_last_incomplete=True)
-    array([2, 0, 1, 2])
+    4
     >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0, 1], 4, allow_last_incomplete=True)
-    array([2, 0, 1, 2])
+    4
     >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 2], 4, allow_last_incomplete=True)
-    array([2, 0, 1, 2])
+    4
     >>> detect_repeating_K_sequence_in_list([2, 0], 3, allow_last_incomplete=True)
     >>> detect_repeating_K_sequence_in_list([2, 0, 1], 3, allow_last_incomplete=True)
     >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2], 3, allow_last_incomplete=True)
-    array([2, 0, 1])
+    3
     >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2], 3, allow_last_incomplete=True)
     >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0], 3, allow_last_incomplete=True)
     >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1], 3, allow_last_incomplete=True)
@@ -388,14 +397,10 @@ def detect_repeating_K_sequence_in_list(
     >>> detect_repeating_K_sequence_in_list([2, 0, 1, 2, 2, 0, 1, 2, 2, 0, 1, 2, 3], 4, allow_last_incomplete=True)
     >>> detect_repeating_K_sequence_in_list([['1', '14', 0], ['1', '15', 0], ['0', 'unit', '0'],
     ... ['1', '14', 0], ['1', '15', 0], ['0', 'unit', '0']], 3)
-    array([['1', '14', '0'],
-           ['1', '15', '0'],
-           ['0', 'unit', '0']], dtype='<U21')
+    3
     >>> detect_repeating_K_sequence_in_list([['1', '14', 0], ['1', '15', 0], ['0', 'unit', '0'],
     ... ['1', '14', 0], ['1', '15', 0]], 3, allow_last_incomplete=True)
-    array([['1', '14', '0'],
-           ['1', '15', '0'],
-           ['0', 'unit', '0']], dtype='<U21')
+    3
     """
     k = period
 
@@ -412,9 +417,67 @@ def detect_repeating_K_sequence_in_list(
     inp_first, inp_last = inp[:max_len], inp[max_len:]
 
     if np.all(inp_first.reshape([-1, k, *inp_first.shape[1:]]) == inp_first[:k]) and (
-            len(inp_last) == 0 or np.all(inp_last == inp_first[: len(inp_last)])
+        len(inp_last) == 0 or np.all(inp_last == inp_first[: len(inp_last)])
     ):
-        return inp_first[:k]
+        return k
+
+    return None
+
+
+def detect_repeating_interleaved_sequence_in_list(
+    inp: Sequence | np.ndarray, allow_last_incomplete=False
+) -> int | None:
+    """
+    TODO doc.
+
+    >>> detect_repeating_interleaved_sequence_in_list([0])
+    >>> detect_repeating_interleaved_sequence_in_list([0, 1])
+    >>> detect_repeating_interleaved_sequence_in_list([0, 0])
+    2
+    >>> detect_repeating_interleaved_sequence_in_list([0, 0, 1, 1])
+    2
+    >>> detect_repeating_interleaved_sequence_in_list([0, 0, 0, 1, 1, 1])
+    3
+    >>> detect_repeating_interleaved_sequence_in_list([0, 1, 2])
+    >>> detect_repeating_interleaved_sequence_in_list([0, 0, 1, 1, 2, 2])
+    2
+    >>> detect_repeating_interleaved_sequence_in_list([0, 0, 0, 1, 1, 1, 2, 2, 2])
+    3
+    >>> detect_repeating_interleaved_sequence_in_list([0, 0, 0, 1, 1, 1, 2, 2])
+    >>> detect_repeating_interleaved_sequence_in_list([0, 0, 0, 1, 1, 1, 2, 2], allow_last_incomplete=True)
+    3
+    >>> detect_repeating_interleaved_sequence_in_list([0, 0, 0, 1, 1, 2, 2, 2])
+    >>> detect_repeating_interleaved_sequence_in_list([0, 0, 0, 1, 1, 2, 2, 2], allow_last_incomplete=True)
+    >>> detect_repeating_interleaved_sequence_in_list([['1', '14', 0], ['1', '15', 0]])
+    >>> detect_repeating_interleaved_sequence_in_list([['1', '14', 0], ['1', '14', 0], ['1', '15', 0], ['1', '15', 0]])
+    2
+    >>> detect_repeating_interleaved_sequence_in_list([['1', '14', 0], ['1', '14', 0],
+    ... ['1', '15', 0], ['1', '15', 0], ['1', '16', 0]])
+    >>> detect_repeating_interleaved_sequence_in_list([['1', '14', 0], ['1', '14', 0],
+    ... ['1', '15', 0], ['1', '15', 0], ['1', '16', 0]], allow_last_incomplete=True)
+    2
+    """
+    if not isinstance(inp, np.ndarray):
+        inp = np.array(inp)
+
+    repeats_mask = (inp[0] == inp).reshape([inp.shape[0], -1]).all(axis=-1)
+    n_period = int(np.argmin(repeats_mask))
+    if n_period == 0 and repeats_mask[n_period]:
+        # all are the same value
+        n_period = inp.shape[0]
+    elif repeats_mask[n_period]:
+        return None
+
+    if n_period <= 1:
+        return None
+
+    if not allow_last_incomplete and (inp.shape[0] % n_period) != 0:
+        return None
+
+    expected = np.repeat(inp[::n_period], n_period, axis=0)[: len(inp)]
+
+    if expected.shape == inp.shape and np.all(expected == inp):
+        return n_period
 
     return None
 
@@ -515,12 +578,12 @@ def addindent(s_, numSpaces):
     return s
 
 
-_CAMEL_TO_SNAKE_REGEX1 = re.compile(r'(.)([A-Z][a-z]+)')
-_CAMEL_TO_SNAKE_REGEX2 = re.compile(r'([a-z0-9])([A-Z])')
+_CAMEL_TO_SNAKE_REGEX1 = re.compile(r"(.)([A-Z][a-z]+)")
+_CAMEL_TO_SNAKE_REGEX2 = re.compile(r"([a-z0-9])([A-Z])")
 
 
 def camel_to_snake(name: str, upper=False):
-    name = _CAMEL_TO_SNAKE_REGEX1.sub(r'\1_\2', name)
-    name = _CAMEL_TO_SNAKE_REGEX2.sub(r'\1_\2', name)
+    name = _CAMEL_TO_SNAKE_REGEX1.sub(r"\1_\2", name)
+    name = _CAMEL_TO_SNAKE_REGEX2.sub(r"\1_\2", name)
     out = name.upper() if upper else name.lower()
     return out

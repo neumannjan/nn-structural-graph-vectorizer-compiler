@@ -30,7 +30,7 @@ class MaterializeUnitTransforms:
         weight_shape = self._compute_shapes.compute_input_shape(batch_id, weight)
 
         if not isinstance(input_shape, ConcreteShape) and not isinstance(weight_shape, ConcreteShape):
-            raise ValueError(f"Cannot determine shape of inputs of layer {layer_id}.")
+            raise ValueError("Simplify unit linears first, and perhaps remove identity layers first.")
 
         if not isinstance(input_shape, ConcreteShape):
             assert isinstance(weight_shape, ConcreteShape)

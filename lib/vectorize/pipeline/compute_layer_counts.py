@@ -34,6 +34,8 @@ class ComputeLayerCounts:
                 return -(-(end - start) // step)
             case Repeat(times=_, total_length=total_length):
                 return total_length
+            case RepeatInterleave(times=_, total_length=total_length):
+                return total_length
             case GatherPair(a, b):
                 count = in_count
                 count = self.compute_gather_count(count, a)
@@ -56,18 +58,20 @@ class ComputeLayerCounts:
     def compute_facts_count(self, facts: Collection[Fact]) -> int:
         return sum((_compute_fact_count(f) for f in facts))
 
+    def compute_ref_count(self, ref: tuple[int, str, int]):
+        t, l, o = ref
+        if t == Refs.TYPE_FACT:
+            return _compute_fact_count(self.network.fact_layers[l].facts[o])
+        elif t == Refs.TYPE_WEIGHT:
+            return self.compute_weight_count(self.network.weights[l])
+        else:
+            return 1
+
+    def iter_ref_counts(self, refs: Refs) -> Iterable[int]:
+        return (self.compute_ref_count(ref) for ref in refs)
+
     def compute_refs_count(self, refs: Refs) -> int:
-        acc = 0
-
-        for t, l, o in zip(refs.types, refs.layer_ids, refs.ordinals):
-            if t == Refs.TYPE_FACT:
-                acc += _compute_fact_count(self.network.fact_layers[l].facts[o])
-            elif t == Refs.TYPE_WEIGHT:
-                acc += self.compute_weight_count(self.network.weights[l])
-            else:
-                acc += 1
-
-        return acc
+        return sum(self.iter_ref_counts(refs))
 
     def iter_layer_refs_counts(self, batch: int, refs: LayerRefs, layers_fresh=False) -> Iterable[int]:
         for t, id in refs:

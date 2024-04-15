@@ -1,9 +1,9 @@
 from typing import Iterable, Type
 
+import torch
+
 from lib.engines.torch.linear import LinearModule
 from lib.engines.torch.model import LayeredInputType
-
-import torch
 
 
 class NetworkParams(torch.nn.Module):
@@ -54,10 +54,19 @@ class LayerModule(torch.nn.Module):
 
 class _LayerModuleWithDebug(LayerModule):
     def forward(self, inputs: LayeredInputType):
-        try:
-            return super().forward(inputs)
-        except Exception as e:
-            raise Exception(f"Exception in layer {self.out_key}.") from e
+        x = inputs
+
+        for i, (is_nonseq, module) in enumerate(zip(self.is_nonseq, self.the_modules)):
+            try:
+                if is_nonseq:
+                    x = module(x, inputs)
+                else:
+                    x = module(x)
+            except Exception as e:
+                raise Exception(f"Exception in layer {self.out_key}, module no. {i}.") from e
+
+        inputs[self.out_key] = x  # pyright: ignore
+        return inputs
 
 
 class NetworkModule(torch.nn.Module):

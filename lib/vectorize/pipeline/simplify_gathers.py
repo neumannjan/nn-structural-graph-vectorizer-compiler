@@ -1,6 +1,6 @@
 from typing import overload
 
-from lib.utils import detect_repeating_sequence_in_list
+from lib.utils import detect_repeating_interleaved_sequence_in_list, detect_repeating_sequence_in_list
 from lib.vectorize.model import *
 from lib.vectorize.model.gather import OneGather
 from lib.vectorize.pipeline.compute_layer_counts import ComputeLayerCounts
@@ -12,8 +12,16 @@ def build_optimal_gather(ordinals: list[int], total_refs_count: int | None, allo
 
     if all_inputs_the_same:
         if total_refs_count == 1:
-            return NoopGather()
-        return TakeSingleValue(ordinals[0])
+            return (
+                NoopGather()
+                if len(ordinals) == 1
+                else RepeatInterleave(times=len(ordinals), total_length=len(ordinals))
+            )
+        return (
+            TakeSingleValue(ordinals[0])
+            if len(ordinals) == 1
+            else RepeatInterleave(times=len(ordinals), total_length=len(ordinals))
+        )
 
     ###### simple slicing #######
 
@@ -30,16 +38,15 @@ def build_optimal_gather(ordinals: list[int], total_refs_count: int | None, allo
     ###### subsequence with (optimizable) repeat: #######
 
     if allow_subseq:
-        subseq = None
-        if subseq is None:
-            subseq = detect_repeating_sequence_in_list(ordinals, allow_last_incomplete=True)
+        subseq_len = detect_repeating_sequence_in_list(ordinals, allow_last_incomplete=True)
+        subseq = ordinals[:subseq_len]
 
-        if subseq is not None and len(subseq) <= len(ordinals) // 2:
-            subseq_gather = build_optimal_gather(subseq.tolist(), total_refs_count=total_refs_count, allow_subseq=False)
-            repeats = -(-len(ordinals) // len(subseq))
+        if subseq_len is not None and subseq_len <= len(ordinals) // 2:
+            subseq_gather = build_optimal_gather(subseq, total_refs_count=total_refs_count, allow_subseq=False)
+            repeats = -(-len(ordinals) // subseq_len)
             total_length = len(ordinals)
 
-            if total_length == len(subseq):
+            if total_length == subseq_len:
                 return subseq_gather
 
             match subseq_gather:
@@ -47,6 +54,20 @@ def build_optimal_gather(ordinals: list[int], total_refs_count: int | None, allo
                     return Repeat(times=repeats, total_length=total_length)
                 case _:
                     return GatherPair(subseq_gather, Repeat(times=repeats, total_length=total_length))
+
+        repeats = detect_repeating_interleaved_sequence_in_list(ordinals, allow_last_incomplete=True)
+
+        if repeats is not None:
+            assert repeats > 1
+            subseq = ordinals[::repeats]
+            subseq_gather = build_optimal_gather(subseq, total_refs_count=total_refs_count, allow_subseq=False)
+            total_length = len(ordinals)
+
+            match subseq_gather:
+                case NoopGather():
+                    return RepeatInterleave(times=repeats, total_length=total_length)
+                case _:
+                    return GatherPair(subseq_gather, RepeatInterleave(times=repeats, total_length=total_length))
 
     ###### generic fallback implementation ######
 
@@ -86,6 +107,8 @@ class SimplifyGathers(LayerwiseOperation):
             case SliceValues(start=_, end=_, step=_):
                 return gather
             case Repeat(times=_, total_length=_):
+                return gather
+            case RepeatInterleave(times=_, total_length=_):
                 return gather
             case _:
                 assert False, f"{gather}"

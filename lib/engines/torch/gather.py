@@ -64,3 +64,18 @@ class RepeatModule(torch.nn.Module):
 
     def extra_repr(self) -> str:
         return f"repeats={self.repeats}, total_length={self.total_length}"
+
+
+class RepeatInterleaveModule(torch.nn.Module):
+    def __init__(self, repeats: int, total_length: int) -> None:
+        super().__init__()
+        self.repeats = repeats
+        self.total_length = total_length
+
+    def forward(self, x: torch.Tensor):
+        x = x.repeat_interleave(self.repeats, dim=0)
+        x = x[: self.total_length]
+        return x
+
+    def extra_repr(self) -> str:
+        return f"repeats={self.repeats}, total_length={self.total_length}"

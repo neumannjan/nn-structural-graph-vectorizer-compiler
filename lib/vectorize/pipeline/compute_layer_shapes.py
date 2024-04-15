@@ -126,9 +126,7 @@ class ComputeLayerShapes:
             case (ConcreteShape(_), ConcreteShape(_)):
                 begin_shape = [max(a, b) for a, b in zip(weight_shape[:-2], input_shape[:-2])]
                 return ConcreteShape([*begin_shape, weight_shape[-2], input_shape[-1]])
-            case (VariousShape(), _):
-                return VARIOUS_SHAPE
-            case (_, VariousShape()):
+            case (VariousShape(), _) | (_, VariousShape()):
                 return VARIOUS_SHAPE
             case (ConcreteShape(_), _):
                 return weight_shape

@@ -7,6 +7,7 @@ from lib.vectorize.model.gather import (
     GenericGather,
     NoopGather,
     Repeat,
+    RepeatInterleave,
     SliceValues,
     TakeSingleValue,
 )
@@ -62,6 +63,8 @@ def _match_op(op: Operation):
         case SliceValues(start=start, end=end, step=step):
             ...
         case Repeat(times=_, total_length=total_length):
+            ...
+        case RepeatInterleave(times=_, total_length=total_length):
             ...
         case GatherPair(a, b):
             ...

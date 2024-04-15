@@ -1,3 +1,4 @@
+from collections import OrderedDict
 from collections.abc import Sequence
 from typing import Hashable, TypeVar, overload
 
@@ -53,7 +54,8 @@ class OptimizeTailRefsToUniqueNoOrdRemap(LayerwiseOperation):
     def _remap_ref_groups_to_unique(
         self, layer: Layer, ref_groups: Sequence[tuple[_TRef, ...]]
     ) -> Sequence[tuple[_TRef, ...]]:
-        ref_groups_uniq = sorted(set(ref_groups))
+        # ref_groups_uniq = sorted(set(ref_groups))
+        ref_groups_uniq = sorted(OrderedDict.fromkeys(ref_groups))
         group_ord_map = {group_ref: o_group_new for o_group_new, group_ref in enumerate(ref_groups_uniq)}
         layer.ord_map = {}
 

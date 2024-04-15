@@ -15,8 +15,8 @@ from lib.vectorize.pipeline.layerwise import Layerwise
 from lib.vectorize.pipeline.materialize_unit_transforms import materialize_unit_transforms
 from lib.vectorize.pipeline.merge_trivial_layer_concats import merge_trivial_layer_concats
 from lib.vectorize.pipeline.merge_unit_facts import merge_unit_facts
-from lib.vectorize.pipeline.optimize_k_sequence_refs_in_linears import OptimizeKSeqRefsInLinears
 from lib.vectorize.pipeline.optimize_linears_to_unique_refs import OptimizeLinearsUniqueRefPairs
+from lib.vectorize.pipeline.optimize_sequence_refs_in_linears import OptimizeSequenceRefsInLinears
 from lib.vectorize.pipeline.optimize_single_use_gathers import (
     build_optimize_single_use_gathers,
 )
@@ -25,6 +25,7 @@ from lib.vectorize.pipeline.optimize_tail_refs_to_unique import (
     OptimizeTailRefsToUniqueNoOrdRemap,
     RemapOrdinals,
 )
+from lib.vectorize.pipeline.separate_input_refs import ShapeLayerIndexer, build_separate_input_refs
 from lib.vectorize.pipeline.simplify_gathers import SimplifyGathers
 from lib.vectorize.pipeline.simplify_pure_unit_fact_linears import (
     SimplifyPureUnitFactLinears,
@@ -63,8 +64,11 @@ def create_vectorized_network_compiler(
         # + transpose_fixed_count_linears  # <- optional
         # + extract_unit_ordinals
         + _debug
-        + Layerwise(SimplifyPureUnitFactLinears)
         + compute_layer_shapes  # <- shapes are expected starting here
+        + _debug
+        + build_separate_input_refs(ShapeLayerIndexer)
+        + _debug
+        + Layerwise(SimplifyPureUnitFactLinears)
         + _debug
     )
 
@@ -72,7 +76,11 @@ def create_vectorized_network_compiler(
 
     if settings.linears_optimize_repeating_seq and not settings.linears_optimize_unique_ref_pairs_aggressively:
         # 'optimize' gather pairs on K_subseq == period
-        build_vectorized_network += Layerwise(OptimizeKSeqRefsInLinears)
+        build_vectorized_network += (
+            PIPE  #
+            + Layerwise(OptimizeSequenceRefsInLinears)
+            + _debug
+        )
 
     # ------
 
@@ -94,7 +102,7 @@ def create_vectorized_network_compiler(
     # ------
 
     if settings.linears_optimize_repeating_seq and settings.linears_optimize_unique_ref_pairs_aggressively:
-        build_vectorized_network += Layerwise(OptimizeKSeqRefsInLinears)
+        build_vectorized_network += Layerwise(OptimizeSequenceRefsInLinears)
 
     # ------
 
@@ -104,6 +112,7 @@ def create_vectorized_network_compiler(
         + _debug
         + Layerwise(ClearOrdinalsMap)
         + Layerwise(ConcatInputsLayers)  # <- gathers are expected starting here
+        + _debug
         + Layerwise(SimplifyGathers)
         + _debug
         + dissolve_identity_layers

@@ -55,6 +55,15 @@ class Refs(Sequence[tuple[int, str, int]]):
 
         return self.types[key], self.layer_ids[key], self.ordinals[key]
 
+    def __setitem__(self, key: int, value: tuple[int, str, int]):
+        self.types[key], self.layer_ids[key], self.ordinals[key] = value
+
+    def append(self, value: tuple[int, str, int]):
+        t, l, o = value
+        self.types.append(t)
+        self.layer_ids.append(l)
+        self.ordinals.append(o)
+
     def __repr__(self) -> str:
         n = 5
         out = ", ".join((f"<{_type_to_str(t)}|{l}|{o}>" for t, l, o in self[:n]))
