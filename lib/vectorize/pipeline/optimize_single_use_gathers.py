@@ -104,14 +104,6 @@ class OptimizeSingleUseGathers:
             case _:
                 assert False, f"{gather}"
 
-    def _get_layer_count(self, batch: int, layer: Layer) -> int:
-        cnt = layer.count
-
-        if cnt is None:
-            cnt = self._counts.compute_layer_count(batch, layer)
-
-        return cnt
-
     def _compute_refs_count(self, batch: int, refs: LayerRefs | tuple[Input, Input, DimensionLifts]):
         match refs:
             case LayerRefs():
@@ -229,7 +221,8 @@ class OptimizeSingleUseGathers:
                 aggregate=aggregate,
             ) if (
                 isinstance(base, InputLayerBase)
-                or self._counts.compute_input_count(batch, this) == self._get_layer_count(batch, layer)
+                or self._counts.compute_input_count(batch, this)
+                == self._counts.compute_linear_count(batch, input, weight, base.lifts)
             ):
                 assert isinstance(gather, (GenericGather, NoopGather))
                 return self._do_reorder_layer_output(
