@@ -1,7 +1,13 @@
 import torch
 
 from lib.engines.torch.dim_reduce import build_dim_reduce_module
-from lib.engines.torch.gather import GenericGatherModule, RepeatInterleaveModule, RepeatModule, SliceValuesModule, TakeValueModule
+from lib.engines.torch.gather import (
+    GenericGatherModule,
+    RepeatInterleaveModule,
+    RepeatModule,
+    SliceValuesModule,
+    TakeValueModule,
+)
 from lib.engines.torch.linear import LinearModule
 from lib.engines.torch.network import LayerModule, NetworkModule, NetworkParams
 from lib.engines.torch.refs import ConcatRefsModule, RetrieveRefModule
@@ -117,7 +123,7 @@ def _for_batch(
         for op in layer.operations:
             layer_modules.append(_for_op(op, settings))
 
-        layer_module = LayerModule(layer_modules, out_key=key, debug=debug)
+        layer_module = LayerModule(layer_modules, out_key=key, expected_count=layer.expected_count, debug=debug)
         modules.append(layer_module)
 
     assert isinstance(key, str)

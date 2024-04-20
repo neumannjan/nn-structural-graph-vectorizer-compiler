@@ -30,11 +30,14 @@ class LayerModule(torch.nn.Module):
 
         return super().__new__(cls)
 
-    def __init__(self, modules: Iterable[torch.nn.Module], out_key: str, *, debug: bool = False) -> None:
+    def __init__(
+        self, modules: Iterable[torch.nn.Module], out_key: str, expected_count: int | None, *, debug: bool = False
+    ) -> None:
         super().__init__()
         self.the_modules = torch.nn.ModuleList(modules)
         self.is_nonseq = [isinstance(m, _NONSEQUENTIAL_MODULES) for m in self.the_modules]
         self.out_key = out_key
+        self.expected_count = expected_count
 
     def forward(self, inputs: LayeredInputType):
         x = inputs
@@ -49,7 +52,7 @@ class LayerModule(torch.nn.Module):
         return inputs
 
     def extra_repr(self) -> str:
-        return f"out_key: {self.out_key},"
+        return f"out_key: {self.out_key},\nexpected_count: {self.expected_count},"
 
 
 class _LayerModuleWithDebug(LayerModule):

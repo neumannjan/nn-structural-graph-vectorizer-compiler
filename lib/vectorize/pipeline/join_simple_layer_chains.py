@@ -21,6 +21,7 @@ class JoinSimpleLayerChains:
 
             prev_r = head
             for (_, r) in rest:
+                vals.expected_count = layers[r].expected_count
                 vals.operations.extend(layers[r].operations)
                 layers[r] = vals
                 del layers[prev_r]

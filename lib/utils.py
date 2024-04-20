@@ -118,14 +118,10 @@ def detect_repeating_sequence_in_list(inp: Sequence | np.ndarray, allow_last_inc
     4
     >>> detect_repeating_sequence_in_list([0], allow_last_incomplete=False)
     >>> detect_repeating_sequence_in_list([0, 0], allow_last_incomplete=False)
-    1
     >>> detect_repeating_sequence_in_list([0, 0, 0], allow_last_incomplete=False)
-    1
     >>> detect_repeating_sequence_in_list([0], allow_last_incomplete=True)
     >>> detect_repeating_sequence_in_list([0, 0], allow_last_incomplete=True)
-    1
     >>> detect_repeating_sequence_in_list([0, 0, 0], allow_last_incomplete=True)
-    1
     >>> detect_repeating_sequence_in_list([2, 0], allow_last_incomplete=False)
     >>> detect_repeating_sequence_in_list([2, 0, 1], allow_last_incomplete=False)
     >>> detect_repeating_sequence_in_list([2, 0, 1, 2], allow_last_incomplete=False)
@@ -235,6 +231,8 @@ def detect_repeating_sequence_in_list(inp: Sequence | np.ndarray, allow_last_inc
         if np.all(inp_first.reshape([-1, k, *inp_first.shape[1:]]) == inp_first[:k]) and (
             inp_last is None or np.all(inp_last == inp_first[: len(inp_last)])
         ):
+            if k == 1:
+                return None
             return k
 
     return None

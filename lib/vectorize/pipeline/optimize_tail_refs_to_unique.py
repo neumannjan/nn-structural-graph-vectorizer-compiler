@@ -1,12 +1,13 @@
-from collections import OrderedDict
 from collections.abc import Sequence
-from typing import Hashable, TypeVar, overload
 
 from lib.vectorize.model import *
+from lib.vectorize.pipeline.compute_layer_counts import ComputeLayerCounts
 from lib.vectorize.pipeline.layerwise import LayerwiseOperation
-from lib.vectorize.pipeline.utils.ref_groups import get_ref_groups, get_refs
-
-_TRef = TypeVar("_TRef", bound=Hashable)
+from lib.vectorize.pipeline.utils.ref_groups import (
+    SimpleUniqueRefsMappableTransform,
+    build_grouper_for_aggregate,
+    remap_refs,
+)
 
 
 class RemapOrdinals(LayerwiseOperation):
@@ -34,6 +35,8 @@ class RemapOrdinals(LayerwiseOperation):
             case LinearGatherLayerBase(input=Refs() as input, weight=Refs() as weight):
                 self._for_refs(batch, input)
                 self._for_refs(batch, weight)
+            case _:
+                assert False, f"{layer.base}"
         return layer
 
 
@@ -50,22 +53,9 @@ class OptimizeTailRefsToUniqueNoOrdRemap(LayerwiseOperation):
     def __init__(self, network: VectorizedLayerNetwork) -> None:
         self.network = network
         self._final_layers = {batch: next(reversed(self.network.batches[batch].layers)) for batch in network.batches}
+        self._counts = ComputeLayerCounts(network)
 
-    def _remap_ref_groups_to_unique(
-        self, layer: Layer, ref_groups: Sequence[tuple[_TRef, ...]]
-    ) -> Sequence[tuple[_TRef, ...]]:
-        # ref_groups_uniq = sorted(set(ref_groups))
-        ref_groups_uniq = sorted(OrderedDict.fromkeys(ref_groups))
-        group_ord_map = {group_ref: o_group_new for o_group_new, group_ref in enumerate(ref_groups_uniq)}
-        layer.ord_map = {}
-
-        for o_group, group_ref in enumerate(ref_groups):
-            o_group_new = group_ord_map[group_ref]
-            layer.ord_map[o_group] = o_group_new
-
-        return ref_groups_uniq
-
-    def _get_new_aggregate(self, aggregate: Reduce, refs_chunks_uniq: Sequence[tuple[_TRef, ...]]) -> Reduce:
+    def _get_new_aggregate(self, aggregate: Reduce, refs_chunks_uniq: Sequence[tuple]) -> Reduce:
         match aggregate:
             case Noop():
                 return aggregate
@@ -76,36 +66,12 @@ class OptimizeTailRefsToUniqueNoOrdRemap(LayerwiseOperation):
             case _:
                 assert False, f"{aggregate}"
 
-    @overload
-    def _compute_ref_groups_uniq(self, layer: Layer, target: Refs) -> Sequence[tuple[tuple[int, str, int], ...]]:
-        pass
-
-    @overload
-    def _compute_ref_groups_uniq(self, layer: Layer, target: GenericGather) -> Sequence[tuple[int, ...]]:
-        pass
-
-    def _compute_ref_groups_uniq(self, layer: Layer, target: Refs | GenericGather):
-        refs = get_refs(target)
-        ref_groups = get_ref_groups(layer.aggregate, refs)
-        ref_groups_uniq = self._remap_ref_groups_to_unique(layer, ref_groups)
-        return ref_groups_uniq
-
-    def _apply_to_target(self, layer: Layer, target: Refs | GenericGather):
-        match target:
-            case Refs():
-                ref_groups_uniq = self._compute_ref_groups_uniq(layer, target)
-                refs_uniq = [o for os in ref_groups_uniq for o in os]
-                target.types = [r[0] for r in refs_uniq]
-                target.layer_ids = [r[1] for r in refs_uniq]
-                target.ordinals = [r[2] for r in refs_uniq]
-            case GenericGather():
-                ref_groups_uniq = self._compute_ref_groups_uniq(layer, target)
-                refs_uniq = [o for os in ref_groups_uniq for o in os]
-                target.ordinals = refs_uniq
-            case _:
-                assert False, f"{target}"
-
-        layer.aggregate = self._get_new_aggregate(layer.aggregate, ref_groups_uniq)
+    def _apply_to_target(self, batch: int, layer: Layer, target: Refs | GenericGather):
+        grouper = build_grouper_for_aggregate(layer.aggregate)
+        transform = SimpleUniqueRefsMappableTransform(grouper)
+        if remap_refs(self._counts, batch, target, transform):
+            layer.ord_map = transform.ord_map
+            layer.aggregate = self._get_new_aggregate(layer.aggregate, transform.last_groups)
 
     def __call__(self, batch: int, layer_id: str, layer: Layer) -> Layer:
         if layer_id == self._final_layers[batch]:
@@ -116,18 +82,15 @@ class OptimizeTailRefsToUniqueNoOrdRemap(LayerwiseOperation):
             case Layer(
                 base=InputLayerBase(input=Refs() as input),
             ):
-                self._apply_to_target(layer, input)
+                self._apply_to_target(batch, layer, input)
             case Layer(
-                base=LinearLayerBase(input=Refs() as input, weight=Refs() as weight),
-                aggregate=FixedCountReduce(period=period),
-            ) if period == len(weight) or period == len(input):
-                if period != len(weight):
-                    self._apply_to_target(layer, weight)
-                elif period != len(input):
-                    self._apply_to_target(layer, input)
-            case Layer(
-                base=LinearGatherLayerBase(input=input, weight=weight, gather=GenericGather() as gather),
+                base=(LinearLayerBase() | LinearGatherLayerBase(gather=NoopGather())),
             ):
-                self._apply_to_target(layer, gather)
+                # nothing to do here?
+                pass
+            case Layer(
+                base=LinearGatherLayerBase(input=input, weight=weight, lifts=lifts, gather=GenericGather() as gather),
+            ):
+                self._apply_to_target(batch, layer, gather)
 
         return layer

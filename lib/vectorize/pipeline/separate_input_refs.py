@@ -64,7 +64,7 @@ class SeparateInputRefs:
                         new_base = InputLayerBase(refs)
                     case LinearLayerBase() | LinearGatherLayerBase():
                         refs = Refs([], [], []), Refs([], [], [])
-                        new_base = LinearLayerBase(*refs)
+                        new_base = LinearLayerBase(*refs, lifts=old_base.lifts)
                     case _:
                         assert False
 

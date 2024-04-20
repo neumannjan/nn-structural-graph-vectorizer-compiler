@@ -1,3 +1,4 @@
+from abc import abstractmethod
 from typing import Any, Literal, Protocol, Sequence
 
 import numpy as np
@@ -60,7 +61,11 @@ class _ScatterBase(torch.nn.Module):
         self.reduce: _StrictReductionRef = _to_strict(reduce)
 
     def extra_repr(self) -> str:
-        return f"reduce={self.reduce}"
+        return f"reduce={self.reduce}, count={len(self)}"
+
+    @abstractmethod
+    def __len__(self):
+        raise NotImplementedError()
 
 
 _SCATTER_FUNC: dict[_StrictReductionRef, _ScatterFunc] = {
@@ -72,13 +77,17 @@ _SCATTER_FUNC: dict[_StrictReductionRef, _ScatterFunc] = {
 
 
 class Scatter(_ScatterBase):
-    def __init__(self, index: torch.Tensor, reduce: ReductionDef) -> None:
+    def __init__(self, counts: Sequence | torch.Tensor | np.ndarray, index: torch.Tensor, reduce: ReductionDef) -> None:
         super().__init__(reduce)
+        self._len = len(counts)
         self.index = torch.nn.Parameter(index, requires_grad=False)
         self.reduce_func = _SCATTER_FUNC[self.reduce]
 
     def forward(self, x: torch.Tensor):
         return self.reduce_func(x, index=self.index, dim=0)
+
+    def __len__(self):
+        return self._len
 
 
 _SEGMENT_CSR_FUNC: dict[_StrictReductionRef, _SegmentCSRFunc] = {
@@ -90,13 +99,17 @@ _SEGMENT_CSR_FUNC: dict[_StrictReductionRef, _SegmentCSRFunc] = {
 
 
 class SegmentCSR(_ScatterBase):
-    def __init__(self, indptr: torch.Tensor, reduce: ReductionDef) -> None:
+    def __init__(self, counts: Sequence | torch.Tensor | np.ndarray, indptr: torch.Tensor, reduce: ReductionDef) -> None:
         super().__init__(reduce)
+        self._len = len(counts)
         self.indptr = torch.nn.Parameter(indptr, requires_grad=False)
         self.reduce_func = _SEGMENT_CSR_FUNC[self.reduce]
 
     def forward(self, x: torch.Tensor):
         return self.reduce_func(x, indptr=self.indptr)
+
+    def __len__(self):
+        return self._len
 
 
 def coo_to_csr_dim0(index: torch.Tensor, do_assert: bool = True) -> torch.Tensor:
@@ -133,8 +146,8 @@ def build_scatter_module(
         if ((index[1:] - index[:-1]) >= 0).all().item():
             if reduce_method == "segment_csr":
                 indptr = coo_to_csr_dim0(index, do_assert=False)
-                return SegmentCSR(indptr, reduce)
+                return SegmentCSR(counts, indptr, reduce)
             else:
                 assert False
 
-    return Scatter(index, reduce)
+    return Scatter(counts, index, reduce)

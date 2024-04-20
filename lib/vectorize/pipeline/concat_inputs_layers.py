@@ -46,14 +46,14 @@ class ConcatInputsLayers(LayerwiseOperation):
             case InputLayerBase(input=input):
                 input = self._for_input(batch, layer, input)
                 return InputLayerBase(input=input)
-            case LinearLayerBase(input=input, weight=weight):
+            case LinearLayerBase(input=input, weight=weight, lifts=lifts):
                 input = self._for_input(batch, layer, input)
                 weight = self._for_input(batch, layer, weight)
-                return LinearLayerBase(input=input, weight=weight)
-            case LinearGatherLayerBase(input=input, weight=weight, gather=gather):
+                return LinearLayerBase(input=input, weight=weight, lifts=lifts)
+            case LinearGatherLayerBase(input=input, weight=weight, gather=gather, lifts=lifts):
                 input = self._for_input(batch, layer, input)
                 weight = self._for_input(batch, layer, weight)
-                return LinearGatherLayerBase(input=input, weight=weight, gather=gather)
+                return LinearGatherLayerBase(input=input, weight=weight, gather=gather, lifts=lifts)
             case _:
                 assert False
 

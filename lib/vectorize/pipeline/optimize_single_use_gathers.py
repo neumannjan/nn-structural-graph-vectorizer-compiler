@@ -1,9 +1,11 @@
+from collections.abc import Sequence
 from typing import Iterable, Iterator, Literal, TypeVar
 
 from lib.vectorize.model import *
+from lib.vectorize.model.layer import DimensionLifts
 from lib.vectorize.pipeline.compute_layer_counts import ComputeLayerCounts
 from lib.vectorize.pipeline.utils.chain_graph import ComputeChainGraph
-from lib.vectorize.pipeline.utils.ref_groups import get_ref_groups
+from lib.vectorize.pipeline.utils.ref_groups import build_grouper_for_aggregate
 
 
 def _reorder_aggregate(aggregate: Reduce, ordinals: list[int]):
@@ -46,7 +48,7 @@ class OptimizeSingleUseGathers:
         self.debug = debug
 
         self._compute_chain_graph = ComputeChainGraph(network, types=(LayerRefs.TYPE_LAYER, LayerRefs.TYPE_FACT))
-        self._compute_counts = ComputeLayerCounts(network)
+        self._counts = ComputeLayerCounts(network)
 
         self._fact_reorders: dict[tuple[str, tuple[int, ...]], str] = {}
 
@@ -60,16 +62,14 @@ class OptimizeSingleUseGathers:
         # We must create this version of the layer first.
         if new_layer_id is None:
             facts_new = [fact_layer.facts[o] for o in ordinals2]
-            count_new = self._compute_counts.compute_facts_count(facts_new)
+            count_new = self._counts.compute_facts_count(facts_new)
             new_layer = FactLayer(facts=facts_new, count=count_new, shape=fact_layer.shape)
         else:
             new_layer = self.network.fact_layers[new_layer_id]
             count_new = new_layer.count
             assert count_new is not None
 
-        count_old = (
-            self._compute_counts.compute_facts_count(fact_layer.facts) if fact_layer.count is None else fact_layer.count
-        )
+        count_old = self._counts.compute_facts_count(fact_layer.facts) if fact_layer.count is None else fact_layer.count
 
         is_free = count_new <= count_old
 
@@ -85,96 +85,178 @@ class OptimizeSingleUseGathers:
 
         return ("found_free", new_layer_id) if is_free else ("found", new_layer_id)
 
+    def _get_gather_ordinals(
+        self, batch: int, refs: LayerRefs | tuple[Input, Input, DimensionLifts], gather: GenericGather | NoopGather
+    ) -> Sequence[int]:
+        match gather:
+            case GenericGather(ordinals):
+                return ordinals
+            case NoopGather():
+                match refs:
+                    case LayerRefs():
+                        in_count = self._counts.compute_layer_refs_count(batch, refs)
+                    case (input, weight, lifts):
+                        in_count = self._counts.compute_linear_count(batch, input, weight, lifts)
+                    case _:
+                        assert False, f"{refs}"
+
+                return range(in_count)
+            case _:
+                assert False, f"{gather}"
+
+    def _get_layer_count(self, batch: int, layer: Layer) -> int:
+        cnt = layer.count
+
+        if cnt is None:
+            cnt = self._counts.compute_layer_count(batch, layer)
+
+        return cnt
+
+    def _compute_refs_count(self, batch: int, refs: LayerRefs | tuple[Input, Input, DimensionLifts]):
+        match refs:
+            case LayerRefs():
+                return self._counts.compute_layer_refs_count(batch, refs)
+            case (input, weight, lifts):
+                return self._counts.compute_linear_count(batch, input, weight, lifts)
+            case _:
+                raise ValueError(refs)
+
+    def _do_reorder_layer_output(
+        self,
+        batch: int,
+        gather: GenericGather | NoopGather,
+        refs: LayerRefs | tuple[Input, Input, DimensionLifts],
+        container: GatheredLayers | LinearGatherLayerBase,
+        other: Iterable[
+            tuple[
+                GenericGather | NoopGather,
+                LayerRefs | tuple[Input, Input, DimensionLifts],
+                GatheredLayers | LinearGatherLayerBase,
+            ]
+        ],
+        aggregate: Reduce,
+        ordinals2: list[int],
+        chain_i: int,
+    ) -> Literal["ignore", "found_free", "found"]:
+        grouper = build_grouper_for_aggregate(aggregate)
+        first_ord_groups = dict(enumerate(grouper(self._get_gather_ordinals(batch, refs, gather))))
+        gather_new = GenericGather([v for b in ordinals2 for v in first_ord_groups[b]])
+
+        refs_cnt = self._compute_refs_count(batch, refs)
+        gather_cnt = self._counts.compute_gather_count(refs_cnt, gather)
+        gather_new_cnt = self._counts.compute_gather_count(refs_cnt, gather_new)
+
+        is_free = gather_new_cnt <= gather_cnt
+
+        if not is_free and chain_i >= self.max_chain_length:
+            return "ignore"
+
+        container.gather = gather_new
+
+        for gather_this, refs_this, container_this in other:
+            first_ord_groups = dict(enumerate(grouper(self._get_gather_ordinals(batch, refs_this, gather_this))))
+            gather_this_new = GenericGather([v for b in ordinals2 for v in first_ord_groups[b]])
+            container_this.gather = gather_this_new
+
+        _reorder_aggregate(aggregate, ordinals2)
+        return "found_free" if is_free else "found"
+
     def _reorder_layer_output(
         self, batch: int, layer: Layer, ordinals2: list[int], chain_i: int, upcoming_ref: tuple[int, str] | None
-    ) -> Literal["ignore", "found_free", "found", "not_found", "inapplicable"]:
+    ) -> Literal["ignore", "found_free", "found", "propagate", "inapplicable"]:
         match layer:
-            case Layer(
-                base=LinearLayerBase(
-                    input=GatheredLayers(gather=GenericGather() as gather_a),
-                    weight=GatheredLayers(gather=GenericGather() as gather_b),
-                ),
-                aggregate=aggregate,
-            ) if len(gather_a.ordinals) == len(gather_b.ordinals):
-                first_ord_groups = dict(enumerate(get_ref_groups(aggregate, gather_a.ordinals)))
-                gather_a_ordinals_new = [v for b in ordinals2 for v in first_ord_groups[b]]
-
-                is_free = len(gather_a_ordinals_new) <= len(gather_a.ordinals)
-
-                if not is_free and chain_i >= self.max_chain_length:
-                    return "ignore"
-
-                first_ord_groups = dict(enumerate(get_ref_groups(aggregate, gather_b.ordinals)))
-                gather_b.ordinals = [v for b in ordinals2 for v in first_ord_groups[b]]
-
-                _reorder_aggregate(aggregate, ordinals2)
-                return "found_free" if is_free else "found"
+            case Layer(base=InputLayerBase(input=GatheredLayers(refs=[_], gather=NoopGather()), aggregate=Noop())):
+                return "propagate"
             case Layer(
                 base=(
                     LinearLayerBase(
-                        input=GatheredLayers(gather=GenericGather() as gather),
-                        weight=GatheredLayers() as other,
+                        input=GatheredLayers(refs=[ref2], gather=NoopGather()) as input,
                     )
-                    | LinearLayerBase(
-                        input=GatheredLayers() as other,
-                        weight=GatheredLayers(gather=GenericGather() as gather),
+                    | LinearGatherLayerBase(
+                        input=GatheredLayers(refs=[ref2], gather=NoopGather()) as input, gather=NoopGather()
                     )
                 ),
-                aggregate=FixedCountReduce(period=period) as aggregate,
-            ) if self._compute_counts.compute_input_count(batch, other) == period:
-                first_ord_groups = dict(enumerate(get_ref_groups(aggregate, gather.ordinals)))
-                gather_ordinals_new = [v for b in ordinals2 for v in first_ord_groups[b]]
-
-                is_free = len(gather_ordinals_new) <= len(gather.ordinals)
-
-                if not is_free and chain_i >= self.max_chain_length:
-                    return "ignore"
-
-                gather.ordinals = gather_ordinals_new
-                return "found_free" if is_free else "found"
+                aggregate=Noop(),
+            ) if upcoming_ref == ref2 and self._counts.compute_input_count(batch, input) == self._get_layer_count(
+                batch, layer
+            ):
+                return "propagate"
             case Layer(
                 base=(
-                    InputLayerBase(input=GatheredLayers(gather=GenericGather() as gather))
-                    | LinearGatherLayerBase(gather=GenericGather() as gather)
+                    LinearLayerBase(
+                        weight=GatheredLayers(refs=[ref2], gather=NoopGather()) as weight,
+                    )
+                    | LinearGatherLayerBase(
+                        weight=GatheredLayers(refs=[ref2], gather=NoopGather()) as weight, gather=NoopGather()
+                    )
+                ),
+                aggregate=Noop(),
+            ) if upcoming_ref == ref2 and self._counts.compute_input_count(batch, weight) == self._get_layer_count(
+                batch, layer
+            ):
+                return "propagate"
+            case Layer(
+                base=LinearLayerBase(
+                    input=GatheredLayers(refs=refs_a, gather=gather_a) as input,
+                    weight=GatheredLayers(refs=refs_b, gather=gather_b) as weight,
                 ),
                 aggregate=aggregate,
+            ) if self._counts.compute_input_count(batch, input) == self._counts.compute_input_count(batch, weight):
+                assert isinstance(gather_a, (GenericGather, NoopGather))
+                assert isinstance(gather_b, (GenericGather, NoopGather))
+                return self._do_reorder_layer_output(
+                    batch,
+                    gather_a,
+                    refs_a,
+                    input,
+                    ((gather_b, refs_b, weight),),
+                    aggregate,
+                    ordinals2,
+                    chain_i,
+                )
+            case Layer(
+                base=(
+                    LinearLayerBase(
+                        input=GatheredLayers(refs=refs, gather=gather) as this,
+                        weight=GatheredLayers(),
+                    )
+                    | LinearLayerBase(
+                        input=GatheredLayers(),
+                        weight=GatheredLayers(refs=refs, gather=gather) as this,
+                    )
+                    | InputLayerBase(input=GatheredLayers(refs=refs, gather=gather) as this)
+                ) as base,
+                aggregate=aggregate,
+            ) if (
+                isinstance(base, InputLayerBase)
+                or self._counts.compute_input_count(batch, this) == self._get_layer_count(batch, layer)
             ):
-                first_ord_groups = dict(enumerate(get_ref_groups(aggregate, gather.ordinals)))
-
-                gather_ordinals_new = [v for b in ordinals2 for v in first_ord_groups[b]]
-
-                is_free = len(gather_ordinals_new) <= len(gather.ordinals)
-
-                if not is_free and chain_i >= self.max_chain_length:
-                    return "ignore"
-
-                gather.ordinals = gather_ordinals_new
-                _reorder_aggregate(aggregate, ordinals2)
-                return "found_free" if is_free else "found"
-            case Layer(base=InputLayerBase(input=GatheredLayers(refs=[_], gather=NoopGather()))):
-                return "not_found"
-            case Layer(
-                base=LinearLayerBase(input=GatheredLayers(refs=[ref2], gather=NoopGather()))
-            ) if upcoming_ref == ref2:
-                return "not_found"
-            case Layer(
-                base=LinearLayerBase(weight=GatheredLayers(refs=[ref2], gather=NoopGather()))
-            ) if upcoming_ref == ref2:
-                return "not_found"
-            case Layer(
-                base=LinearGatherLayerBase(
-                    input=GatheredLayers(refs=[ref2], gather=NoopGather()),
-                    gather=NoopGather(),
+                assert isinstance(gather, (GenericGather, NoopGather))
+                return self._do_reorder_layer_output(
+                    batch,
+                    gather,
+                    refs,
+                    this,
+                    (),
+                    aggregate,
+                    ordinals2,
+                    chain_i,
                 )
-            ) if upcoming_ref == ref2:
-                return "not_found"
             case Layer(
-                base=LinearGatherLayerBase(
-                    weight=GatheredLayers(refs=[ref2], gather=NoopGather()),
-                    gather=NoopGather(),
+                base=LinearGatherLayerBase(input=input, weight=weight, lifts=lifts, gather=gather) as base,
+                aggregate=aggregate,
+            ):
+                assert isinstance(gather, (GenericGather, NoopGather))
+                return self._do_reorder_layer_output(
+                    batch,
+                    gather,
+                    (input, weight, lifts),
+                    base,
+                    (),
+                    aggregate,
+                    ordinals2,
+                    chain_i,
                 )
-            ) if upcoming_ref == ref2:
-                return "not_found"
 
         return "inapplicable"
 
@@ -245,8 +327,10 @@ class OptimizeSingleUseGathers:
                                         i += 1
                                     old_ref_to_layer = None
                                 case "ignore" | "inapplicable":
+                                    if reorder_result == "ignore":
+                                        print(f"IGNORING (chain_i={i}, max_chain_length={self.max_chain_length})")
                                     old_ref_to_layer = None
-                                case "not_found":
+                                case "propagate":
                                     old_ref_to_layer = ref_to_layer
                                 case _:
                                     assert False

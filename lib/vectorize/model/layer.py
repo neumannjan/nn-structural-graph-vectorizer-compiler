@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from typing import Literal
 
 from lib.vectorize.model.fact import Fact, fact_repr
 from lib.vectorize.model.gather import Gather
@@ -45,26 +46,72 @@ class InputLayerBase:
         return isinstance(value, InputLayerBase) and self.input == value.input
 
 
+DimensionLift = tuple[Literal[-1], int] | tuple[int, Literal[-1]]
+DimensionLifts = tuple[DimensionLift, DimensionLift] | None
+
+
+def _get_lift_dimension(lift: DimensionLift) -> Literal[0, 1]:
+    match lift:
+        case (-1, -1):
+            raise ValueError(lift)
+        case (_, -1):
+            return 0
+        case (-1, _):
+            return 1
+        case _:
+            raise ValueError(lift)
+
+
+def lifts_dimension_match(lifts: DimensionLifts) -> bool:
+    if lifts is None:
+        raise ValueError()
+
+    a, b = lifts
+    return _get_lift_dimension(a) == _get_lift_dimension(b)
+
+
 class LinearLayerBase:
-    __slots__ = ("input", "weight")
+    __slots__ = ("input", "weight", "lifts")
     __repr__ = repr_slots
 
-    def __init__(self, input: Input, weight: Input) -> None:
+    def __init__(
+        self,
+        input: Input,
+        weight: Input,
+        lifts: DimensionLifts = None,
+    ) -> None:
         self.input = input
         self.weight = weight
+        self.lifts = lifts
 
     def __eq__(self, value: object, /) -> bool:
-        return isinstance(value, LinearLayerBase) and self.input == value.input and self.weight == value.weight
+        return (
+            isinstance(value, LinearLayerBase)
+            and self.input == value.input
+            and self.weight == value.weight
+            and self.lifts == value.lifts
+        )
+
+    @property
+    def lifts_dimension_match(self) -> bool:
+        return lifts_dimension_match(self.lifts)
 
 
 class LinearGatherLayerBase:
-    __slots__ = ("input", "weight", "gather")
+    __slots__ = ("input", "weight", "gather", "lifts")
     __repr__ = repr_slots
 
-    def __init__(self, input: Input, weight: Input, gather: Gather) -> None:
+    def __init__(
+        self,
+        input: Input,
+        weight: Input,
+        gather: Gather,
+        lifts: DimensionLifts = None,
+    ) -> None:
         self.input = input
         self.weight = weight
         self.gather = gather
+        self.lifts = lifts
 
     def __eq__(self, value: object, /) -> bool:
         return (
@@ -72,7 +119,12 @@ class LinearGatherLayerBase:
             and self.input == value.input
             and self.weight == value.weight
             and self.gather == value.gather
+            and self.lifts == value.lifts
         )
+
+    @property
+    def lifts_dimension_match(self) -> bool:
+        return lifts_dimension_match(self.lifts)
 
 
 LayerBase = InputLayerBase | LinearLayerBase | LinearGatherLayerBase

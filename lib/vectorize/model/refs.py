@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from typing import Iterator, overload
+from typing import Iterable, Iterator, overload
 
 from lib.vectorize.model.repr import repr_slots
 
@@ -27,6 +27,15 @@ class Refs(Sequence[tuple[int, str, int]]):
         self.types = types
         self.layer_ids = layer_ids
         self.ordinals = ordinals
+
+    @staticmethod
+    def from_iter(it: Iterable[tuple[int, str, int]]):
+        out = Refs([], [], [])
+        for t, l, o in it:
+            out.types.append(t)
+            out.layer_ids.append(l)
+            out.ordinals.append(o)
+        return out
 
     def __contains__(self, x: object, /) -> bool:
         if not isinstance(x, tuple):
@@ -57,6 +66,11 @@ class Refs(Sequence[tuple[int, str, int]]):
 
     def __setitem__(self, key: int, value: tuple[int, str, int]):
         self.types[key], self.layer_ids[key], self.ordinals[key] = value
+
+    def set(self, values: Iterable[tuple[int, str, int]]):
+        self.types = [r[0] for r in values]
+        self.layer_ids = [r[1] for r in values]
+        self.ordinals = [r[2] for r in values]
 
     def append(self, value: tuple[int, str, int]):
         t, l, o = value

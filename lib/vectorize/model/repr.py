@@ -1,9 +1,7 @@
 import itertools
-from dataclasses import fields, is_dataclass
-from typing import Any, Hashable, Iterable, Mapping, Sequence
+from typing import Iterable, Mapping, Sequence
 
 import numpy as np
-from typing_extensions import Callable
 
 from lib.utils import addindent
 
@@ -15,14 +13,22 @@ def _get_key(key) -> str:
         return my_repr(key)
 
 
-def _iter_values(obj: object, keys: Iterable[Hashable]):
+def _get_value(obj: object, key: str | int):
     if isinstance(obj, Mapping):
-        yield from (obj[k] for k in keys)
-    else:
-        yield from (getattr(obj, str(k)) for k in keys)
+        return obj[key]
+
+    if isinstance(key, int):
+        if hasattr(obj.__class__, "__getitem__"):
+            return obj[key]  # pyright: ignore
+
+    return getattr(obj, str(key))
 
 
-def repr_module_like(self: object, module_keys: Iterable[Hashable], extra_keys: Iterable[Hashable]) -> str:
+def _iter_values(obj: object, keys: Iterable[str | int]):
+    yield from (_get_value(obj, key) for key in keys)
+
+
+def repr_module_like(self: object, module_keys: Iterable[str | int], extra_keys: Iterable[str | int]) -> str:
     modules = dict(((k, v) for k, v in zip(module_keys, _iter_values(self, module_keys))))
     extras = dict(((k, v) for k, v in zip(extra_keys, _iter_values(self, extra_keys))))
 

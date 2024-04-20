@@ -1,17 +1,20 @@
 from dataclasses import dataclass
 from typing import Literal
 
+LinearsPadForSymmetriesOption = Literal["never", "by_count", "always", "always_full", "always_inputs_only",
+"always_weights_only"]
+
 
 @dataclass
 class VectorizeSettings:
     # TODO: reintroduce?
     # group_learnable_weight_parameters: bool = True
 
-    linears_optimize_repeating_seq: bool = True
-
     linears_optimize_unique_ref_pairs: bool = True
 
-    linears_optimize_unique_ref_pairs_aggressively: bool = False
+    linears_symmetries: bool = True
+
+    linears_pad_for_symmetries: LinearsPadForSymmetriesOption = "by_count"
 
     optimize_tail_refs: bool = True
 

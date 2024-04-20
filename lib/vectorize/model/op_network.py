@@ -1,4 +1,4 @@
-from typing import OrderedDict
+from typing import OrderedDict, overload
 
 from lib.model.ops import ReductionDef
 from lib.vectorize.model.gather import (
@@ -81,11 +81,21 @@ def _match_op(op: Operation):
 
 
 class OperationSeq:
-    __slots__ = ("layer_refs", "operations")
+    __slots__ = ("layer_refs", "operations", "expected_count")
 
-    def __init__(self, layer_refs: LayerRefs | None, operations: list[Operation]) -> None:
+    def __init__(self, layer_refs: LayerRefs | None, operations: list[Operation], count: int | None) -> None:
         self.layer_refs = layer_refs
         self.operations = operations
+        self.expected_count = count
+
+    @overload
+    def __getitem__(self, key: int) -> "Operation": ...
+
+    @overload
+    def __getitem__(self, key: slice) -> "list[Operation]": ...
+
+    def __getitem__(self, key: int | slice) -> "Operation | list[Operation]":
+        return self.operations[key]
 
     def __repr__(self) -> str:
         operations = [self.layer_refs] + self.operations
@@ -93,15 +103,12 @@ class OperationSeq:
         if len(operations) == 0:
             return self.__class__.__name__ + f"({self.layer_refs})"
 
-        out_dict = {}
-        out_dict["layer_refs"] = self.layer_refs
-        for i in range(len(self.operations)):
-            out_dict[i] = self.operations[i]
-
         return (
             self.__class__.__name__
             + "("
-            + repr_module_like(out_dict, module_keys=["layer_refs"] + list(range(len(self.operations))), extra_keys=())
+            + repr_module_like(
+                self, module_keys=["layer_refs"] + list(range(len(self.operations))), extra_keys=("expected_count",)
+            )
             + ")"
         )
 

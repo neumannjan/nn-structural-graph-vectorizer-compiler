@@ -1,6 +1,9 @@
+import math
 from typing import Collection, Iterable
 
 from lib.vectorize.model import *
+from lib.vectorize.model.layer import DimensionLifts, lifts_dimension_match
+from lib.vectorize.pipeline.layerwise import LayerwiseOperation
 
 
 def _compute_fact_count(fact: Fact) -> int:
@@ -15,7 +18,7 @@ def _compute_fact_count(fact: Fact) -> int:
             assert False
 
 
-class ComputeLayerCounts:
+class ComputeLayerCounts(LayerwiseOperation):
     def __init__(self, network: VectorizedLayerNetwork) -> None:
         self.network = network
 
@@ -73,6 +76,24 @@ class ComputeLayerCounts:
     def compute_refs_count(self, refs: Refs) -> int:
         return sum(self.iter_ref_counts(refs))
 
+    def compute_layer_ref_count(self, batch: int, type: int, id: str, layers_fresh=False) -> int:
+        match type:
+            case LayerRefs.TYPE_FACT:
+                cnt = self.network.fact_layers[id].count
+                assert cnt is not None
+                return cnt
+            case LayerRefs.TYPE_WEIGHT:
+                return self.compute_weight_count(self.network.weights[id])
+            case LayerRefs.TYPE_LAYER:
+                if not layers_fresh:
+                    cnt = self.network.batches[batch].layers[id].count
+                    assert cnt is not None
+                else:
+                    cnt = self.compute_layer_count(batch, self.network.batches[batch].layers[id])
+                return cnt
+            case _:
+                raise ValueError(type)
+
     def iter_layer_refs_counts(self, batch: int, refs: LayerRefs, layers_fresh=False) -> Iterable[int]:
         for t, id in refs:
             match t:
@@ -106,20 +127,26 @@ class ComputeLayerCounts:
                 assert False, f"{input}"
         return count
 
-    def compute_linear_count(self, batch: int, input: Input, weight: Input) -> int:
+    def compute_lifted_count(self, input_count: int, weight_count: int, lifts: DimensionLifts) -> int:
+        if lifts is None or lifts_dimension_match(lifts):
+            return math.lcm(weight_count, input_count)
+
+        (a0, a1), (b0, b1) = lifts
+        return max(a0, b0) * max(a1, b1)
+
+    def compute_linear_count(self, batch: int, input: Input, weight: Input, lifts: DimensionLifts) -> int:
         weight_count = self.compute_input_count(batch, weight)
         input_count = self.compute_input_count(batch, input)
-
-        return max(weight_count, input_count)
+        return self.compute_lifted_count(input_count, weight_count, lifts)
 
     def compute_layer_base_count(self, batch: int, base: LayerBase) -> int:
         match base:
             case InputLayerBase(input=gathered_source):
                 return self.compute_input_count(batch, gathered_source)
-            case LinearLayerBase(input=input, weight=weight):
-                return self.compute_linear_count(batch, input, weight)
-            case LinearGatherLayerBase(input=input, weight=weight, gather=gather):
-                count = self.compute_linear_count(batch, input, weight)
+            case LinearLayerBase(input=input, weight=weight, lifts=lifts):
+                return self.compute_linear_count(batch, input, weight, lifts)
+            case LinearGatherLayerBase(input=input, weight=weight, gather=gather, lifts=lifts):
+                count = self.compute_linear_count(batch, input, weight, lifts)
                 count = self.compute_gather_count(count, gather)
                 return count
             case _:
@@ -140,6 +167,10 @@ class ComputeLayerCounts:
                     layer.count = self.compute_layer_count(bid, layer)
             except Exception as e:
                 raise Exception(f"Exception in batch {bid}, layer {lid}") from e
+
+    def __call__(self, batch: int, layer_id: str, layer: Layer) -> Layer:
+        layer.count = self.compute_layer_count(batch, layer)
+        return layer
 
 
 def compute_layer_counts(network: VectorizedLayerNetwork):

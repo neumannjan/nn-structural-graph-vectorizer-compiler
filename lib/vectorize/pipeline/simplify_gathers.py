@@ -1,4 +1,4 @@
-from typing import overload
+from typing import Container, Generic, Sequence, Type, TypeVar, overload
 
 from lib.utils import detect_repeating_interleaved_sequence_in_list, detect_repeating_sequence_in_list
 from lib.vectorize.model import *
@@ -6,34 +6,71 @@ from lib.vectorize.model.gather import OneGather
 from lib.vectorize.pipeline.compute_layer_counts import ComputeLayerCounts
 from lib.vectorize.pipeline.layerwise import LayerwiseOperation
 
+_T = TypeVar("_T")
 
-def build_optimal_gather(ordinals: list[int], total_refs_count: int | None, allow_subseq=True) -> Gather:
+
+class _AnyWhitelist(Container[_T], Generic[_T]):
+    def __contains__(self, x: object, /) -> bool:
+        return True
+
+
+_ANY_WHITELIST: Container[Type[Gather]] = _AnyWhitelist()
+
+
+_TGather = TypeVar("_TGather", bound=Gather)
+
+
+@overload
+def build_optimal_gather(
+    ordinals: Sequence[int], total_refs_count: int | None, *, whitelist: Container[Type[_TGather]], allow_subseq=True
+) -> _TGather: ...
+
+
+@overload
+def build_optimal_gather(ordinals: Sequence[int], total_refs_count: int | None, *, allow_subseq=True) -> Gather: ...
+
+
+def build_optimal_gather(
+    ordinals: Sequence[int],
+    total_refs_count: int | None,
+    *,
+    whitelist: Container[Type[Gather]] | None = None,
+    allow_subseq=True,
+) -> Gather:
+    if whitelist is None:
+        whitelist = _ANY_WHITELIST
+    assert GenericGather in whitelist
+
+    if len(ordinals) == 0:
+        return GenericGather(list(ordinals))
+
     all_inputs_the_same = all((ordinals[0] == o for o in ordinals[1:]))
 
     if all_inputs_the_same:
         if total_refs_count == 1:
-            return (
-                NoopGather()
-                if len(ordinals) == 1
-                else RepeatInterleave(times=len(ordinals), total_length=len(ordinals))
-            )
-        return (
-            TakeSingleValue(ordinals[0])
-            if len(ordinals) == 1
-            else RepeatInterleave(times=len(ordinals), total_length=len(ordinals))
-        )
+            if NoopGather in whitelist and len(ordinals) == 1:
+                return NoopGather()
+            elif RepeatInterleave in whitelist:
+                return RepeatInterleave(times=len(ordinals), total_length=len(ordinals))
+        else:
+            if TakeSingleValue in whitelist and len(ordinals) == 1:
+                return TakeSingleValue(ordinals[0])
+            elif RepeatInterleave in whitelist:
+                return RepeatInterleave(times=len(ordinals), total_length=len(ordinals))
 
     ###### simple slicing #######
 
-    step = ordinals[1] - ordinals[0]
-    all_ordinals_differ_by_step = all((b - a == step for a, b in zip(ordinals[:-1], ordinals[1:])))
+    if len(ordinals) >= 2:
+        step = ordinals[1] - ordinals[0]
+        all_ordinals_differ_by_step = step > 0 and all((b - a == step for a, b in zip(ordinals[:-1], ordinals[1:])))
 
-    if all_ordinals_differ_by_step:
-        start = ordinals[0]
-        end = ordinals[-1] + 1
-        if step == 1 and start == 0 and end == total_refs_count:
-            return NoopGather()
-        return SliceValues(step=step, start=start, end=end)
+        if all_ordinals_differ_by_step:
+            start = ordinals[0]
+            end = ordinals[-1] + 1
+            if NoopGather in whitelist and step == 1 and start == 0 and end == total_refs_count:
+                return NoopGather()
+            elif SliceValues in whitelist:
+                return SliceValues(step=step, start=start, end=end)
 
     ###### subsequence with (optimizable) repeat: #######
 
@@ -42,36 +79,41 @@ def build_optimal_gather(ordinals: list[int], total_refs_count: int | None, allo
         subseq = ordinals[:subseq_len]
 
         if subseq_len is not None and subseq_len <= len(ordinals) // 2:
-            subseq_gather = build_optimal_gather(subseq, total_refs_count=total_refs_count, allow_subseq=False)
+            subseq_gather = build_optimal_gather(
+                subseq, total_refs_count=total_refs_count, allow_subseq=False, whitelist=whitelist
+            )
             repeats = -(-len(ordinals) // subseq_len)
             total_length = len(ordinals)
 
             if total_length == subseq_len:
                 return subseq_gather
 
-            match subseq_gather:
-                case NoopGather():
-                    return Repeat(times=repeats, total_length=total_length)
-                case _:
-                    return GatherPair(subseq_gather, Repeat(times=repeats, total_length=total_length))
+            if Repeat in whitelist:
+                match subseq_gather:
+                    case NoopGather():
+                        return Repeat(times=repeats, total_length=total_length)
+                    case _ if GatherPair in whitelist:
+                        return GatherPair(subseq_gather, Repeat(times=repeats, total_length=total_length))
 
-        repeats = detect_repeating_interleaved_sequence_in_list(ordinals, allow_last_incomplete=True)
+        if RepeatInterleave in whitelist:
+            repeats = detect_repeating_interleaved_sequence_in_list(ordinals, allow_last_incomplete=True)
 
-        if repeats is not None:
-            assert repeats > 1
-            subseq = ordinals[::repeats]
-            subseq_gather = build_optimal_gather(subseq, total_refs_count=total_refs_count, allow_subseq=False)
-            total_length = len(ordinals)
+            if repeats is not None:
+                assert repeats > 1
+                subseq = ordinals[::repeats]
+                subseq_gather = build_optimal_gather(
+                    subseq, total_refs_count=total_refs_count, allow_subseq=False, whitelist=whitelist
+                )
+                total_length = len(ordinals)
 
-            match subseq_gather:
-                case NoopGather():
-                    return RepeatInterleave(times=repeats, total_length=total_length)
-                case _:
-                    return GatherPair(subseq_gather, RepeatInterleave(times=repeats, total_length=total_length))
+                match subseq_gather:
+                    case NoopGather():
+                        return RepeatInterleave(times=repeats, total_length=total_length)
+                    case _ if GatherPair in whitelist:
+                        return GatherPair(subseq_gather, RepeatInterleave(times=repeats, total_length=total_length))
 
     ###### generic fallback implementation ######
-
-    return GenericGather(ordinals)
+    return GenericGather(list(ordinals))
 
 
 class SimplifyGathers(LayerwiseOperation):
@@ -144,15 +186,15 @@ class SimplifyGathers(LayerwiseOperation):
                 self._for_input(batch, input)
                 self._for_input(batch, weight)
                 return base
-            case LinearGatherLayerBase(input=input, weight=weight, gather=gather):
+            case LinearGatherLayerBase(input=input, weight=weight, gather=gather, lifts=lifts):
                 self._for_input(batch, input)
                 self._for_input(batch, weight)
-                total_count = self._compute_layer_counts.compute_linear_count(batch, input, weight)
+                total_count = self._compute_layer_counts.compute_linear_count(batch, input, weight, lifts)
                 gather = self.simplify_gather(gather, total_refs_count=total_count)
                 if isinstance(gather, NoopGather):
-                    return LinearLayerBase(input, weight)
+                    return LinearLayerBase(input, weight, lifts=lifts)
                 else:
-                    return LinearGatherLayerBase(input, weight, gather)
+                    return LinearGatherLayerBase(input, weight, gather, lifts=lifts)
             case _:
                 assert False
 
