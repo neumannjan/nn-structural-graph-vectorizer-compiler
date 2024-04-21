@@ -3,6 +3,8 @@ from collections.abc import Sequence
 from lib.vectorize.model import *
 from lib.vectorize.pipeline.compute_layer_counts import ComputeLayerCounts
 from lib.vectorize.pipeline.layerwise import LayerwiseOperation
+from lib.vectorize.pipeline.simplify_gathers import build_optimal_gather
+from lib.vectorize.pipeline.utils.gather import combine_ord_maps_
 from lib.vectorize.pipeline.utils.ref_groups import (
     SimpleUniqueRefsMappableTransform,
     build_grouper_for_aggregate,
@@ -70,6 +72,7 @@ class OptimizeTailRefsToUniqueNoOrdRemap(LayerwiseOperation):
         grouper = build_grouper_for_aggregate(layer.aggregate)
         transform = SimpleUniqueRefsMappableTransform(grouper)
         if remap_refs(self._counts, batch, target, transform):
+            combine_ord_maps_(transform.ord_map, layer.ord_map)
             layer.ord_map = transform.ord_map
             layer.aggregate = self._get_new_aggregate(layer.aggregate, transform.last_groups)
 
@@ -92,5 +95,18 @@ class OptimizeTailRefsToUniqueNoOrdRemap(LayerwiseOperation):
                 base=LinearGatherLayerBase(input=input, weight=weight, lifts=lifts, gather=GenericGather() as gather),
             ):
                 self._apply_to_target(batch, layer, gather)
+
+                # can we simplify the gather?
+                total_refs_count = self._counts.compute_linear_count(batch, input, weight, lifts)
+                new_gather = build_optimal_gather(
+                    gather.ordinals, total_refs_count=total_refs_count, whitelist=(NoopGather, type(None))
+                )
+
+                if new_gather is not None:
+                    assert isinstance(new_gather, NoopGather)
+                    layer.base = LinearLayerBase(input=input, weight=weight, lifts=lifts)
+
+                    # can we repeat the tail application process now?
+                    self(batch, layer_id, layer)
 
         return layer

@@ -151,6 +151,9 @@ class SimpleUniqueRefsTransform(RefsTransform):
         ref_groups = list(self.grouper(refs))
         ref_groups_uniq = self.get_unique_ref_groups(ref_groups)
 
+        if len(ref_groups) == len(ref_groups_uniq):
+            return None
+
         refs_out = flatten_ref_groups(ref_groups_uniq)
         self._last_groups = ref_groups_uniq
         return refs_out

@@ -106,6 +106,8 @@ def create_vectorized_network_compiler(
 
     if len(remaps) > 0:
         remaps += ComputeLayerCounts
+        if debug_prints:
+            remaps += LayerwisePrint
 
     # ------
 

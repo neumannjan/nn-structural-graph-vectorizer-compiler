@@ -61,8 +61,8 @@ def get_pairs(refs: Iterable[_T], weight_refs: Iterable[_T]):
 
 
 def get_unique(values: Iterable[_T]) -> list[_T]:
-    out = list(OrderedDict.fromkeys(values))
-    # out = sorted(set(values))  # pyright: ignore
+    # out = list(OrderedDict.fromkeys(values))
+    out = sorted(set(values))  # pyright: ignore
     return out
 
 
@@ -182,23 +182,27 @@ class OptimizeLinearsPadForSymmetries(LayerwiseOperation):
                 return layer
             case Layer(
                 base=(
-                    LinearLayerBase(input=Refs() as input, weight=Refs() as weight, lifts=None)
+                    LinearLayerBase(input=Refs() as input, weight=Refs() as weight, lifts=lifts)
                     | LinearGatherLayerBase(
-                        input=Refs() as input, weight=Refs() as weight, gather=NoopGather(), lifts=None
+                        input=Refs() as input, weight=Refs() as weight, gather=NoopGather(), lifts=lifts
                     )
                 )
             ):
-                # if lifts not None, will fail
+                if lifts is not None:
+                    return layer
+
                 final_gather = self._remap(self.how, batch, input, weight)
                 if final_gather is not None:
                     layer.base = LinearGatherLayerBase(input=input, weight=weight, gather=final_gather, lifts=None)
                 return layer
             case Layer(
                 base=LinearGatherLayerBase(
-                    input=Refs() as input, weight=Refs() as weight, gather=GenericGather() as gather2, lifts=None
+                    input=Refs() as input, weight=Refs() as weight, gather=GenericGather() as gather2, lifts=lifts
                 )
             ):
-                # if lifts not None, will fail
+                if lifts is not None:
+                    return layer
+
                 gather1 = self._remap(self.how, batch, input, weight)
                 if gather1 is not None:
                     combine_gathers_(gather1, gather2)

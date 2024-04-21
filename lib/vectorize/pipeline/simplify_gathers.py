@@ -18,16 +18,41 @@ _ANY_WHITELIST: Container[Type[Gather]] = _AnyWhitelist()
 
 
 _TGather = TypeVar("_TGather", bound=Gather)
+_TGatherOrNone = TypeVar("_TGatherOrNone", bound=Gather | None)
 
 
 @overload
 def build_optimal_gather(
-    ordinals: Sequence[int], total_refs_count: int | None, *, whitelist: Container[Type[_TGather]], allow_subseq=True
-) -> _TGather: ...
+    ordinals: Sequence[int],
+    total_refs_count: int | None,
+    *,
+    whitelist: Container[Type[_TGatherOrNone]],
+    allow_subseq=True,
+) -> _TGatherOrNone: ...
 
 
 @overload
 def build_optimal_gather(ordinals: Sequence[int], total_refs_count: int | None, *, allow_subseq=True) -> Gather: ...
+
+
+@overload
+def build_optimal_gather(
+    ordinals: Sequence[int],
+    total_refs_count: int | None,
+    *,
+    whitelist: Container[Type[_TGather]] | None,
+    allow_subseq=True,
+) -> Gather: ...
+
+
+@overload
+def build_optimal_gather(
+    ordinals: Sequence[int],
+    total_refs_count: int | None,
+    *,
+    whitelist: Container[Type[_TGatherOrNone]] | None,
+    allow_subseq=True,
+) -> Gather | None: ...
 
 
 def build_optimal_gather(
@@ -36,13 +61,17 @@ def build_optimal_gather(
     *,
     whitelist: Container[Type[Gather]] | None = None,
     allow_subseq=True,
-) -> Gather:
+) -> Gather | None:
     if whitelist is None:
         whitelist = _ANY_WHITELIST
-    assert GenericGather in whitelist
+
+    assert GenericGather in whitelist or type(None) in whitelist
 
     if len(ordinals) == 0:
-        return GenericGather(list(ordinals))
+        if GenericGather in whitelist:
+            return GenericGather(list(ordinals))
+        else:
+            return None
 
     all_inputs_the_same = all((ordinals[0] == o for o in ordinals[1:]))
 
@@ -113,13 +142,18 @@ def build_optimal_gather(
                         return GatherPair(subseq_gather, RepeatInterleave(times=repeats, total_length=total_length))
 
     ###### generic fallback implementation ######
-    return GenericGather(list(ordinals))
+    if GenericGather in whitelist:
+        return GenericGather(list(ordinals))
+    else:
+        return None
 
 
 class SimplifyGathers(LayerwiseOperation):
-    def __init__(self, network: VectorizedLayerNetwork) -> None:
+    def __init__(self, network: VectorizedLayerNetwork, whitelist: Container[Type[_TGather]] | None = None) -> None:
         self.network = network
         self._compute_layer_counts = ComputeLayerCounts(network)
+        assert whitelist is None or GenericGather in whitelist
+        self._whitelist = whitelist
 
     @overload
     def simplify_gather(self, gather: OneGather, total_refs_count: int | None) -> OneGather: ...
@@ -130,7 +164,7 @@ class SimplifyGathers(LayerwiseOperation):
     def simplify_gather(self, gather: Gather, total_refs_count: int | None) -> Gather:
         match gather:
             case GenericGather(ordinals=ordinals):
-                return build_optimal_gather(ordinals, total_refs_count=total_refs_count)
+                return build_optimal_gather(ordinals, total_refs_count=total_refs_count, whitelist=self._whitelist)
             case GatherPair(a, b):
                 a = self.simplify_gather(a, total_refs_count=total_refs_count)
                 b = self.simplify_gather(b, total_refs_count=total_refs_count)

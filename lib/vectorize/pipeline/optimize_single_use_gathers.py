@@ -162,29 +162,31 @@ class OptimizeSingleUseGathers:
             case Layer(
                 base=(
                     LinearLayerBase(
-                        input=GatheredLayers(refs=[ref2], gather=NoopGather()) as input,
+                        input=GatheredLayers(refs=[ref2], gather=NoopGather()) as this,
                     )
                     | LinearGatherLayerBase(
-                        input=GatheredLayers(refs=[ref2], gather=NoopGather()) as input, gather=NoopGather()
+                        input=GatheredLayers(refs=[ref2], gather=NoopGather()) as this, gather=NoopGather()
                     )
-                ),
+                ) as base,
                 aggregate=Noop(),
-            ) if upcoming_ref == ref2 and self._counts.compute_input_count(batch, input) == self._get_layer_count(
-                batch, layer
+            ) if upcoming_ref == ref2 and (
+                self._counts.compute_input_count(batch, this)
+                == self._counts.compute_linear_count(batch, base.input, base.weight, base.lifts)
             ):
                 return "propagate"
             case Layer(
                 base=(
                     LinearLayerBase(
-                        weight=GatheredLayers(refs=[ref2], gather=NoopGather()) as weight,
+                        weight=GatheredLayers(refs=[ref2], gather=NoopGather()) as this,
                     )
                     | LinearGatherLayerBase(
-                        weight=GatheredLayers(refs=[ref2], gather=NoopGather()) as weight, gather=NoopGather()
+                        weight=GatheredLayers(refs=[ref2], gather=NoopGather()) as this, gather=NoopGather()
                     )
-                ),
+                ) as base,
                 aggregate=Noop(),
-            ) if upcoming_ref == ref2 and self._counts.compute_input_count(batch, weight) == self._get_layer_count(
-                batch, layer
+            ) if upcoming_ref == ref2 and (
+                self._counts.compute_input_count(batch, this)
+                == self._counts.compute_linear_count(batch, base.input, base.weight, base.lifts)
             ):
                 return "propagate"
             case Layer(
@@ -212,16 +214,33 @@ class OptimizeSingleUseGathers:
                         input=GatheredLayers(refs=refs, gather=gather) as this,
                         weight=GatheredLayers(),
                     )
-                    | LinearLayerBase(
-                        input=GatheredLayers(),
-                        weight=GatheredLayers(refs=refs, gather=gather) as this,
-                    )
                     | InputLayerBase(input=GatheredLayers(refs=refs, gather=gather) as this)
                 ) as base,
                 aggregate=aggregate,
             ) if (
                 isinstance(base, InputLayerBase)
                 or self._counts.compute_input_count(batch, this)
+                == self._counts.compute_linear_count(batch, input, weight, base.lifts)
+            ):
+                assert isinstance(gather, (GenericGather, NoopGather))
+                return self._do_reorder_layer_output(
+                    batch,
+                    gather,
+                    refs,
+                    this,
+                    (),
+                    aggregate,
+                    ordinals2,
+                    chain_i,
+                )
+            case Layer(
+                base=LinearLayerBase(
+                    input=GatheredLayers(),
+                    weight=GatheredLayers(refs=refs, gather=gather) as this,
+                ) as base,
+                aggregate=aggregate,
+            ) if (
+                self._counts.compute_input_count(batch, this)
                 == self._counts.compute_linear_count(batch, input, weight, base.lifts)
             ):
                 assert isinstance(gather, (GenericGather, NoopGather))
