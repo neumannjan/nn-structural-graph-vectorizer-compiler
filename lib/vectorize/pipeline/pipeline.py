@@ -7,7 +7,7 @@ from lib.vectorize.pipeline.build_initial_network import build_initial_network
 from lib.vectorize.pipeline.compute_layer_counts import ComputeLayerCounts, compute_layer_counts
 from lib.vectorize.pipeline.compute_layer_shapes import compute_layer_shapes
 from lib.vectorize.pipeline.concat_inputs_layers import ConcatInputsLayers
-from lib.vectorize.pipeline.dissolve_identity_layers import dissolve_identity_layers
+from lib.vectorize.pipeline.dissolve_identity_layers import dissolve_identity_layers, predissolve_identity_layers
 from lib.vectorize.pipeline.drop_unused_layers import drop_unused_layers
 from lib.vectorize.pipeline.give_unique_names import give_unique_names
 from lib.vectorize.pipeline.join_simple_layer_chains import join_simple_layer_chains
@@ -74,6 +74,10 @@ def create_vectorized_network_compiler(
         # + drop_unused_neurons  # TODO
         # + transpose_fixed_count_linears  # <- optional
         # + extract_unit_ordinals
+        + _debug
+        + compute_layer_counts
+        + _debug
+        + predissolve_identity_layers
         + _debug
         + compute_layer_shapes  # <- shapes are expected starting here
         + _debug
