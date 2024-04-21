@@ -387,6 +387,8 @@ class OptimizeSingleUseGathers:
         for chain in g.iter_chains_with_ref_gathers():
             chain = list(chain)
             chain.reverse()
+            if self.debug:
+                print(chain)
             i = 0
             old_ref_to_layer = None
             for (ref, new_ref_to_layer), _upcoming in iter_lookahead(chain):

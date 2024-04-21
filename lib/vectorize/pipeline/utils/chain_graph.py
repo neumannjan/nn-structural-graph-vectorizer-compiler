@@ -12,7 +12,7 @@ class _ChainGraph:
         self,
         single_successors: Mapping[_Node, _Node],
         single_predecessors: Mapping[_Node, _Node],
-        ref_gathers: Mapping[_Node, GatheredLayers],
+        ref_gathers: Mapping[_Node, GatheredLayers | None],
     ) -> None:
         self.single_successors = single_successors
         self.single_predecessors = single_predecessors
@@ -107,7 +107,7 @@ class ComputeChainGraph:
 
     def __call__(self, layers: Mapping[str, OperationSeq | Layer]) -> _ChainGraph:
         succ: dict[_Node, _Node] = {}
-        ref_gathers: dict[_Node, GatheredLayers] = {}
+        ref_gathers: dict[_Node, GatheredLayers | None] = {}
 
         for layer_id, ops in layers.items():
             match ops:
@@ -151,7 +151,10 @@ class ComputeChainGraph:
                     )
                 ) if t in self.searched_types:
                     succ[t, ref_layer_id] = LayerRefs.TYPE_LAYER, layer_id
-                    ref_gathers[t, ref_layer_id] = gl
+                    if (t, ref_layer_id) in ref_gathers:
+                        ref_gathers[t, ref_layer_id] = None
+                    else:
+                        ref_gathers[t, ref_layer_id] = gl
 
         visited: set[_Node] = set()
 

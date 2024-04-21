@@ -13,7 +13,6 @@ from lib.vectorize.pipeline.give_unique_names import give_unique_names
 from lib.vectorize.pipeline.join_simple_layer_chains import join_simple_layer_chains
 from lib.vectorize.pipeline.layerwise import Layerwise, LayerwisePrint
 from lib.vectorize.pipeline.lift_symmetrical_linears import LiftSymmetricalLinears
-from lib.vectorize.pipeline.mark_compilable_layers import MarkCompilableLayers
 from lib.vectorize.pipeline.materialize_unit_transforms import materialize_unit_transforms
 from lib.vectorize.pipeline.merge_trivial_layer_concats import merge_trivial_layer_concats
 from lib.vectorize.pipeline.merge_unit_facts import merge_unit_facts
@@ -27,7 +26,12 @@ from lib.vectorize.pipeline.optimize_tail_refs_to_unique import (
     OptimizeTailRefsToUniqueNoOrdRemap,
     RemapOrdinals,
 )
-from lib.vectorize.pipeline.separate_input_refs import ShapeLayerIndexer, build_separate_input_refs
+from lib.vectorize.pipeline.separate_input_refs import (
+    ShapeLayerIndexer,
+    WeightLayerIndexer,
+    build_combined_layer_indexer_factory,
+    build_separate_input_refs,
+)
 from lib.vectorize.pipeline.simplify_gathers import SimplifyGathers
 from lib.vectorize.pipeline.simplify_pure_unit_fact_linears import (
     SimplifyPureUnitFactLinears,
@@ -57,6 +61,11 @@ def create_vectorized_network_compiler(
 
     # ------
 
+    if settings.granularize_by_weight:
+        indexer_factory = build_combined_layer_indexer_factory(ShapeLayerIndexer, WeightLayerIndexer)
+    else:
+        indexer_factory = ShapeLayerIndexer
+
     build_vectorized_network = (
         PIPE  #
         + build_initial_network
@@ -68,7 +77,7 @@ def create_vectorized_network_compiler(
         + _debug
         + compute_layer_shapes  # <- shapes are expected starting here
         + _debug
-        + build_separate_input_refs(ShapeLayerIndexer)
+        + build_separate_input_refs(indexer_factory)
         + _debug
         + Layerwise(SimplifyPureUnitFactLinears)
         + _debug

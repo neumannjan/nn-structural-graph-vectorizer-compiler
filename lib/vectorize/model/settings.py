@@ -28,3 +28,5 @@ class VectorizeSettings:
     optimize_single_use_gathers_aggressive_through_symmetries: bool = True
 
     merge_trivial_layer_concats: bool = True
+
+    granularize_by_weight: bool = False

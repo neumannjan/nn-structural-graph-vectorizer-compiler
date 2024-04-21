@@ -12,15 +12,35 @@ _T = TypeVar("_T", covariant=True)
 
 
 class LayerIndexer(Protocol, Generic[_T]):
-    @overload
-    def __call__(
-        self, batch_id: int, base: LinearLayerBase | LinearGatherLayerBase
-    ) -> Iterable[tuple[tuple[_Ref, _Ref], _T]]: ...
+    def for_ref(self, batch_id: int, ref: _Ref) -> _T: ...
+    def for_linear(self, batch_id: int, iref: _Ref, wref: _Ref) -> _T: ...
 
-    @overload
-    def __call__(self, batch_id: int, base: InputLayerBase) -> Iterable[tuple[_Ref, _T]]: ...
 
-    def __call__(self, batch_id: int, base: LayerBase) -> Iterable[tuple[_Ref | tuple[_Ref, _Ref], _T]]: ...
+@overload
+def _iter_indexer(
+    base: LinearLayerBase | LinearGatherLayerBase, batch_id: int, indexer: LayerIndexer[_T]
+) -> Iterable[tuple[tuple[_Ref, _Ref], _T]]: ...
+
+
+@overload
+def _iter_indexer(base: InputLayerBase, batch_id: int, indexer: LayerIndexer[_T]) -> Iterable[tuple[_Ref, _T]]: ...
+
+
+def _iter_indexer(
+    base: LayerBase, batch_id: int, indexer: LayerIndexer[_T]
+) -> Iterable[tuple[tuple[_Ref, _Ref] | _Ref, _T]]:
+    match base:
+        case InputLayerBase(input=Refs() as refs):
+            for ref in refs:
+                yield ref, indexer.for_ref(batch_id, ref)
+        case (
+            LinearLayerBase(input=Refs() as irefs, weight=Refs() as wrefs)
+            | LinearGatherLayerBase(input=Refs() as irefs, weight=Refs() as wrefs)
+        ):
+            for iref, wref in zip(irefs, wrefs):
+                yield (iref, wref), indexer.for_linear(batch_id, iref, wref)
+        case _:
+            raise ValueError(base)
 
 
 class SeparateInputRefs:
@@ -84,7 +104,7 @@ class SeparateInputRefs:
                     case _:
                         assert False
 
-        new_grps = set((grp for _, grp in self.indexer(batch_id, layer.base)))
+        new_grps = set((grp for _, grp in _iter_indexer(layer.base, batch_id, self.indexer)))
 
         if len(new_grps) <= 1:
             return {}
@@ -93,7 +113,7 @@ class SeparateInputRefs:
 
         match layer.base:
             case InputLayerBase(input=Refs() as refs):
-                for i, (ref, grp) in enumerate(self.indexer(batch_id, layer.base)):
+                for i, (ref, grp) in enumerate(_iter_indexer(layer.base, batch_id, self.indexer)):
                     new_layer_refs = _get_new_layer_refs(grp, layer.base)
                     new_o = len(new_layer_refs)
                     new_layer_refs.append(ref)
@@ -113,7 +133,7 @@ class SeparateInputRefs:
 
                 new_orig_refs = Refs([], [], [])
 
-                for i, ((iref, wref), grp) in enumerate(self.indexer(batch_id, layer.base)):
+                for i, ((iref, wref), grp) in enumerate(_iter_indexer(layer.base, batch_id, self.indexer)):
                     (new_layer_irefs, new_layer_wrefs) = _get_new_layer_refs(grp, layer.base)
                     new_o = len(new_layer_irefs)
                     new_layer_irefs.append(iref)
@@ -164,30 +184,22 @@ class _ShapeLayerIndexer(LayerIndexer[tuple[ConcreteShape | AnyShape, ...]]):
     def __init__(self, network: VectorizedLayerNetwork) -> None:
         self._shapes = ComputeLayerShapes(network)
 
-    def __call__(self, batch_id: int, base: LayerBase):
-        match base:
-            case InputLayerBase(input=Refs() as refs):
-                for ref in refs:
-                    out_shape = self._shapes.compute_ref_shape(batch_id, *ref)
-                    match out_shape:
-                        case ConcreteShape() | AnyShape():
-                            yield ref, (out_shape,)
-                        case _:
-                            raise ValueError(out_shape)
-            case (
-                LinearLayerBase(input=Refs() as irefs, weight=Refs() as wrefs)
-                | LinearGatherLayerBase(input=Refs() as irefs, weight=Refs() as wrefs)
-            ):
-                for iref, wref in zip(irefs, wrefs):
-                    shape1 = self._shapes.compute_ref_shape(batch_id, *iref)
-                    shape2 = self._shapes.compute_ref_shape(batch_id, *wref)
-                    match shape1, shape2:
-                        case ((ConcreteShape() | AnyShape()), (ConcreteShape() | AnyShape())):
-                            yield (iref, wref), (shape2, shape1)
-                        case _:
-                            raise ValueError(shape1, shape2)
+    def for_ref(self, batch_id: int, ref: _Ref) -> tuple[ConcreteShape | AnyShape, ...]:
+        out_shape = self._shapes.compute_ref_shape(batch_id, *ref)
+        match out_shape:
+            case ConcreteShape() | AnyShape():
+                return (out_shape,)
             case _:
-                assert False
+                raise ValueError(out_shape)
+
+    def for_linear(self, batch_id: int, iref: _Ref, wref: _Ref) -> tuple[ConcreteShape | AnyShape, ...]:
+        shape1 = self._shapes.compute_ref_shape(batch_id, *iref)
+        shape2 = self._shapes.compute_ref_shape(batch_id, *wref)
+        match shape1, shape2:
+            case ((ConcreteShape() | AnyShape()), (ConcreteShape() | AnyShape())):
+                return shape2, shape1
+            case _:
+                raise ValueError(shape1, shape2)
 
 
 class ShapeLayerIndexer(LayerIndexer[str]):
@@ -206,9 +218,56 @@ class ShapeLayerIndexer(LayerIndexer[str]):
     def _get_shape_ids(self, shapes: Iterable[ConcreteShape | AnyShape]) -> str:
         return "__".join((self._get_shape_id(sh) for sh in shapes))
 
-    def __call__(self, batch_id: int, base: LayerBase):
-        for ref, shapes in self._delegate(batch_id, base):
-            yield ref, self._get_shape_ids(shapes)
+    def for_ref(self, *kargs, **kwargs) -> str:
+        return self._get_shape_ids(self._delegate.for_ref(*kargs, **kwargs))
+
+    def for_linear(self, *kargs, **kwargs) -> str:
+        return self._get_shape_ids(self._delegate.for_linear(*kargs, **kwargs))
+
+
+class WeightLayerIndexer(LayerIndexer[str]):
+    def __init__(self, network: VectorizedLayerNetwork) -> None:
+        self._network = network
+
+    def for_ref(self, batch_id: int, ref: _Ref) -> str:
+        t, l, _ = ref
+        if t == Refs.TYPE_WEIGHT:
+            return l
+        else:
+            return ""
+
+    def for_linear(self, batch_id: int, iref: _Ref, wref: _Ref) -> str:
+        t1, l1, _ = iref
+        t2, l2, _ = wref
+        match t1, t2:
+            case (Refs.TYPE_WEIGHT, Refs.TYPE_WEIGHT):
+                return l1 + "_" + l2
+            case (Refs.TYPE_WEIGHT, _):
+                return l1
+            case (_, Refs.TYPE_WEIGHT):
+                return l2
+            case _:
+                return ""
+
+
+class CombinedLayerIndexer(LayerIndexer[str]):
+    def __init__(self, *indexers: LayerIndexer[str]) -> None:
+        self.indexers = indexers
+
+    def for_ref(self, *kargs, **kwargs) -> str:
+        return "__".join(filter(lambda v: v, (idx.for_ref(*kargs, **kwargs) for idx in self.indexers)))
+
+    def for_linear(self, *kargs, **kwargs) -> str:
+        return "__".join(filter(lambda v: v, (idx.for_linear(*kargs, **kwargs) for idx in self.indexers)))
+
+
+def build_combined_layer_indexer_factory(
+    *indexers: Callable[[VectorizedLayerNetwork], LayerIndexer[str]],
+) -> Callable[[VectorizedLayerNetwork], CombinedLayerIndexer]:
+    def _f(network: VectorizedLayerNetwork):
+        return CombinedLayerIndexer(*[f(network) for f in indexers])
+
+    return _f
 
 
 def build_separate_input_refs(indexer_factory: Callable[[VectorizedLayerNetwork], LayerIndexer[str]]):
