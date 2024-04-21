@@ -146,7 +146,7 @@ _LAYER_MODULE_LIKES = ("base", "aggregate", "transform")
 
 
 class Layer:
-    __slots__ = ("base", "aggregate", "transform", "count", "shape", "ord_map")
+    __slots__ = ("base", "aggregate", "transform", "count", "shape", "ord_map", "compilable")
     __repr__ = repr_slots
 
     def __init__(
@@ -156,6 +156,7 @@ class Layer:
         transform: Transform,
         count: int | None = None,
         shape: Shape | None = None,
+        compilable: bool = False,
     ) -> None:
         self.base = base
         self.aggregate = aggregate
@@ -163,6 +164,7 @@ class Layer:
         self.count = count
         self.shape = shape if shape is not None else VariousShape()
         self.ord_map: dict[int, int] = {}
+        self.compilable = compilable
 
     def __repr__(self) -> str:
         out = self.__class__.__name__ + "("

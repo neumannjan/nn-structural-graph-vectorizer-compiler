@@ -13,6 +13,7 @@ from lib.vectorize.pipeline.give_unique_names import give_unique_names
 from lib.vectorize.pipeline.join_simple_layer_chains import join_simple_layer_chains
 from lib.vectorize.pipeline.layerwise import Layerwise, LayerwisePrint
 from lib.vectorize.pipeline.lift_symmetrical_linears import LiftSymmetricalLinears
+from lib.vectorize.pipeline.mark_compilable_layers import MarkCompilableLayers
 from lib.vectorize.pipeline.materialize_unit_transforms import materialize_unit_transforms
 from lib.vectorize.pipeline.merge_trivial_layer_concats import merge_trivial_layer_concats
 from lib.vectorize.pipeline.merge_unit_facts import merge_unit_facts
@@ -95,10 +96,6 @@ def create_vectorized_network_compiler(
             if debug_prints:
                 remaps += LayerwisePrint
 
-        remaps += LiftSymmetricalLinears
-        if debug_prints:
-            remaps += LayerwisePrint
-
     if settings.optimize_tail_refs:
         remaps += OptimizeTailRefsToUniqueNoOrdRemap
         if debug_prints:
@@ -118,17 +115,41 @@ def create_vectorized_network_compiler(
         + Layerwise(ClearOrdinalsMap)
         + Layerwise(ConcatInputsLayers)  # <- gathers are expected starting here
         + _debug
-        + compute_layer_counts
+        + Layerwise(MarkCompilableLayers)
         + _debug
     )
 
-    if settings.optimize_single_use_gathers:
+    if settings.optimize_single_use_gathers and settings.optimize_single_use_gathers_before_symmetries:
         build_vectorized_network += (
             PIPE  #
             + build_optimize_single_use_gathers(
                 max_chain_length=settings.optimize_single_use_gathers_aggressive_max_chain_length,
                 debug=debug_prints,
             )
+            + compute_layer_counts
+            + _debug
+        )
+
+    if settings.linears_symmetries:
+        remaps2 = Layerwise(LiftSymmetricalLinears)
+
+        if debug_prints:
+            remaps2 += LayerwisePrint
+
+        build_vectorized_network += (
+            PIPE  #
+            + remaps2
+            + _debug
+        )
+
+    if settings.optimize_single_use_gathers and not settings.optimize_single_use_gathers_before_symmetries:
+        build_vectorized_network += (
+            PIPE  #
+            + build_optimize_single_use_gathers(
+                max_chain_length=settings.optimize_single_use_gathers_aggressive_max_chain_length,
+                debug=debug_prints,
+            )
+            + compute_layer_counts
             + _debug
         )
 

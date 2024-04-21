@@ -55,6 +55,10 @@ class _ChainGraph:
         for n in self.iter_beginnings():
             yield self.iter_single_chain(beginning=n)
 
+    def iter_chain_lengths(self) -> Iterable[int]:
+        for chain in self.iter_chains():
+            yield sum((1 for _ in chain))
+
 
 class ComputeChainGraph:
     def __init__(self, network: VectorizedOpSeqNetwork | VectorizedLayerNetwork, types: tuple[int, ...]) -> None:

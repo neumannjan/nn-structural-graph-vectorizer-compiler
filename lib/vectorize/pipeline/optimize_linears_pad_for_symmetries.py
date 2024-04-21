@@ -1,4 +1,4 @@
-from typing import Callable, Collection, Iterable, OrderedDict, TypeVar
+from typing import Callable, Collection, Iterable, TypeVar
 
 from lib.utils import head_and_rest
 from lib.vectorize.model import *
@@ -152,7 +152,7 @@ class OptimizeLinearsPadForSymmetries(LayerwiseOperation):
 
         return variant()
 
-    def _remap(self, how: LinearsPadForSymmetriesOption, batch: int, refs: Refs, wrefs: Refs) -> GenericGather | None:
+    def _remap(self, batch: int, refs: Refs, wrefs: Refs) -> GenericGather | None:
         padded = self._get_padded_refs(batch, refs, wrefs)
 
         if padded is None:
@@ -191,7 +191,7 @@ class OptimizeLinearsPadForSymmetries(LayerwiseOperation):
                 if lifts is not None:
                     return layer
 
-                final_gather = self._remap(self.how, batch, input, weight)
+                final_gather = self._remap(batch, input, weight)
                 if final_gather is not None:
                     layer.base = LinearGatherLayerBase(input=input, weight=weight, gather=final_gather, lifts=None)
                 return layer
@@ -203,7 +203,7 @@ class OptimizeLinearsPadForSymmetries(LayerwiseOperation):
                 if lifts is not None:
                     return layer
 
-                gather1 = self._remap(self.how, batch, input, weight)
+                gather1 = self._remap(batch, input, weight)
                 if gather1 is not None:
                     combine_gathers_(gather1, gather2)
                 return layer

@@ -20,6 +20,8 @@ class VectorizeSettings:
 
     optimize_single_use_gathers: bool = True
 
+    optimize_single_use_gathers_before_symmetries: bool = False
+
     optimize_single_use_gathers_aggressive_max_chain_length: int | Literal["unlimited"] = 0
 
     merge_trivial_layer_concats: bool = True

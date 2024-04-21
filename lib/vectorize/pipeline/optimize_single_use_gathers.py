@@ -2,9 +2,9 @@ from collections.abc import Sequence
 from typing import Iterable, Iterator, Literal, TypeVar
 
 from lib.vectorize.model import *
-from lib.vectorize.model.layer import DimensionLifts
 from lib.vectorize.pipeline.compute_layer_counts import ComputeLayerCounts
 from lib.vectorize.pipeline.utils.chain_graph import ComputeChainGraph
+from lib.vectorize.pipeline.utils.gather import combine_gathers
 from lib.vectorize.pipeline.utils.ref_groups import build_grouper_for_aggregate
 
 
@@ -86,7 +86,7 @@ class OptimizeSingleUseGathers:
         return ("found_free", new_layer_id) if is_free else ("found", new_layer_id)
 
     def _get_gather_ordinals(
-        self, batch: int, refs: LayerRefs | tuple[Input, Input, DimensionLifts], gather: GenericGather | NoopGather
+        self, batch: int, refs: LayerRefs | tuple[Input, Input], gather: GenericGather | NoopGather
     ) -> Sequence[int]:
         match gather:
             case GenericGather(ordinals):
@@ -95,8 +95,8 @@ class OptimizeSingleUseGathers:
                 match refs:
                     case LayerRefs():
                         in_count = self._counts.compute_layer_refs_count(batch, refs)
-                    case (input, weight, lifts):
-                        in_count = self._counts.compute_linear_count(batch, input, weight, lifts)
+                    case (input, weight):
+                        in_count = self._counts.compute_linear_count(batch, input, weight, None)
                     case _:
                         assert False, f"{refs}"
 
@@ -104,12 +104,12 @@ class OptimizeSingleUseGathers:
             case _:
                 assert False, f"{gather}"
 
-    def _compute_refs_count(self, batch: int, refs: LayerRefs | tuple[Input, Input, DimensionLifts]):
+    def _compute_refs_count(self, batch: int, refs: LayerRefs | tuple[Input, Input]):
         match refs:
             case LayerRefs():
                 return self._counts.compute_layer_refs_count(batch, refs)
-            case (input, weight, lifts):
-                return self._counts.compute_linear_count(batch, input, weight, lifts)
+            case (input, weight):
+                return self._counts.compute_linear_count(batch, input, weight, None)
             case _:
                 raise ValueError(refs)
 
@@ -117,12 +117,12 @@ class OptimizeSingleUseGathers:
         self,
         batch: int,
         gather: GenericGather | NoopGather,
-        refs: LayerRefs | tuple[Input, Input, DimensionLifts],
+        refs: LayerRefs | tuple[Input, Input],
         container: GatheredLayers | LinearGatherLayerBase,
         other: Iterable[
             tuple[
                 GenericGather | NoopGather,
-                LayerRefs | tuple[Input, Input, DimensionLifts],
+                LayerRefs | tuple[Input, Input],
                 GatheredLayers | LinearGatherLayerBase,
             ]
         ],
@@ -153,51 +153,70 @@ class OptimizeSingleUseGathers:
         _reorder_aggregate(aggregate, ordinals2)
         return "found_free" if is_free else "found"
 
+    def _redistribute_linear_gather_layer_back(
+        self,
+        batch: int,
+        base: LinearGatherLayerBase,
+        input: GatheredLayers,
+        weight: GatheredLayers,
+        ordinals: list[int],
+    ):
+        input_count = self._counts.compute_input_count(batch, input)
+        weight_count = self._counts.compute_input_count(batch, weight)
+
+        assert isinstance(input.gather, (GenericGather, NoopGather))
+        assert isinstance(weight.gather, (GenericGather, NoopGather))
+
+        assert input_count == weight_count
+
+        input.gather = combine_gathers(input.gather, GenericGather(ordinals))
+        weight.gather = combine_gathers(weight.gather, GenericGather(ordinals))
+        base.gather = NoopGather()
+
     def _reorder_layer_output(
         self, batch: int, layer: Layer, ordinals2: list[int], chain_i: int, upcoming_ref: tuple[int, str] | None
     ) -> Literal["ignore", "found_free", "found", "propagate", "inapplicable"]:
+        if layer.compilable:
+            return "inapplicable"
+
         match layer:
             case Layer(base=InputLayerBase(input=GatheredLayers(refs=[_], gather=NoopGather()), aggregate=Noop())):
                 return "propagate"
             case Layer(
                 base=(
-                    LinearLayerBase(
-                        input=GatheredLayers(refs=[ref2], gather=NoopGather()) as this,
-                    )
-                    | LinearGatherLayerBase(
-                        input=GatheredLayers(refs=[ref2], gather=NoopGather()) as this, gather=NoopGather()
-                    )
+                    LinearLayerBase(input=GatheredLayers(refs=[ref2], gather=NoopGather()) as this, lifts=None)
                 ) as base,
                 aggregate=Noop(),
-            ) if upcoming_ref == ref2 and (
-                self._counts.compute_input_count(batch, this)
-                == self._counts.compute_linear_count(batch, base.input, base.weight, base.lifts)
-            ):
+            ) if upcoming_ref == ref2:
                 return "propagate"
+            case Layer(base=LinearLayerBase(lifts=lifts) | LinearGatherLayerBase(lifts=lifts)) if lifts is not None:
+                return "inapplicable"
             case Layer(
                 base=(
                     LinearLayerBase(
                         weight=GatheredLayers(refs=[ref2], gather=NoopGather()) as this,
-                    )
-                    | LinearGatherLayerBase(
-                        weight=GatheredLayers(refs=[ref2], gather=NoopGather()) as this, gather=NoopGather()
+                        lifts=None,
                     )
                 ) as base,
                 aggregate=Noop(),
-            ) if upcoming_ref == ref2 and (
-                self._counts.compute_input_count(batch, this)
-                == self._counts.compute_linear_count(batch, base.input, base.weight, base.lifts)
-            ):
+            ) if upcoming_ref == ref2:
                 return "propagate"
             case Layer(
                 base=LinearLayerBase(
                     input=GatheredLayers(refs=refs_a, gather=gather_a) as input,
                     weight=GatheredLayers(refs=refs_b, gather=gather_b) as weight,
+                    lifts=None,
                 ),
                 aggregate=aggregate,
-            ) if self._counts.compute_input_count(batch, input) == self._counts.compute_input_count(batch, weight):
+            ):
                 assert isinstance(gather_a, (GenericGather, NoopGather))
                 assert isinstance(gather_b, (GenericGather, NoopGather))
+
+                input_count = self._counts.compute_input_count(batch, input)
+                weight_count = self._counts.compute_input_count(batch, weight)
+
+                assert input_count == weight_count
+
                 return self._do_reorder_layer_output(
                     batch,
                     gather_a,
@@ -209,18 +228,8 @@ class OptimizeSingleUseGathers:
                     chain_i,
                 )
             case Layer(
-                base=(
-                    LinearLayerBase(
-                        input=GatheredLayers(refs=refs, gather=gather) as this,
-                        weight=GatheredLayers(),
-                    )
-                    | InputLayerBase(input=GatheredLayers(refs=refs, gather=gather) as this)
-                ) as base,
+                base=InputLayerBase(input=GatheredLayers(refs=refs, gather=gather) as this) as base,
                 aggregate=aggregate,
-            ) if (
-                isinstance(base, InputLayerBase)
-                or self._counts.compute_input_count(batch, this)
-                == self._counts.compute_linear_count(batch, input, weight, base.lifts)
             ):
                 assert isinstance(gather, (GenericGather, NoopGather))
                 return self._do_reorder_layer_output(
@@ -234,41 +243,34 @@ class OptimizeSingleUseGathers:
                     chain_i,
                 )
             case Layer(
-                base=LinearLayerBase(
-                    input=GatheredLayers(),
-                    weight=GatheredLayers(refs=refs, gather=gather) as this,
+                base=LinearGatherLayerBase(
+                    input=GatheredLayers() as input, weight=GatheredLayers() as weight, lifts=None, gather=gather
                 ) as base,
                 aggregate=aggregate,
-            ) if (
-                self._counts.compute_input_count(batch, this)
-                == self._counts.compute_linear_count(batch, input, weight, base.lifts)
             ):
                 assert isinstance(gather, (GenericGather, NoopGather))
-                return self._do_reorder_layer_output(
+
+                match gather:
+                    case NoopGather():
+                        layer.base = LinearLayerBase(input=input, weight=weight, lifts=None)
+                        return self._reorder_layer_output(batch, layer, ordinals2, chain_i, upcoming_ref)
+
+                out = self._do_reorder_layer_output(
                     batch,
                     gather,
-                    refs,
-                    this,
-                    (),
-                    aggregate,
-                    ordinals2,
-                    chain_i,
-                )
-            case Layer(
-                base=LinearGatherLayerBase(input=input, weight=weight, lifts=lifts, gather=gather) as base,
-                aggregate=aggregate,
-            ):
-                assert isinstance(gather, (GenericGather, NoopGather))
-                return self._do_reorder_layer_output(
-                    batch,
-                    gather,
-                    (input, weight, lifts),
+                    (input, weight),
                     base,
                     (),
                     aggregate,
                     ordinals2,
                     chain_i,
                 )
+
+                if out in ("found", "found_free"):
+                    assert isinstance(base.gather, GenericGather)
+                    self._redistribute_linear_gather_layer_back(batch, base, input, weight, base.gather.ordinals)
+
+                return out
 
         return "inapplicable"
 

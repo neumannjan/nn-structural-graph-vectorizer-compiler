@@ -43,9 +43,6 @@ class OptimizeLinearsUniqueRefPairs(LayerwiseOperation):
     def _remap_ref_pairs(self, batch: int, refs: Refs, wrefs: Refs) -> GenericGather | None:
         new_pairs = get_unique(get_pairs(refs, wrefs))
 
-        if new_pairs is None:
-            return None
-
         if max(len(refs), len(wrefs)) <= len(new_pairs):
             return None
 
@@ -60,10 +57,6 @@ class OptimizeLinearsUniqueRefPairs(LayerwiseOperation):
         return final_gather
 
     def __call__(self, batch: int, layer_id: str, layer: Layer) -> Layer:
-        if layer_id == "l1_embed__wa":
-            # TODO remove
-            pass
-
         match layer:
             case Layer(base=InputLayerBase(input=input)):
                 # nothing to do

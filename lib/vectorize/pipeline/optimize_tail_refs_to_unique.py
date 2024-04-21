@@ -68,7 +68,7 @@ class OptimizeTailRefsToUniqueNoOrdRemap(LayerwiseOperation):
             case _:
                 assert False, f"{aggregate}"
 
-    def _apply_to_target(self, batch: int, layer: Layer, target: Refs | GenericGather):
+    def _apply_to_target(self, batch: int, layer: Layer, target: Refs | GenericGather | GatheredLayers):
         grouper = build_grouper_for_aggregate(layer.aggregate)
         transform = SimpleUniqueRefsMappableTransform(grouper)
         if remap_refs(self._counts, batch, target, transform):
@@ -83,7 +83,7 @@ class OptimizeTailRefsToUniqueNoOrdRemap(LayerwiseOperation):
 
         match layer:
             case Layer(
-                base=InputLayerBase(input=Refs() as input),
+                base=InputLayerBase(input=input),
             ):
                 self._apply_to_target(batch, layer, input)
             case Layer(

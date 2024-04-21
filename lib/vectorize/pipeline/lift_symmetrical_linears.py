@@ -1,4 +1,6 @@
 import warnings
+from collections.abc import Sequence
+from typing import TypeVar
 
 import numpy as np
 
@@ -12,17 +14,28 @@ from lib.vectorize.model.layer import DimensionLift, DimensionLifts, lifts_dimen
 from lib.vectorize.pipeline.compute_layer_counts import ComputeLayerCounts
 from lib.vectorize.pipeline.layerwise import LayerwiseOperation
 
+_TSeq = TypeVar("_TSeq", list, Refs)
+
 
 class LiftSymmetricalLinears(LayerwiseOperation):
     def __init__(self, network: VectorizedLayerNetwork) -> None:
         self.network = network
         self._counts = ComputeLayerCounts(network)
 
-    def _get_refs(self, input: Refs) -> np.ndarray:
+    def _get_refs_as_numpy(self, input: Refs) -> np.ndarray:
         return np.stack([input.types, input.layer_ids, input.ordinals], axis=1)
 
-    def _detect_dim_lift(self, refs: Refs, preferred_period: int | None) -> DimensionLift | None:
-        arr = self._get_refs(refs)
+    def _detect_dim_lift(self, refs: GatheredLayers | Refs, preferred_period: int | None) -> DimensionLift | None:
+        match refs:
+            case Refs():
+                arr = self._get_refs_as_numpy(refs)
+            case GatheredLayers(gather=GenericGather(ordinals)):
+                arr = np.array(ordinals)
+            case GatheredLayers(gather=NoopGather()):
+                return None
+            case _:
+                raise ValueError(refs.gather)
+
         if preferred_period is not None:
             out_period = detect_repeating_K_sequence_in_list(arr, period=preferred_period, allow_last_incomplete=False)
             if out_period is not None:
@@ -39,7 +52,7 @@ class LiftSymmetricalLinears(LayerwiseOperation):
 
         return None
 
-    def _get_dim_lifted_refs(self, refs: Refs, dim_lift: DimensionLift):
+    def _get_dim_lifted_refs(self, refs: _TSeq, dim_lift: DimensionLift) -> _TSeq:
         match dim_lift:
             case (period, -1):
                 refs = refs[:: len(refs) // period]
@@ -50,17 +63,35 @@ class LiftSymmetricalLinears(LayerwiseOperation):
 
         return refs
 
+    def _get_dim_lifted_input(self, input: Input, dim_lift: DimensionLift) -> Input:
+        match input:
+            case Refs():
+                return self._get_dim_lifted_refs(input, dim_lift)
+            case GatheredLayers(refs=refs, gather=GenericGather(ordinals)):
+                return GatheredLayers(refs=refs, gather=GenericGather(self._get_dim_lifted_refs(ordinals, dim_lift)))
+            case _:
+                raise ValueError(input)
+
+    def _input_to_refs(self, input: Input) -> Sequence:
+        match input:
+            case Refs():
+                return input
+            case GatheredLayers(gather=GenericGather(ordinals)):
+                return ordinals
+            case _:
+                raise ValueError(input)
+
     def _simplify(
         self,
         batch_id: int,
         base: LinearLayerBase | LinearGatherLayerBase,
-        input: Refs,
-        weight: Refs,
+        input: Input,
+        weight: Input,
         preferred_period: int | None,
         existing_lifts: DimensionLifts,
     ):
-        input_count = self._counts.compute_refs_count(input)
-        weight_count = self._counts.compute_refs_count(weight)
+        input_count = self._counts.compute_input_count(batch_id, input)
+        weight_count = self._counts.compute_input_count(batch_id, weight)
 
         if existing_lifts is not None:
             i_dim_lift, w_dim_lift = existing_lifts
@@ -82,8 +113,8 @@ class LiftSymmetricalLinears(LayerwiseOperation):
 
         expected_count = self._counts.compute_linear_count(batch_id, input, weight, existing_lifts)
 
-        input_lifted = self._get_dim_lifted_refs(input, i_dim_lift) if i_dim_lift is not None else input
-        weight_lifted = self._get_dim_lifted_refs(weight, w_dim_lift) if w_dim_lift is not None else weight
+        input_lifted = self._get_dim_lifted_input(input, i_dim_lift) if i_dim_lift is not None else input
+        weight_lifted = self._get_dim_lifted_input(weight, w_dim_lift) if w_dim_lift is not None else weight
 
         if i_dim_lift is not None and w_dim_lift is not None and not lifts_dimension_match((i_dim_lift, w_dim_lift)):
             # try both
@@ -113,7 +144,12 @@ class LiftSymmetricalLinears(LayerwiseOperation):
             # can only do one or the other
             if input_lifted_count == expected_count and weight_lifted_count == expected_count:
                 # must choose the cheaper one of the two
-                if len(input_lifted) + len(weight) <= len(input) + len(weight_lifted):
+                input_refs = self._input_to_refs(input)
+                weight_refs = self._input_to_refs(weight)
+                input_lifted_refs = self._input_to_refs(input_lifted)
+                weight_lifted_refs = self._input_to_refs(weight_lifted)
+
+                if len(input_lifted_refs) + len(weight_refs) <= len(input_refs) + len(weight_lifted_refs):
                     # input
                     w_dim_lift = None
                 else:
@@ -144,16 +180,20 @@ class LiftSymmetricalLinears(LayerwiseOperation):
                 pass
             case Layer(
                 base=(
-                    LinearLayerBase(input=Refs() as input, weight=Refs() as weight, lifts=lifts)
-                    | LinearGatherLayerBase(input=Refs() as input, weight=Refs() as weight, lifts=lifts)
+                    LinearLayerBase(input=input, weight=weight, lifts=lifts)
+                    | LinearGatherLayerBase(
+                        input=input, weight=weight, lifts=lifts
+                    )
                 ) as base,
                 aggregate=FixedCountReduce(period=period),
             ):
                 self._simplify(batch, base, input, weight, preferred_period=period, existing_lifts=lifts)
             case Layer(
                 base=(
-                    LinearLayerBase(input=Refs() as input, weight=Refs() as weight, lifts=lifts)
-                    | LinearGatherLayerBase(input=Refs() as input, weight=Refs() as weight, lifts=lifts)
+                    LinearLayerBase(input=input, weight=weight, lifts=lifts)
+                    | LinearGatherLayerBase(
+                        input=input, weight=weight, lifts=lifts
+                    )
                 ) as base
             ):
                 self._simplify(batch, base, input, weight, preferred_period=None, existing_lifts=lifts)
