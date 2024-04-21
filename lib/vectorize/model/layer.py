@@ -70,6 +70,16 @@ def lifts_dimension_match(lifts: DimensionLifts) -> bool:
     return _get_lift_dimension(a) == _get_lift_dimension(b)
 
 
+def get_lifts_period(lifts: DimensionLifts) -> int | None:
+    match lifts:
+        case ((-1, a), (-1, b)) if a == b:
+            return a
+        case ((a, -1), (b, -1)) if a == b:
+            return a
+
+    return None
+
+
 class LinearLayerBase:
     __slots__ = ("input", "weight", "lifts")
     __repr__ = repr_slots

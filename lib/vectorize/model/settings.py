@@ -1,8 +1,9 @@
 from dataclasses import dataclass
 from typing import Literal
 
-LinearsPadForSymmetriesOption = Literal["never", "by_count", "always", "always_full", "always_inputs_only",
-"always_weights_only"]
+LinearsPadForSymmetriesOption = Literal[
+    "never", "by_count", "always", "always_full", "always_inputs_only", "always_weights_only"
+]
 
 
 @dataclass
@@ -23,5 +24,7 @@ class VectorizeSettings:
     optimize_single_use_gathers_before_symmetries: bool = False
 
     optimize_single_use_gathers_aggressive_max_chain_length: int | Literal["unlimited"] = 0
+
+    optimize_single_use_gathers_aggressive_through_symmetries: bool = True
 
     merge_trivial_layer_concats: bool = True

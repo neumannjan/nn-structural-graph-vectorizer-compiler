@@ -26,11 +26,13 @@ if __name__ == "__main__":
     v_settings.optimize_single_use_gathers = True
     v_settings.merge_trivial_layer_concats = True
 
-    v_settings.optimize_single_use_gathers_before_symmetries = True
-    v_settings.optimize_single_use_gathers_aggressive_max_chain_length = 'unlimited'
+    v_settings.optimize_single_use_gathers_before_symmetries = False
 
-    # dataset = MyMutagenesis(n_settings, "simple", "original")
-    dataset = MyTUDataset(n_settings, "mutag", "gcn")
+    v_settings.optimize_single_use_gathers_aggressive_max_chain_length = 0
+    v_settings.optimize_single_use_gathers_aggressive_through_symmetries = True
+
+    dataset = MyMutagenesis(n_settings, "simple", "original")
+    # dataset = MyTUDataset(n_settings, "mutag", "gcn")
 
     print("Dataset:", dataset)
     print("Device:", device)

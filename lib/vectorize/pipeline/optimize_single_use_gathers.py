@@ -2,6 +2,7 @@ from collections.abc import Sequence
 from typing import Iterable, Iterator, Literal, TypeVar
 
 from lib.vectorize.model import *
+from lib.vectorize.model.layer import get_lifts_period
 from lib.vectorize.pipeline.compute_layer_counts import ComputeLayerCounts
 from lib.vectorize.pipeline.utils.chain_graph import ComputeChainGraph
 from lib.vectorize.pipeline.utils.gather import combine_gathers
@@ -39,12 +40,29 @@ def iter_lookahead(it: Iterable[_T]) -> Iterable[tuple[_T, _T | None]]:
         yield v, None
 
 
+def _get_aggregate_period(aggregate: Reduce) -> int | None:
+    match aggregate:
+        case Noop():
+            return 1
+        case FixedCountReduce(period=period):
+            return period
+        case UnevenReduce():
+            return None
+        case _:
+            raise ValueError(aggregate)
+
+
 class OptimizeSingleUseGathers:
     def __init__(
-        self, network: VectorizedLayerNetwork, max_chain_length: int | Literal["unlimited"], debug: bool
+        self,
+        network: VectorizedLayerNetwork,
+        max_chain_length: int | Literal["unlimited"],
+        propagate_through_symmetries: bool,
+        debug: bool,
     ) -> None:
         self.network = network
         self.max_chain_length = float("inf") if max_chain_length == "unlimited" else max_chain_length
+        self.propagate_through_symmetries = propagate_through_symmetries
         self.debug = debug
 
         self._compute_chain_graph = ComputeChainGraph(network, types=(LayerRefs.TYPE_LAYER, LayerRefs.TYPE_FACT))
@@ -160,6 +178,7 @@ class OptimizeSingleUseGathers:
         input: GatheredLayers,
         weight: GatheredLayers,
         ordinals: list[int],
+        total_count: int | None = None,
     ):
         input_count = self._counts.compute_input_count(batch, input)
         weight_count = self._counts.compute_input_count(batch, weight)
@@ -167,11 +186,20 @@ class OptimizeSingleUseGathers:
         assert isinstance(input.gather, (GenericGather, NoopGather))
         assert isinstance(weight.gather, (GenericGather, NoopGather))
 
-        assert input_count == weight_count
+        if total_count is None:
+            assert input_count == weight_count
+            total_count = input_count
 
-        input.gather = combine_gathers(input.gather, GenericGather(ordinals))
-        weight.gather = combine_gathers(weight.gather, GenericGather(ordinals))
-        base.gather = NoopGather()
+        _any = False
+        if input_count == total_count:
+            input.gather = combine_gathers(input.gather, GenericGather(ordinals))
+            _any = True
+        if weight_count == total_count:
+            weight.gather = combine_gathers(weight.gather, GenericGather(ordinals))
+            _any = True
+
+        if _any:
+            base.gather = NoopGather()
 
     def _reorder_layer_output(
         self, batch: int, layer: Layer, ordinals2: list[int], chain_i: int, upcoming_ref: tuple[int, str] | None
@@ -183,14 +211,62 @@ class OptimizeSingleUseGathers:
             case Layer(base=InputLayerBase(input=GatheredLayers(refs=[_], gather=NoopGather()), aggregate=Noop())):
                 return "propagate"
             case Layer(
+                base=LinearGatherLayerBase(
+                    input=GatheredLayers() as input, weight=GatheredLayers() as weight, lifts=lifts, gather=NoopGather()
+                ) as base,
+                aggregate=aggregate,
+            ):
+                layer.base = LinearLayerBase(input=input, weight=weight, lifts=lifts)
+                return self._reorder_layer_output(batch, layer, ordinals2, chain_i, upcoming_ref)
+            case Layer(
                 base=(
                     LinearLayerBase(input=GatheredLayers(refs=[ref2], gather=NoopGather()) as this, lifts=None)
                 ) as base,
                 aggregate=Noop(),
             ) if upcoming_ref == ref2:
                 return "propagate"
-            case Layer(base=LinearLayerBase(lifts=lifts) | LinearGatherLayerBase(lifts=lifts)) if lifts is not None:
-                return "inapplicable"
+            case Layer(
+                base=LinearLayerBase(
+                    input=GatheredLayers(refs=refs_a, gather=gather_a) as input,
+                    weight=GatheredLayers(refs=refs_b, gather=gather_b) as weight,
+                    lifts=lifts,
+                ) as base,
+                aggregate=aggregate,
+            ) if self.propagate_through_symmetries and lifts is not None and _get_aggregate_period(
+                aggregate
+            ) == get_lifts_period(lifts):
+                assert isinstance(gather_a, (GenericGather, NoopGather))
+                assert isinstance(gather_b, (GenericGather, NoopGather))
+
+                input_count = self._counts.compute_input_count(batch, input)
+                weight_count = self._counts.compute_input_count(batch, weight)
+
+                layer_count = self._counts.compute_linear_count(batch, input, weight, lifts)
+
+                variants: list[
+                    tuple[
+                        GenericGather | NoopGather,
+                        LayerRefs | tuple[Input, Input],
+                        GatheredLayers | LinearGatherLayerBase,
+                    ]
+                ] = []
+
+                if input_count == layer_count:
+                    variants.append((gather_a, refs_a, input))
+                if weight_count == layer_count:
+                    variants.append((gather_b, refs_b, weight))
+
+                if len(variants) == 0:
+                    return "inapplicable"
+
+                return self._do_reorder_layer_output(
+                    batch,
+                    *variants[0],
+                    variants[1:],
+                    aggregate,
+                    ordinals2,
+                    chain_i,
+                )
             case Layer(
                 base=(
                     LinearLayerBase(
@@ -244,16 +320,40 @@ class OptimizeSingleUseGathers:
                 )
             case Layer(
                 base=LinearGatherLayerBase(
+                    input=GatheredLayers() as input, weight=GatheredLayers() as weight, lifts=lifts, gather=gather
+                ) as base,
+                aggregate=aggregate,
+            ) if self.propagate_through_symmetries and lifts is not None and _get_aggregate_period(
+                aggregate
+            ) == get_lifts_period(lifts):
+                assert isinstance(gather, GenericGather)
+
+                out = self._do_reorder_layer_output(
+                    batch,
+                    gather,
+                    (input, weight),
+                    base,
+                    (),
+                    aggregate,
+                    ordinals2,
+                    chain_i,
+                )
+
+                if out in ("found", "found_free"):
+                    assert isinstance(base.gather, GenericGather)
+                    layer_count = self._counts.compute_linear_count(batch, input, weight, lifts)
+                    self._redistribute_linear_gather_layer_back(
+                        batch, base, input, weight, base.gather.ordinals, total_count=layer_count
+                    )
+
+                return out
+            case Layer(
+                base=LinearGatherLayerBase(
                     input=GatheredLayers() as input, weight=GatheredLayers() as weight, lifts=None, gather=gather
                 ) as base,
                 aggregate=aggregate,
             ):
-                assert isinstance(gather, (GenericGather, NoopGather))
-
-                match gather:
-                    case NoopGather():
-                        layer.base = LinearLayerBase(input=input, weight=weight, lifts=None)
-                        return self._reorder_layer_output(batch, layer, ordinals2, chain_i, upcoming_ref)
+                assert isinstance(gather, GenericGather)
 
                 out = self._do_reorder_layer_output(
                     batch,
@@ -271,6 +371,8 @@ class OptimizeSingleUseGathers:
                     self._redistribute_linear_gather_layer_back(batch, base, input, weight, base.gather.ordinals)
 
                 return out
+            case Layer(base=LinearLayerBase(lifts=lifts) | LinearGatherLayerBase(lifts=lifts)) if lifts is not None:
+                return "inapplicable"
 
         return "inapplicable"
 
@@ -328,6 +430,8 @@ class OptimizeSingleUseGathers:
                                 if reorder_result != "found_free":
                                     i += 1
                                 old_ref_to_layer = None
+                            else:
+                                i = 0
                         elif t == LayerRefs.TYPE_LAYER:
                             reorder_result = self._reorder_layer_output(
                                 batch, layers[l], ordinals, chain_i=i, upcoming_ref=upcoming_ref
@@ -343,6 +447,7 @@ class OptimizeSingleUseGathers:
                                 case "ignore" | "inapplicable":
                                     if reorder_result == "ignore":
                                         print(f"IGNORING (chain_i={i}, max_chain_length={self.max_chain_length})")
+                                    i = 0
                                     old_ref_to_layer = None
                                 case "propagate":
                                     old_ref_to_layer = ref_to_layer
@@ -356,9 +461,16 @@ class OptimizeSingleUseGathers:
             self._for_layers(batch_id, batch.layers)
 
 
-def build_optimize_single_use_gathers(max_chain_length: int | Literal["unlimited"], debug: bool):
+def build_optimize_single_use_gathers(
+    max_chain_length: int | Literal["unlimited"], propagate_through_symmetries: bool, debug: bool
+):
     def optimize_single_use_gathers(network: VectorizedLayerNetwork):
-        OptimizeSingleUseGathers(network, max_chain_length=max_chain_length, debug=debug).optimize_single_use_gathers()
+        OptimizeSingleUseGathers(
+            network,
+            max_chain_length=max_chain_length,
+            propagate_through_symmetries=propagate_through_symmetries,
+            debug=debug,
+        ).optimize_single_use_gathers()
         return network
 
     return optimize_single_use_gathers

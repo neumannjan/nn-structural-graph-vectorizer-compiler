@@ -115,8 +115,8 @@ def create_vectorized_network_compiler(
         + Layerwise(ClearOrdinalsMap)
         + Layerwise(ConcatInputsLayers)  # <- gathers are expected starting here
         + _debug
-        + Layerwise(MarkCompilableLayers)
-        + _debug
+        # + Layerwise(MarkCompilableLayers)
+        # + _debug
     )
 
     if settings.optimize_single_use_gathers and settings.optimize_single_use_gathers_before_symmetries:
@@ -124,6 +124,7 @@ def create_vectorized_network_compiler(
             PIPE  #
             + build_optimize_single_use_gathers(
                 max_chain_length=settings.optimize_single_use_gathers_aggressive_max_chain_length,
+                propagate_through_symmetries=settings.optimize_single_use_gathers_aggressive_through_symmetries,
                 debug=debug_prints,
             )
             + compute_layer_counts
@@ -147,6 +148,7 @@ def create_vectorized_network_compiler(
             PIPE  #
             + build_optimize_single_use_gathers(
                 max_chain_length=settings.optimize_single_use_gathers_aggressive_max_chain_length,
+                propagate_through_symmetries=settings.optimize_single_use_gathers_aggressive_through_symmetries,
                 debug=debug_prints,
             )
             + compute_layer_counts
