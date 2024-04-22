@@ -11,6 +11,7 @@ from lib.vectorize.pipeline.compute_layer_shapes import compute_layer_shapes
 from lib.vectorize.pipeline.concat_inputs_layers import ConcatInputsLayers, concat_inputs_layers
 from lib.vectorize.pipeline.dissolve_identity_layers import dissolve_identity_layers, predissolve_identity_layers
 from lib.vectorize.pipeline.drop_linear_gather_layer_base import drop_linear_gather_layer_base
+from lib.vectorize.pipeline.drop_redundant_views import drop_redundant_views
 from lib.vectorize.pipeline.drop_unused_layers import drop_unused_layers
 from lib.vectorize.pipeline.give_unique_names import give_unique_names
 from lib.vectorize.pipeline.iso_compress import ForwardPassRunner, build_iso_compression_factory
@@ -229,6 +230,8 @@ def create_vectorized_network_compiler(
         + to_seq_network
         + _debug
         + join_simple_layer_chains
+        + _debug
+        + drop_redundant_views
         + _debug
     )
 
