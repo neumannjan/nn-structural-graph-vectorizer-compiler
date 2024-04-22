@@ -106,6 +106,8 @@ def create_vectorized_network_compiler(
         + _debug
         + compute_layer_counts
         + _debug
+        + Layerwise(SimplifyPureUnitFactLinears)
+        + _debug
     )
 
     if settings.iso_compression:
@@ -120,12 +122,6 @@ def create_vectorized_network_compiler(
             + compute_layer_counts
             + _debug
         )
-
-    build_vectorized_network += (
-        PIPE  #
-        + Layerwise(SimplifyPureUnitFactLinears)
-        + _debug
-    )
 
     # ------
 
