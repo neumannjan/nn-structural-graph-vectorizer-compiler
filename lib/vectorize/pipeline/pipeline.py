@@ -14,6 +14,7 @@ from lib.vectorize.pipeline.join_simple_layer_chains import join_simple_layer_ch
 from lib.vectorize.pipeline.layerwise import Layerwise, LayerwisePrint
 from lib.vectorize.pipeline.lift_symmetrical_linears import LiftSymmetricalLinears
 from lib.vectorize.pipeline.materialize_unit_transforms import materialize_unit_transforms
+from lib.vectorize.pipeline.merge_same_value_facts import merge_same_value_facts
 from lib.vectorize.pipeline.merge_trivial_layer_concats import merge_trivial_layer_concats
 from lib.vectorize.pipeline.merge_unit_facts import merge_unit_facts
 from lib.vectorize.pipeline.optimize_linears_pad_for_symmetries import build_optimize_linears_pad_for_symmetries
@@ -71,6 +72,7 @@ def create_vectorized_network_compiler(
         + build_initial_network
         + _debug
         + merge_unit_facts
+        + merge_same_value_facts
         # + drop_unused_neurons  # TODO
         # + transpose_fixed_count_linears  # <- optional
         # + extract_unit_ordinals
