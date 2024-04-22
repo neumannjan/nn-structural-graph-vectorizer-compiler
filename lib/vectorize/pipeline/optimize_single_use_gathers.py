@@ -136,12 +136,12 @@ class OptimizeSingleUseGathers:
         batch: int,
         gather: GenericGather | NoopGather,
         refs: LayerRefs | tuple[Input, Input],
-        container: GatheredLayers | LinearGatherLayerBase,
+        container: GatheredLayers,
         other: Iterable[
             tuple[
                 GenericGather | NoopGather,
                 LayerRefs | tuple[Input, Input],
-                GatheredLayers | LinearGatherLayerBase,
+                GatheredLayers,
             ]
         ],
         aggregate: Reduce,
@@ -171,36 +171,6 @@ class OptimizeSingleUseGathers:
         _reorder_aggregate(aggregate, ordinals2)
         return "found_free" if is_free else "found"
 
-    def _redistribute_linear_gather_layer_back(
-        self,
-        batch: int,
-        base: LinearGatherLayerBase,
-        input: GatheredLayers,
-        weight: GatheredLayers,
-        ordinals: list[int],
-        total_count: int | None = None,
-    ):
-        input_count = self._counts.compute_input_count(batch, input)
-        weight_count = self._counts.compute_input_count(batch, weight)
-
-        assert isinstance(input.gather, (GenericGather, NoopGather))
-        assert isinstance(weight.gather, (GenericGather, NoopGather))
-
-        if total_count is None:
-            assert input_count == weight_count
-            total_count = input_count
-
-        _any = False
-        if input_count == total_count:
-            input.gather = combine_gathers(input.gather, GenericGather(ordinals))
-            _any = True
-        if weight_count == total_count:
-            weight.gather = combine_gathers(weight.gather, GenericGather(ordinals))
-            _any = True
-
-        if _any:
-            base.gather = NoopGather()
-
     def _reorder_layer_output(
         self, batch: int, layer: Layer, ordinals2: list[int], chain_i: int, upcoming_ref: tuple[int, str] | None
     ) -> Literal["ignore", "found_free", "found", "propagate", "inapplicable"]:
@@ -208,16 +178,10 @@ class OptimizeSingleUseGathers:
             return "inapplicable"
 
         match layer:
+            case Layer(base=LinearGatherLayerBase()):
+                raise ValueError(layer.base)
             case Layer(base=InputLayerBase(input=GatheredLayers(refs=[_], gather=NoopGather()), aggregate=Noop())):
                 return "propagate"
-            case Layer(
-                base=LinearGatherLayerBase(
-                    input=GatheredLayers() as input, weight=GatheredLayers() as weight, lifts=lifts, gather=NoopGather()
-                ) as base,
-                aggregate=aggregate,
-            ):
-                layer.base = LinearLayerBase(input=input, weight=weight, lifts=lifts)
-                return self._reorder_layer_output(batch, layer, ordinals2, chain_i, upcoming_ref)
             case Layer(
                 base=(
                     LinearLayerBase(input=GatheredLayers(refs=[ref2], gather=NoopGather()) as this, lifts=None)
@@ -247,7 +211,7 @@ class OptimizeSingleUseGathers:
                     tuple[
                         GenericGather | NoopGather,
                         LayerRefs | tuple[Input, Input],
-                        GatheredLayers | LinearGatherLayerBase,
+                        GatheredLayers,
                     ]
                 ] = []
 
@@ -318,60 +282,7 @@ class OptimizeSingleUseGathers:
                     ordinals2,
                     chain_i,
                 )
-            case Layer(
-                base=LinearGatherLayerBase(
-                    input=GatheredLayers() as input, weight=GatheredLayers() as weight, lifts=lifts, gather=gather
-                ) as base,
-                aggregate=aggregate,
-            ) if self.propagate_through_symmetries and lifts is not None and _get_aggregate_period(
-                aggregate
-            ) == get_lifts_period(lifts):
-                assert isinstance(gather, GenericGather)
-
-                out = self._do_reorder_layer_output(
-                    batch,
-                    gather,
-                    (input, weight),
-                    base,
-                    (),
-                    aggregate,
-                    ordinals2,
-                    chain_i,
-                )
-
-                if out in ("found", "found_free"):
-                    assert isinstance(base.gather, GenericGather)
-                    layer_count = self._counts.compute_linear_count(batch, input, weight, lifts)
-                    self._redistribute_linear_gather_layer_back(
-                        batch, base, input, weight, base.gather.ordinals, total_count=layer_count
-                    )
-
-                return out
-            case Layer(
-                base=LinearGatherLayerBase(
-                    input=GatheredLayers() as input, weight=GatheredLayers() as weight, lifts=None, gather=gather
-                ) as base,
-                aggregate=aggregate,
-            ):
-                assert isinstance(gather, GenericGather)
-
-                out = self._do_reorder_layer_output(
-                    batch,
-                    gather,
-                    (input, weight),
-                    base,
-                    (),
-                    aggregate,
-                    ordinals2,
-                    chain_i,
-                )
-
-                if out in ("found", "found_free"):
-                    assert isinstance(base.gather, GenericGather)
-                    self._redistribute_linear_gather_layer_back(batch, base, input, weight, base.gather.ordinals)
-
-                return out
-            case Layer(base=LinearLayerBase(lifts=lifts) | LinearGatherLayerBase(lifts=lifts)) if lifts is not None:
+            case Layer(base=LinearLayerBase(lifts=lifts)) if lifts is not None:
                 return "inapplicable"
 
         return "inapplicable"

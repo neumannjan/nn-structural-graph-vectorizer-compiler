@@ -1,4 +1,4 @@
-from typing import OrderedDict, overload
+from typing import Iterator, OrderedDict, overload
 
 from lib.model.ops import ReductionDef
 from lib.vectorize.model.gather import (
@@ -111,6 +111,9 @@ class OperationSeq:
             )
             + ")"
         )
+
+    def __iter__(self) -> Iterator[Operation]:
+        return iter(self.operations)
 
 
 class OpSeqBatch:
