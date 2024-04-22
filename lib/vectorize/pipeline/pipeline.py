@@ -1,15 +1,18 @@
+import copy
 from typing import Callable, TypeVar
 
 from lib.sources.base import Network
 from lib.vectorize.model import VectorizedOpSeqNetwork
+from lib.vectorize.model.network import VectorizedLayerNetwork
 from lib.vectorize.model.settings import VectorizeSettings
 from lib.vectorize.pipeline.build_initial_network import build_initial_network
 from lib.vectorize.pipeline.compute_layer_counts import ComputeLayerCounts, compute_layer_counts
 from lib.vectorize.pipeline.compute_layer_shapes import compute_layer_shapes
-from lib.vectorize.pipeline.concat_inputs_layers import ConcatInputsLayers
+from lib.vectorize.pipeline.concat_inputs_layers import ConcatInputsLayers, concat_inputs_layers
 from lib.vectorize.pipeline.dissolve_identity_layers import dissolve_identity_layers, predissolve_identity_layers
 from lib.vectorize.pipeline.drop_unused_layers import drop_unused_layers
 from lib.vectorize.pipeline.give_unique_names import give_unique_names
+from lib.vectorize.pipeline.iso_compress import ForwardPassRunner, build_iso_compression_factory
 from lib.vectorize.pipeline.join_simple_layer_chains import join_simple_layer_chains
 from lib.vectorize.pipeline.layerwise import Layerwise, LayerwisePrint
 from lib.vectorize.pipeline.lift_symmetrical_linears import LiftSymmetricalLinears
@@ -23,7 +26,6 @@ from lib.vectorize.pipeline.optimize_single_use_gathers import (
     build_optimize_single_use_gathers,
 )
 from lib.vectorize.pipeline.optimize_tail_refs_to_unique import (
-    ClearOrdinalsMap,
     OptimizeTailRefsToUniqueNoOrdRemap,
     RemapOrdinals,
 )
@@ -55,8 +57,25 @@ def _create_printer(enabled: bool):
     return PIPE
 
 
+def _deepcopy_vectorized(network: VectorizedLayerNetwork) -> VectorizedLayerNetwork:
+    return copy.deepcopy(network)
+
+
+_simple_tail = (
+    PIPE
+    + _deepcopy_vectorized
+    + compute_layer_counts
+    + compute_layer_shapes
+    + concat_inputs_layers
+    + materialize_unit_transforms
+    + drop_unused_layers
+    + give_unique_names
+    + to_seq_network
+)
+
+
 def create_vectorized_network_compiler(
-    settings: VectorizeSettings, debug_prints: bool = False
+    settings: VectorizeSettings, forward_pass_runner: ForwardPassRunner, debug_prints: bool = False
 ) -> Callable[[Network], VectorizedOpSeqNetwork]:
     _debug = _create_printer(debug_prints)
 
@@ -85,9 +104,26 @@ def create_vectorized_network_compiler(
         + _debug
         + build_separate_input_refs(indexer_factory)
         + _debug
-        + Layerwise(SimplifyPureUnitFactLinears)
-        + _debug
         + compute_layer_counts
+        + _debug
+    )
+
+    if settings.iso_compression:
+        build_vectorized_network += (
+            PIPE  #
+            + Layerwise(
+                build_iso_compression_factory(_simple_tail, forward_pass_runner),
+            )
+            + Layerwise(
+                RemapOrdinals,
+            )
+            + compute_layer_counts
+            + _debug
+        )
+
+    build_vectorized_network += (
+        PIPE  #
+        + Layerwise(SimplifyPureUnitFactLinears)
         + _debug
     )
 
@@ -127,7 +163,6 @@ def create_vectorized_network_compiler(
         PIPE  #
         + remaps
         + _debug
-        + Layerwise(ClearOrdinalsMap)
         + Layerwise(ConcatInputsLayers)  # <- gathers are expected starting here
         + _debug
         # + Layerwise(MarkCompilableLayers)

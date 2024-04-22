@@ -17,6 +17,8 @@ class VectorizeSettings:
 
     linears_pad_for_symmetries: LinearsPadForSymmetriesOption = "by_count"
 
+    iso_compression: bool = True
+
     optimize_tail_refs: bool = True
 
     optimize_single_use_gathers: bool = True

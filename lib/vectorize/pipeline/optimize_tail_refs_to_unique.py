@@ -41,14 +41,10 @@ class RemapOrdinals(LayerwiseOperation):
                 assert False, f"{layer.base}"
         return layer
 
-
-class ClearOrdinalsMap(LayerwiseOperation):
-    def __init__(self, network: VectorizedLayerNetwork) -> None:
-        self.network = network
-
-    def __call__(self, batch: int, layer_id: str, layer: Layer) -> Layer:
-        layer.ord_map = {}
-        return layer
+    def _after_all(self):
+        for batch in self.network.batches.values():
+            for layer in batch.layers.values():
+                layer.ord_map = {}
 
 
 class OptimizeTailRefsToUniqueNoOrdRemap(LayerwiseOperation):

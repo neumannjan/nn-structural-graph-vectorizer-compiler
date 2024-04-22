@@ -10,3 +10,6 @@ class TorchModuleSettings:
     reduce_method: TorchReduceMethod = "segment_csr"
 
     compilation: Compilation = "none"
+
+
+TORCH_SETTINGS_DEFAULT = TorchModuleSettings()

@@ -8,6 +8,12 @@ class LayerwiseOperation(ABC):
     @abstractmethod
     def __call__(self, batch: int, layer_id: str, layer: Layer) -> Layer: ...
 
+    def _before_all(self):
+        pass
+
+    def _after_all(self):
+        pass
+
 
 class _LayerwiseOpFactory(Protocol):
     def __call__(self, network: VectorizedLayerNetwork) -> LayerwiseOperation: ...
@@ -36,6 +42,9 @@ class Layerwise:
             f if isinstance(f, LayerwiseOperation) else f(network) for f in self._op_factories
         ]
 
+        for op in ops:
+            op._before_all()
+
         for bid, batch in network.batches.items():
             for lid, layer in batch.layers.items():
                 try:
@@ -48,6 +57,9 @@ class Layerwise:
                         batch.layers[lid] = out_layer
                 except Exception as e:
                     raise Exception(f"Exception in layer {lid} (batch {bid})") from e
+
+        for op in ops:
+            op._after_all()
 
         return network
 

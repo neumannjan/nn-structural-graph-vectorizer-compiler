@@ -185,6 +185,27 @@ class SimpleUniqueRefsMappableTransform(SimpleUniqueRefsTransform):
         return self._ord_map
 
 
+class GatherRefsTransform(RefsTransform):
+    def __init__(self, grouper: SeqGrouper, ordinals: list[int]) -> None:
+        self.grouper = grouper
+        self.ordinals = ordinals
+        self._last_groups: list[tuple] | None = None
+
+    def __call__(self, refs) -> list[tuple[int, str, int]] | list[int] | None:
+        ref_groups = list(self.grouper(refs))
+        ref_groups_filtered = [ref_groups[o] for o in self.ordinals]
+
+        refs_out = flatten_ref_groups(ref_groups_filtered)
+        self._last_groups = ref_groups_filtered
+        return refs_out
+
+    @property
+    def last_groups(self):
+        if self._last_groups is None:
+            raise ValueError()
+        return self._last_groups
+
+
 # assignment
 
 

@@ -1,3 +1,6 @@
+from typing import OrderedDict
+
+import numpy as np
 import torch
 
 from lib.engines.torch.dim_reduce import build_dim_reduce_module
@@ -12,7 +15,7 @@ from lib.engines.torch.linear import LinearModule
 from lib.engines.torch.network import LayerModule, NetworkModule, NetworkParams
 from lib.engines.torch.refs import ConcatRefsModule, RetrieveRefModule
 from lib.engines.torch.scatter import build_scatter_module, counts_to_index
-from lib.engines.torch.settings import TorchModuleSettings
+from lib.engines.torch.settings import TORCH_SETTINGS_DEFAULT, TorchModuleSettings
 from lib.engines.torch.transform import build_transformation
 from lib.engines.torch.view import ViewModule
 from lib.vectorize.model import *
@@ -111,6 +114,7 @@ def _for_batch(
     batch_reference: OpSeqBatch,
     debug: bool,
     settings: TorchModuleSettings,
+    final_layer_only: bool = True,
 ) -> torch.nn.Module:
     modules: list[torch.nn.Module] = []
 
@@ -127,8 +131,10 @@ def _for_batch(
         modules.append(layer_module)
 
     assert isinstance(key, str)
-    # retrieve last layer ref at batch output
-    modules.append(RetrieveRefModule(key))
+
+    if final_layer_only:
+        # retrieve last layer ref at batch output
+        modules.append(RetrieveRefModule(key))
 
     if len(modules) == 0:
         return modules[0]
@@ -140,6 +146,7 @@ def build_torch_network(
     reference: VectorizedOpSeqNetwork,
     debug: bool,
     settings: TorchModuleSettings,
+    final_layer_only: bool = True,
 ) -> torch.nn.Module:
     params_module = _build_params_module(reference)
 
@@ -147,8 +154,30 @@ def build_torch_network(
 
     for i, (batch_id, batch_ref) in enumerate(reference.batches.items()):
         assert i == batch_id
-        batch_module = _for_batch(batch_ref, debug=debug, settings=settings)
-
+        batch_module = _for_batch(
+            batch_ref,
+            debug=debug,
+            settings=settings,
+            final_layer_only=final_layer_only,
+        )
         batch_modules.append(batch_module)
 
     return NetworkModule(params_module=params_module, batch_modules=batch_modules)
+
+
+def simple_forward_pass_runner(network: VectorizedOpSeqNetwork):
+    tnetwork = build_torch_network(network, debug=False, settings=TORCH_SETTINGS_DEFAULT, final_layer_only=False)
+
+    out: dict[int, dict[str, np.ndarray]] = {}
+
+    for batch_id in network.batches:
+        with torch.no_grad():
+            batch_out: dict[str, torch.Tensor] = tnetwork()
+
+        batch_out_np: OrderedDict[str, np.ndarray] = OrderedDict(
+            ((k, v.detach().cpu().numpy()) for k, v in batch_out.items())
+        )
+
+        out[batch_id] = batch_out_np
+
+    return out
