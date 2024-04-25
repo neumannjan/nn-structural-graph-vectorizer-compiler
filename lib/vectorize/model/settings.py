@@ -25,6 +25,8 @@ class VectorizeSettings:
 
     optimize_single_use_gathers_before_symmetries: bool = False
 
+    optimize_single_use_gathers_margin: int = 0
+
     optimize_single_use_gathers_aggressive_max_chain_length: int | Literal["unlimited"] = 0
 
     optimize_single_use_gathers_aggressive_through_symmetries: bool = True

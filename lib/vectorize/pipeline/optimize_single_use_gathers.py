@@ -5,7 +5,6 @@ from lib.vectorize.model import *
 from lib.vectorize.model.layer import get_lifts_period
 from lib.vectorize.pipeline.compute_layer_counts import ComputeLayerCounts
 from lib.vectorize.pipeline.utils.chain_graph import ComputeChainGraph
-from lib.vectorize.pipeline.utils.gather import combine_gathers
 from lib.vectorize.pipeline.utils.ref_groups import build_grouper_for_aggregate
 
 
@@ -56,12 +55,14 @@ class OptimizeSingleUseGathers:
     def __init__(
         self,
         network: VectorizedLayerNetwork,
+        margin: int,
         max_chain_length: int | Literal["unlimited"],
         propagate_through_symmetries: bool,
         debug: bool,
     ) -> None:
         self.network = network
         self.max_chain_length = float("inf") if max_chain_length == "unlimited" else max_chain_length
+        self.margin = margin
         self.propagate_through_symmetries = propagate_through_symmetries
         self.debug = debug
 
@@ -89,7 +90,7 @@ class OptimizeSingleUseGathers:
 
         count_old = self._counts.compute_facts_count(fact_layer.facts) if fact_layer.count is None else fact_layer.count
 
-        is_free = count_new <= count_old
+        is_free = count_new <= count_old + self.margin
 
         # Let's not do it and use the original.
         if not is_free and chain_i >= self.max_chain_length:
@@ -157,7 +158,7 @@ class OptimizeSingleUseGathers:
         gather_cnt = self._counts.compute_gather_count(refs_cnt, gather)
         gather_new_cnt = self._counts.compute_gather_count(refs_cnt, gather_new)
 
-        is_free = gather_new_cnt <= gather_cnt
+        is_free = gather_new_cnt <= gather_cnt + self.margin
 
         if not is_free and chain_i >= self.max_chain_length:
             return "ignore"
@@ -185,9 +186,7 @@ class OptimizeSingleUseGathers:
             case Layer(base=InputLayerBase(input=GatheredLayers(refs=[_], gather=NoopGather()), aggregate=Noop())):
                 return "propagate"
             case Layer(
-                base=(
-                    LinearLayerBase(input=GatheredLayers(refs=[ref2], gather=NoopGather()) as this, lifts=None)
-                ) as base,
+                base=(LinearLayerBase(input=GatheredLayers(refs=[ref2], gather=NoopGather()) as this, lifts=None)),
                 aggregate=Noop(),
             ) if upcoming_ref == ref2:
                 return "propagate"
@@ -196,7 +195,7 @@ class OptimizeSingleUseGathers:
                     input=GatheredLayers(refs=refs_a, gather=gather_a) as input,
                     weight=GatheredLayers(refs=refs_b, gather=gather_b) as weight,
                     lifts=lifts,
-                ) as base,
+                ),
                 aggregate=aggregate,
             ) if self.propagate_through_symmetries and lifts is not None and _get_aggregate_period(
                 aggregate
@@ -239,7 +238,7 @@ class OptimizeSingleUseGathers:
                         weight=GatheredLayers(refs=[ref2], gather=NoopGather()) as this,
                         lifts=None,
                     )
-                ) as base,
+                ),
                 aggregate=Noop(),
             ) if upcoming_ref == ref2:
                 return "propagate"
@@ -270,7 +269,7 @@ class OptimizeSingleUseGathers:
                     chain_i,
                 )
             case Layer(
-                base=InputLayerBase(input=GatheredLayers(refs=refs, gather=gather) as this) as base,
+                base=InputLayerBase(input=GatheredLayers(refs=refs, gather=gather) as this),
                 aggregate=aggregate,
             ):
                 assert isinstance(gather, (GenericGather, NoopGather))
@@ -377,11 +376,15 @@ class OptimizeSingleUseGathers:
 
 
 def build_optimize_single_use_gathers(
-    max_chain_length: int | Literal["unlimited"], propagate_through_symmetries: bool, debug: bool
+    margin: int,
+    max_chain_length: int | Literal["unlimited"],
+    propagate_through_symmetries: bool,
+    debug: bool,
 ):
     def optimize_single_use_gathers(network: VectorizedLayerNetwork):
         OptimizeSingleUseGathers(
             network,
+            margin=margin,
             max_chain_length=max_chain_length,
             propagate_through_symmetries=propagate_through_symmetries,
             debug=debug,

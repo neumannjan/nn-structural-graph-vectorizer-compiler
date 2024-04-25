@@ -31,6 +31,7 @@ if __name__ == "__main__":
     v_settings.optimize_single_use_gathers = True
     v_settings.optimize_single_use_gathers_before_symmetries = False
 
+    v_settings.optimize_single_use_gathers_margin = 0
     v_settings.optimize_single_use_gathers_aggressive_max_chain_length = 2
     v_settings.optimize_single_use_gathers_aggressive_through_symmetries = True
 
