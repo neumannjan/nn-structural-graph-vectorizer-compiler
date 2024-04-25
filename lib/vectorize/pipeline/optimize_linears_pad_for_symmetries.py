@@ -23,6 +23,13 @@ def _repeat(refs: Iterable[_T], repeats: int):
             yield ref
 
 
+def _extend_mirror(refs: Iterable[_T], repeats: int, transpose: bool):
+    if transpose:
+        return _interleave(refs, repeats)
+    else:
+        return _repeat(refs, repeats)
+
+
 def _extend(refs: Iterable[_T], total: int):
     head, refs = head_and_rest(refs)
 
@@ -39,7 +46,9 @@ def _extend(refs: Iterable[_T], total: int):
         i += 1
 
 
-def _extend_for_each(refs_uniq: Iterable[_T], unique_pairs: Collection[tuple[_T, _T]], total_each: int, key_axis: int):
+def _extend_for_each(
+    refs_uniq: Iterable[_T], unique_pairs: Collection[tuple[_T, _T]], total_each: int, key_axis: int, transpose: bool
+):
     iters = [
         (lambda ref: _extend((pair[1 - key_axis] for pair in unique_pairs if pair[key_axis] == ref), total=total_each))(
             ref
@@ -47,9 +56,14 @@ def _extend_for_each(refs_uniq: Iterable[_T], unique_pairs: Collection[tuple[_T,
         for ref in refs_uniq
     ]
 
-    for i in range(total_each):
+    if transpose:
         for it in iters:
-            yield next(it)
+            for i in range(total_each):
+                yield next(it)
+    else:
+        for i in range(total_each):
+            for it in iters:
+                yield next(it)
 
 
 _POS_WEIGHT_REFS = 0
@@ -67,9 +81,10 @@ def get_unique(values: Iterable[_T]) -> list[_T]:
 
 
 class OptimizeLinearsPadForSymmetries(LayerwiseOperation):
-    def __init__(self, network: VectorizedLayerNetwork, how: LinearsPadForSymmetriesOption) -> None:
+    def __init__(self, network: VectorizedLayerNetwork, how: LinearsPadForSymmetriesOption, transpose: bool) -> None:
         self.network = network
         self.how: LinearsPadForSymmetriesOption = how
+        self.transpose = transpose
         self._counts = ComputeLayerCounts(network)
 
     def _get_padded_refs(self, batch: int, refs: Refs, wrefs: Refs) -> tuple[Refs, Refs] | None:
@@ -112,16 +127,22 @@ class OptimizeLinearsPadForSymmetries(LayerwiseOperation):
             (
                 full_reshaped_compute,
                 lambda: (
-                    Refs.from_iter(_interleave(refs_uniq, repeats=len(wrefs_uniq))),
-                    Refs.from_iter(_repeat(wrefs_uniq, repeats=len(refs_uniq))),
+                    Refs.from_iter(_repeat(refs_uniq, repeats=len(wrefs_uniq))),
+                    Refs.from_iter(_interleave(wrefs_uniq, repeats=len(refs_uniq))),
                 ),
             ),
             (
                 refs_reshaped_compute,
                 lambda: (
-                    Refs.from_iter(_repeat(refs_uniq, repeats=refs_reshaped_uses_max)),
+                    Refs.from_iter(_extend_mirror(refs_uniq, repeats=refs_reshaped_uses_max, transpose=self.transpose)),
                     Refs.from_iter(
-                        _extend_for_each(refs_uniq, unique_pairs, total_each=refs_reshaped_uses_max, key_axis=_POS_REFS)
+                        _extend_for_each(
+                            refs_uniq,
+                            unique_pairs,
+                            total_each=refs_reshaped_uses_max,
+                            key_axis=_POS_REFS,
+                            transpose=self.transpose,
+                        )
                     ),
                 ),
             ),
@@ -130,10 +151,16 @@ class OptimizeLinearsPadForSymmetries(LayerwiseOperation):
                 lambda: (
                     Refs.from_iter(
                         _extend_for_each(
-                            wrefs_uniq, unique_pairs, total_each=wrefs_reshaped_uses_max, key_axis=_POS_WEIGHT_REFS
+                            wrefs_uniq,
+                            unique_pairs,
+                            total_each=wrefs_reshaped_uses_max,
+                            key_axis=_POS_WEIGHT_REFS,
+                            transpose=self.transpose,
                         )
                     ),
-                    Refs.from_iter(_repeat(wrefs_uniq, repeats=wrefs_reshaped_uses_max)),
+                    Refs.from_iter(
+                        _extend_mirror(wrefs_uniq, repeats=wrefs_reshaped_uses_max, transpose=self.transpose)
+                    ),
                 ),
             ),
         ]
@@ -211,8 +238,8 @@ class OptimizeLinearsPadForSymmetries(LayerwiseOperation):
                 raise ValueError(layer.base)
 
 
-def build_optimize_linears_pad_for_symmetries(how: LinearsPadForSymmetriesOption):
+def build_optimize_linears_pad_for_symmetries(how: LinearsPadForSymmetriesOption, transpose: bool):
     def _init(network: VectorizedLayerNetwork):
-        return OptimizeLinearsPadForSymmetries(network, how=how)
+        return OptimizeLinearsPadForSymmetries(network, how=how, transpose=transpose)
 
     return _init

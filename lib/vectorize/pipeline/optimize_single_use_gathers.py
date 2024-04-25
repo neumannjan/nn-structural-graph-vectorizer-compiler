@@ -149,8 +149,9 @@ class OptimizeSingleUseGathers:
         chain_i: int,
     ) -> Literal["ignore", "found_free", "found"]:
         grouper = build_grouper_for_aggregate(aggregate)
-        first_ord_groups = dict(enumerate(grouper(self._get_gather_ordinals(batch, refs, gather))))
-        gather_new = GenericGather([v for b in ordinals2 for v in first_ord_groups[b]])
+        first_ord_groups = dict(enumerate(grouper.group(self._get_gather_ordinals(batch, refs, gather))))
+        gather_new_groups = [first_ord_groups[o] for o in ordinals2]
+        gather_new = GenericGather(list(grouper.ungroup(gather_new_groups)))
 
         refs_cnt = self._compute_refs_count(batch, refs)
         gather_cnt = self._counts.compute_gather_count(refs_cnt, gather)
@@ -164,8 +165,9 @@ class OptimizeSingleUseGathers:
         container.gather = gather_new
 
         for gather_this, refs_this, container_this in other:
-            first_ord_groups = dict(enumerate(grouper(self._get_gather_ordinals(batch, refs_this, gather_this))))
-            gather_this_new = GenericGather([v for b in ordinals2 for v in first_ord_groups[b]])
+            first_ord_groups = dict(enumerate(grouper.group(self._get_gather_ordinals(batch, refs_this, gather_this))))
+            gather_this_new_groups = [first_ord_groups[o] for o in ordinals2]
+            gather_this_new = GenericGather(list(grouper.ungroup(gather_this_new_groups)))
             container_this.gather = gather_this_new
 
         _reorder_aggregate(aggregate, ordinals2)

@@ -32,3 +32,5 @@ class VectorizeSettings:
     merge_trivial_layer_concats: bool = True
 
     granularize_by_weight: bool = False
+
+    transpose_fixed_count_reduce: bool = False

@@ -1,4 +1,4 @@
-from typing import OrderedDict
+from typing import Literal, OrderedDict
 
 from lib.vectorize.model import *
 from lib.vectorize.model.op_network import DimReduce
@@ -12,10 +12,12 @@ class ToSeqNetwork:
         self._compute_shapes = ComputeLayerShapes(network)
         self._compute_counts = ComputeLayerCounts(network)
 
-    def _get_aggregate_period(self, aggregate: Reduce) -> int | None:
+    def _get_aggregate_shape(self, aggregate: Reduce) -> tuple[int, int] | None:
         match aggregate:
-            case FixedCountReduce(period=period, reduce=_):
-                return period
+            case FixedCountReduce(dim=1, period=period, reduce=_):
+                return (-1, period)
+            case FixedCountReduce(dim=0, period=period, reduce=_):
+                return (period, -1)
             case UnevenReduce(counts=_, reduce=_):
                 return None
             case Noop():
@@ -39,7 +41,7 @@ class ToSeqNetwork:
         self,
         batch_id: int,
         id: str,
-        agg_period: int | None,
+        agg_shape: tuple[int, int] | None,
         input: GatheredLayers,
         weight: GatheredLayers,
         lifts: tuple[tuple[int, int], tuple[int, int]] | None,
@@ -69,23 +71,23 @@ class ToSeqNetwork:
 
             shape = self._compute_shapes.compute_linear_shape_from_shapes(input_shape, weight_shape)
 
-            if agg_period is None:
+            if agg_shape is None:
                 out.append(self._build_view(shape, (-1,)))
-            elif agg_period is not None and (input_lift != (-1, agg_period) or weight_lift != (-1, agg_period)):
-                out.append(self._build_view(shape, (-1, agg_period)))
+            elif agg_shape is not None and (input_lift != agg_shape or weight_lift != agg_shape):
+                out.append(self._build_view(shape, agg_shape))
         else:
             out.append(Linear(weight_ops))
 
-            if agg_period is not None:
+            if agg_shape is not None:
                 shape = self._compute_shapes.compute_linear_shape(batch_id, input, weight)
-                out.append(self._build_view(shape, (-1, agg_period)))
+                out.append(self._build_view(shape, agg_shape))
 
     def _map_layer(self, batch_id: int, id: str, layer: Layer) -> OperationSeq:
         try:
             layer_refs: LayerRefs | None = None
             out: list[Operation] = []
 
-            agg_period = self._get_aggregate_period(layer.aggregate)
+            agg_shape = self._get_aggregate_shape(layer.aggregate)
 
             match layer.base:
                 case InputLayerBase(input=GatheredLayers() as input):
@@ -94,15 +96,15 @@ class ToSeqNetwork:
                     if not isinstance(input.gather, NoopGather):
                         out.append(input.gather)
 
-                    if agg_period is not None:
+                    if agg_shape is not None:
                         shape = self._compute_shapes.compute_layer_base_shape(batch_id, layer.base)
-                        out.append(self._build_view(shape, (-1, agg_period)))
+                        out.append(self._build_view(shape, agg_shape))
                 case LinearLayerBase(input=GatheredLayers() as input, weight=GatheredLayers() as weight, lifts=lifts):
                     layer_refs = input.refs
                     self._add_linear_ops(
                         batch_id=batch_id,
                         id=id,
-                        agg_period=agg_period,
+                        agg_shape=agg_shape,
                         input=input,
                         weight=weight,
                         lifts=lifts,
@@ -119,7 +121,7 @@ class ToSeqNetwork:
                     self._add_linear_ops(
                         batch_id=batch_id,
                         id=id,
-                        agg_period=None,
+                        agg_shape=None,
                         input=input,
                         weight=weight,
                         lifts=lifts,
@@ -128,15 +130,15 @@ class ToSeqNetwork:
 
                     out.append(gather)
 
-                    if agg_period is not None:
+                    if agg_shape is not None:
                         shape = self._compute_shapes.compute_layer_base_shape(batch_id, layer.base)
-                        out.append(self._build_view(shape, (-1, agg_period)))
+                        out.append(self._build_view(shape, agg_shape))
                 case _:
                     assert False
 
             match layer.aggregate:
-                case FixedCountReduce(period=_, reduce=r):
-                    out.append(DimReduce(dim=1, reduce=r))
+                case FixedCountReduce(period=_, reduce=r, dim=dim):
+                    out.append(DimReduce(dim=dim, reduce=r))
                 case UnevenReduce():
                     out.append(layer.aggregate)
                 case Noop():

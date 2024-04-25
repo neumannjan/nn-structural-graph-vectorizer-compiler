@@ -1,5 +1,6 @@
 import torch
 from lib.benchmarks.runnables.neuralogic_vectorized import NeuralogicVectorizedTorchRunnable
+from lib.datasets.mutagenesis import MyMutagenesis
 from lib.datasets.tu_molecular import MyTUDataset
 from lib.engines.torch.settings import TorchModuleSettings
 from lib.sources.neuralogic_settings import NeuralogicSettings
@@ -19,16 +20,18 @@ if __name__ == "__main__":
 
     v_settings.iso_compression = True
     v_settings.linears_optimize_unique_ref_pairs = True
-    v_settings.linears_pad_for_symmetries = "never"
+    v_settings.linears_pad_for_symmetries = "by_count"
     v_settings.linears_symmetries = True
     v_settings.optimize_tail_refs = True
 
-    v_settings.optimize_single_use_gathers = True
+    v_settings.transpose_fixed_count_reduce = True
+
     v_settings.merge_trivial_layer_concats = True
 
-    v_settings.optimize_single_use_gathers_before_symmetries = True
+    v_settings.optimize_single_use_gathers = True
+    v_settings.optimize_single_use_gathers_before_symmetries = False
 
-    v_settings.optimize_single_use_gathers_aggressive_max_chain_length = 'unlimited'
+    v_settings.optimize_single_use_gathers_aggressive_max_chain_length = 2
     v_settings.optimize_single_use_gathers_aggressive_through_symmetries = True
 
     v_settings.granularize_by_weight = False

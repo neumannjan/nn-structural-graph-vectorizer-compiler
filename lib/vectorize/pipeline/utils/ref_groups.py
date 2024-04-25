@@ -37,49 +37,81 @@ _THashable = TypeVar("_THashable", bound=Hashable)
 
 
 class SeqGrouper(Protocol):
-    def __call__(self, iterable: Iterable[_THashable]) -> Iterable[tuple[_THashable, ...]]: ...
+    def group(self, seq: Sequence[_THashable]) -> Iterable[tuple[_THashable, ...]]: ...
+
+    def ungroup(self, seq: Sequence[tuple[_THashable, ...]]) -> Iterable[_THashable]: ...
 
 
-def build_even_grouper(n: int) -> SeqGrouper:
-    def even_grouper(iterable: Iterable[_THashable]) -> Iterable[tuple[_THashable, ...]]:
-        it = iter(iterable)
+class EvenGrouper(SeqGrouper):
+    def __init__(self, period: int) -> None:
+        self.period = period
+
+    def group(self, seq: Iterable[_THashable]) -> Iterable[tuple[_THashable, ...]]:
+        it = iter(seq)
         while True:
             try:
-                yield tuple([next(it) for _ in range(n)])
+                yield tuple([next(it) for _ in range(self.period)])
             except StopIteration:
                 break
 
-    return even_grouper
+    def ungroup(self, seq: Sequence[tuple[_THashable, ...]]) -> Iterable[_THashable]:
+        return [val for tpl in seq for val in tpl]
 
 
-def build_uneven_grouper(counts: list[int]) -> SeqGrouper:
-    def uneven_grouper(iterable: Iterable[_THashable]) -> Iterable[tuple[_THashable, ...]]:
-        it = iter(iterable)
+class UnevenGrouper(SeqGrouper):
+    def __init__(self, counts: list[int]) -> None:
+        self.counts = counts
 
-        for c in counts:
+    def group(self, seq: Iterable[_THashable]) -> Iterable[tuple[_THashable, ...]]:
+        it = iter(seq)
+
+        for c in self.counts:
             yield tuple((next(it) for _ in range(c)))
 
-    return uneven_grouper
+    def ungroup(self, seq: Sequence[tuple[_THashable, ...]]) -> Iterable[_THashable]:
+        return [val for tpl in seq for val in tpl]
 
 
-def noop_grouper(iterable: Iterable[_THashable]) -> Iterable[tuple[_THashable, ...]]:
-    return ((v,) for v in iterable)
+class NoopGrouper(SeqGrouper):
+    def group(self, seq: Sequence[_THashable]) -> Iterable[tuple[_THashable, ...]]:
+        return ((v,) for v in seq)
+
+    def ungroup(self, seq: Sequence[tuple[_THashable, ...]]) -> Iterable[_THashable]:
+        return [val for tpl in seq for val in tpl]
+
+
+class EvenTransposedGrouper(SeqGrouper):
+    def __init__(self, period: int) -> None:
+        self.period = period
+        self._delegate = EvenGrouper(period)
+
+    def _transpose(self, seq: Sequence[_THashable], period: int) -> Iterable[_THashable]:
+        for i in range(period):
+            yield from seq[i::period]
+
+    def group(self, seq: Sequence[_THashable]) -> Iterable[tuple[_THashable, ...]]:
+        return self._delegate.group(self._transpose(seq, period=len(seq) // self.period))
+
+    def ungroup(self, seq: Sequence[tuple[_THashable, ...]]) -> Iterable[_THashable]:
+        return self._transpose(list(self._delegate.ungroup(seq)), period=self.period)
 
 
 def build_grouper_for_aggregate(aggregate: Reduce) -> SeqGrouper:
     match aggregate:
         case Noop():
-            return noop_grouper
-        case FixedCountReduce(period=period):
-            return build_even_grouper(n=period)
+            return NoopGrouper()
+        case FixedCountReduce(period=period, dim=1):
+            return EvenGrouper(period=period)
+        case FixedCountReduce(period=period, dim=0):
+            return EvenTransposedGrouper(period=period)
         case UnevenReduce(counts=counts):
-            return build_uneven_grouper(counts)
+            return UnevenGrouper(counts)
         case _:
             assert False, f"{aggregate}"
 
 
 def get_unique_ref_groups(ref_groups: list[tuple[_THashable, ...]]) -> list[tuple[_THashable, ...]]:
-    # out = sourted(set(ref_groups))
+    # out = sorted(set(ref_groups))
     out = sorted(OrderedDict.fromkeys(ref_groups))
     return out
 
@@ -120,10 +152,6 @@ def get_unique_ref_groups_with_gather(
     return ref_groups_uniq, final_gather
 
 
-def flatten_ref_groups(ref_groups: Sequence[tuple[_THashable, ...]]) -> list[_THashable]:
-    return [o for os in ref_groups for o in os]
-
-
 class RefsTransform(Protocol):
     @overload
     def __call__(self, refs: Refs) -> list[tuple[int, str, int]] | None: ...
@@ -146,15 +174,15 @@ class SimpleUniqueRefsTransform(RefsTransform):
     @overload
     def __call__(self, refs: Sequence[int]) -> list[int] | None: ...
 
-    def __call__(self, refs) -> list[tuple[int, str, int]] | list[int] | None:
+    def __call__(self, refs: Sequence[_THashable]) -> list[_THashable] | None:
         self._last_groups = None
-        ref_groups = list(self.grouper(refs))
+        ref_groups = list(self.grouper.group(refs))
         ref_groups_uniq = self.get_unique_ref_groups(ref_groups)
 
         if len(ref_groups) == len(ref_groups_uniq):
             return None
 
-        refs_out = flatten_ref_groups(ref_groups_uniq)
+        refs_out = list(self.grouper.ungroup(ref_groups_uniq))
         self._last_groups = ref_groups_uniq
         return refs_out
 
@@ -191,11 +219,11 @@ class GatherRefsTransform(RefsTransform):
         self.ordinals = ordinals
         self._last_groups: list[tuple] | None = None
 
-    def __call__(self, refs) -> list[tuple[int, str, int]] | list[int] | None:
-        ref_groups = list(self.grouper(refs))
+    def __call__(self, refs: Sequence[_THashable]) -> list[_THashable] | None:
+        ref_groups = list(self.grouper.group(refs))
         ref_groups_filtered = [ref_groups[o] for o in self.ordinals]
 
-        refs_out = flatten_ref_groups(ref_groups_filtered)
+        refs_out = list(self.grouper.ungroup(ref_groups_filtered))
         self._last_groups = ref_groups_filtered
         return refs_out
 

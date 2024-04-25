@@ -42,6 +42,7 @@ from lib.vectorize.pipeline.simplify_pure_unit_fact_linears import (
     SimplifyPureUnitFactLinears,
 )
 from lib.vectorize.pipeline.to_seq_network import to_seq_network
+from lib.vectorize.pipeline.transpose_fixed_reduce_layers import TransposeFixedCountReduceLayers
 from lib.vectorize.pipeline.utils.pipe import PIPE
 
 _T = TypeVar("_T")
@@ -104,6 +105,17 @@ def create_vectorized_network_compiler(
         + _debug
         + compute_layer_shapes  # <- shapes are expected starting here
         + _debug
+    )
+
+    if settings.transpose_fixed_count_reduce:
+        build_vectorized_network += (
+            PIPE  #
+            + Layerwise(TransposeFixedCountReduceLayers)
+            + _debug
+        )
+
+    build_vectorized_network += (
+        PIPE  #
         + build_separate_input_refs(indexer_factory)
         + _debug
         + compute_layer_counts
@@ -141,7 +153,10 @@ def create_vectorized_network_compiler(
 
     if settings.linears_symmetries:
         if settings.linears_pad_for_symmetries != "never":
-            remaps += build_optimize_linears_pad_for_symmetries(settings.linears_pad_for_symmetries)
+            remaps += build_optimize_linears_pad_for_symmetries(
+                settings.linears_pad_for_symmetries,
+                transpose=settings.transpose_fixed_count_reduce,
+            )
             if debug_prints:
                 remaps += LayerwisePrint
 

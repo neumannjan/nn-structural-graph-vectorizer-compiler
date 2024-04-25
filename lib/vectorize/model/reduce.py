@@ -1,15 +1,18 @@
+from typing import Literal
+
 from lib.model.ops import ReductionDef
 from lib.vectorize.model.noop import Noop
 from lib.vectorize.model.repr import repr_slots
 
 
 class FixedCountReduce:
-    __slots__ = ("period", "reduce")
+    __slots__ = ("period", "reduce", "dim")
     __repr__ = repr_slots
 
-    def __init__(self, period: int, reduce: ReductionDef) -> None:
+    def __init__(self, period: int, reduce: ReductionDef, dim: Literal[0, 1] = 1) -> None:
         self.period = period
         self.reduce: ReductionDef = reduce
+        self.dim: Literal[0, 1] = dim
 
     def __eq__(self, value: object, /) -> bool:
         return isinstance(value, FixedCountReduce) and self.period == value.period and self.reduce == value.reduce
@@ -37,7 +40,7 @@ Reduce = FixedCountReduce | UnevenReduce | Noop
 
 def _match_all(reduce: Reduce):
     match reduce:
-        case FixedCountReduce(period=period, reduce=r):
+        case FixedCountReduce(period=period, reduce=r, dim=dim):
             ...
         case UnevenReduce(counts=counts, reduce=r):
             ...
