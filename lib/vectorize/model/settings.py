@@ -8,9 +8,6 @@ LinearsPadForSymmetriesOption = Literal[
 
 @dataclass
 class VectorizeSettings:
-    # TODO: reintroduce?
-    # group_learnable_weight_parameters: bool = True
-
     linears_optimize_unique_ref_pairs: bool = True
 
     linears_symmetries: bool = True
@@ -25,7 +22,9 @@ class VectorizeSettings:
 
     optimize_single_use_gathers_before_symmetries: bool = False
 
-    optimize_single_use_gathers_margin: int = 0
+    optimize_single_use_gathers_margin: int = 50
+
+    optimize_single_use_gathers_margin_rate: float = 0.05
 
     optimize_single_use_gathers_aggressive_max_chain_length: int | Literal["unlimited"] = 0
 
@@ -36,3 +35,6 @@ class VectorizeSettings:
     granularize_by_weight: bool = False
 
     transpose_fixed_count_reduce: bool = False
+
+    def __post_init__(self):
+        assert 0. <= self.optimize_single_use_gathers_margin_rate <= 100.

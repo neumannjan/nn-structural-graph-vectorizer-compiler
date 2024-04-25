@@ -56,6 +56,7 @@ class OptimizeSingleUseGathers:
         self,
         network: VectorizedLayerNetwork,
         margin: int,
+        margin_rate: float,
         max_chain_length: int | Literal["unlimited"],
         propagate_through_symmetries: bool,
         debug: bool,
@@ -63,6 +64,7 @@ class OptimizeSingleUseGathers:
         self.network = network
         self.max_chain_length = float("inf") if max_chain_length == "unlimited" else max_chain_length
         self.margin = margin
+        self.margin_rate = margin_rate
         self.propagate_through_symmetries = propagate_through_symmetries
         self.debug = debug
 
@@ -91,6 +93,9 @@ class OptimizeSingleUseGathers:
         count_old = self._counts.compute_facts_count(fact_layer.facts) if fact_layer.count is None else fact_layer.count
 
         is_free = count_new <= count_old + self.margin
+
+        if not is_free and self.margin_rate > 0:
+            is_free = 1 - count_old / count_new <= self.margin_rate
 
         # Let's not do it and use the original.
         if not is_free and chain_i >= self.max_chain_length:
@@ -159,6 +164,9 @@ class OptimizeSingleUseGathers:
         gather_new_cnt = self._counts.compute_gather_count(refs_cnt, gather_new)
 
         is_free = gather_new_cnt <= gather_cnt + self.margin
+
+        if not is_free and self.margin_rate > 0:
+            is_free = 1 - gather_cnt / gather_new_cnt <= self.margin_rate
 
         if not is_free and chain_i >= self.max_chain_length:
             return "ignore"
@@ -377,6 +385,7 @@ class OptimizeSingleUseGathers:
 
 def build_optimize_single_use_gathers(
     margin: int,
+    margin_rate: float,
     max_chain_length: int | Literal["unlimited"],
     propagate_through_symmetries: bool,
     debug: bool,
@@ -385,6 +394,7 @@ def build_optimize_single_use_gathers(
         OptimizeSingleUseGathers(
             network,
             margin=margin,
+            margin_rate=margin_rate,
             max_chain_length=max_chain_length,
             propagate_through_symmetries=propagate_through_symmetries,
             debug=debug,

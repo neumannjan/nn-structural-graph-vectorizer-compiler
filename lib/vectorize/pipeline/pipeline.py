@@ -189,6 +189,7 @@ def create_vectorized_network_compiler(
             PIPE  #
             + build_optimize_single_use_gathers(
                 margin=settings.optimize_single_use_gathers_margin,
+                margin_rate=settings.optimize_single_use_gathers_margin_rate,
                 max_chain_length=settings.optimize_single_use_gathers_aggressive_max_chain_length,
                 propagate_through_symmetries=settings.optimize_single_use_gathers_aggressive_through_symmetries,
                 debug=debug_prints,
@@ -214,6 +215,7 @@ def create_vectorized_network_compiler(
             PIPE  #
             + build_optimize_single_use_gathers(
                 margin=settings.optimize_single_use_gathers_margin,
+                margin_rate=settings.optimize_single_use_gathers_margin_rate,
                 max_chain_length=settings.optimize_single_use_gathers_aggressive_max_chain_length,
                 propagate_through_symmetries=settings.optimize_single_use_gathers_aggressive_through_symmetries,
                 debug=debug_prints,
