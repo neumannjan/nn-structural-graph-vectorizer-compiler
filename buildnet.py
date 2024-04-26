@@ -28,15 +28,14 @@ if __name__ == "__main__":
 
     v_settings.transpose_fixed_count_reduce = True
 
-    # TODO fix bug where weights get duplicated
-    v_settings.merge_trivial_layer_concats = False
+    v_settings.merge_trivial_layer_concats = True
 
     v_settings.optimize_single_use_gathers = True
 
     v_settings.optimize_single_use_gathers_before_symmetries = False
-    v_settings.optimize_single_use_gathers_margin = 20
+    v_settings.optimize_single_use_gathers_margin = 30
     v_settings.optimize_single_use_gathers_margin_rate = 0.05
-    v_settings.optimize_single_use_gathers_aggressive_max_chain_length = 0
+    v_settings.optimize_single_use_gathers_aggressive_max_chain_length = "unlimited"
     v_settings.optimize_single_use_gathers_aggressive_through_symmetries = True
 
     v_settings.granularize_by_weight = False

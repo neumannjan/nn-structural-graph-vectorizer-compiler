@@ -32,7 +32,6 @@ class VectorizeSettings:
 
     allow_repeat_gathers: bool = False
 
-    # TODO: fix bug where weights get duplicated
     merge_trivial_layer_concats: bool = False
 
     granularize_by_weight: bool = False

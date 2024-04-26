@@ -66,9 +66,18 @@ class MergeTrivialLayerConcats:
         out: dict[tuple[int, str], _Grp] = {}
 
         def _has_overlap(grp: _Grp):
+            weight_set = set(w for t, w in _iter_grp_refs(grp) if t == Refs.TYPE_WEIGHT)
+
             for ref in _iter_grp_refs(grp):
                 if ref in blacklist or out.get(ref, None) not in (None, grp):
                     return True
+
+                t, w = ref
+                if t == Refs.TYPE_WEIGHT:
+                    if w in weight_set:
+                        weight_set.remove(w)
+                    else:
+                        return True
 
             return False
 
