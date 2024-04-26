@@ -20,21 +20,24 @@ if __name__ == "__main__":
 
     v_settings.iso_compression = True
     v_settings.linears_optimize_unique_ref_pairs = True
-    v_settings.linears_pad_for_symmetries = "by_count"
+    v_settings.linears_pad_for_symmetries = "any"
     v_settings.linears_symmetries = True
     v_settings.optimize_tail_refs = True
 
+    v_settings.allow_repeat_gathers = True
+
     v_settings.transpose_fixed_count_reduce = True
 
-    v_settings.merge_trivial_layer_concats = True
+    # TODO fix bug where weights get duplicated
+    v_settings.merge_trivial_layer_concats = False
 
     v_settings.optimize_single_use_gathers = True
 
-    v_settings.optimize_single_use_gathers_before_symmetries = True
-    v_settings.optimize_single_use_gathers_margin = 0
+    v_settings.optimize_single_use_gathers_before_symmetries = False
+    v_settings.optimize_single_use_gathers_margin = 20
     v_settings.optimize_single_use_gathers_margin_rate = 0.05
     v_settings.optimize_single_use_gathers_aggressive_max_chain_length = 0
-    v_settings.optimize_single_use_gathers_aggressive_through_symmetries = False
+    v_settings.optimize_single_use_gathers_aggressive_through_symmetries = True
 
     v_settings.granularize_by_weight = False
 

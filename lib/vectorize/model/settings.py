@@ -1,9 +1,7 @@
 from dataclasses import dataclass
 from typing import Literal
 
-LinearsPadForSymmetriesOption = Literal[
-    "never", "by_count", "always", "always_full", "always_inputs_only", "always_weights_only"
-]
+LinearsPadForSymmetriesOption = Literal["never", "sided_only", "full_only", "any"]
 
 
 @dataclass
@@ -12,11 +10,13 @@ class VectorizeSettings:
 
     linears_symmetries: bool = True
 
-    linears_pad_for_symmetries: LinearsPadForSymmetriesOption = "by_count"
+    linears_pad_for_symmetries: LinearsPadForSymmetriesOption = "any"
 
     iso_compression: bool = True
 
     optimize_tail_refs: bool = True
+
+    optimize_tail_refs_unique_margin_rate: float = 0.05
 
     optimize_single_use_gathers: bool = True
 
@@ -30,11 +30,16 @@ class VectorizeSettings:
 
     optimize_single_use_gathers_aggressive_through_symmetries: bool = True
 
-    merge_trivial_layer_concats: bool = True
+    allow_repeat_gathers: bool = False
+
+    # TODO: fix bug where weights get duplicated
+    merge_trivial_layer_concats: bool = False
 
     granularize_by_weight: bool = False
 
     transpose_fixed_count_reduce: bool = False
 
+    max_nogather_simple_layer_refs_length: int = 24
+
     def __post_init__(self):
-        assert 0. <= self.optimize_single_use_gathers_margin_rate <= 100.
+        assert 0.0 <= self.optimize_single_use_gathers_margin_rate <= 100.0

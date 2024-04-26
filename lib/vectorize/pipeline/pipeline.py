@@ -2,7 +2,9 @@ import copy
 from typing import Callable, TypeVar
 
 from lib.sources.base import Network
+from lib.utils import Blacklist
 from lib.vectorize.model import VectorizedOpSeqNetwork
+from lib.vectorize.model.gather import Repeat, RepeatInterleave
 from lib.vectorize.model.network import VectorizedLayerNetwork
 from lib.vectorize.model.settings import VectorizeSettings
 from lib.vectorize.pipeline.build_initial_network import build_initial_network
@@ -30,6 +32,7 @@ from lib.vectorize.pipeline.optimize_single_use_gathers import (
 from lib.vectorize.pipeline.optimize_tail_refs_to_unique import (
     OptimizeTailRefsToUniqueNoOrdRemap,
     RemapOrdinals,
+    build_optimize_tail_refs_to_unique_no_ord_remap_factory,
 )
 from lib.vectorize.pipeline.separate_input_refs import (
     ShapeLayerIndexer,
@@ -37,7 +40,7 @@ from lib.vectorize.pipeline.separate_input_refs import (
     build_combined_layer_indexer_factory,
     build_separate_input_refs,
 )
-from lib.vectorize.pipeline.simplify_gathers import SimplifyGathers
+from lib.vectorize.pipeline.simplify_gathers import build_simplify_gathers_factory
 from lib.vectorize.pipeline.simplify_pure_unit_fact_linears import (
     SimplifyPureUnitFactLinears,
 )
@@ -156,12 +159,15 @@ def create_vectorized_network_compiler(
             remaps += build_optimize_linears_pad_for_symmetries(
                 settings.linears_pad_for_symmetries,
                 transpose=settings.transpose_fixed_count_reduce,
+                max_refs_nogather_uniq=settings.max_nogather_simple_layer_refs_length,
             )
             if debug_prints:
                 remaps += LayerwisePrint
 
     if settings.optimize_tail_refs:
-        remaps += OptimizeTailRefsToUniqueNoOrdRemap
+        remaps += build_optimize_tail_refs_to_unique_no_ord_remap_factory(
+            unique_margin_rate=settings.optimize_tail_refs_unique_margin_rate
+        )
         if debug_prints:
             remaps += LayerwisePrint
 
@@ -178,6 +184,10 @@ def create_vectorized_network_compiler(
         + _debug
         + drop_linear_gather_layer_base
         + _debug
+        # + drop_unused_neurons_no_ord_remap
+        # + _debug
+        # + Layerwise(RemapOrdinals)
+        # + _debug
         + Layerwise(ConcatInputsLayers)  # <- gathers are expected starting here
         + _debug
         # + Layerwise(MarkCompilableLayers)
@@ -226,7 +236,12 @@ def create_vectorized_network_compiler(
 
     build_vectorized_network += (
         PIPE  #
-        + Layerwise(SimplifyGathers)
+        + Layerwise(
+            build_simplify_gathers_factory(
+                max_nogather_simple_layer_refs_length=settings.max_nogather_simple_layer_refs_length,
+                whitelist=None if settings.allow_repeat_gathers else Blacklist({Repeat, RepeatInterleave}),
+            )
+        )
         + _debug
         + dissolve_identity_layers
         + _debug

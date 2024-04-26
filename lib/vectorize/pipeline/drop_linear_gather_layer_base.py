@@ -20,15 +20,17 @@ class DropLinearGatherLayerBase:
                     ordinals=[o for o in ordinals],
                 )
 
+                base1 = LinearLayerBase(
+                    input=input,
+                    weight=weight,
+                    lifts=lifts,
+                )
+
                 layer1 = Layer(
-                    base=LinearLayerBase(
-                        input=input,
-                        weight=weight,
-                        lifts=lifts,
-                    ),
+                    base=base1,
                     aggregate=Noop(),
                     transform=Transform("identity"),
-                    count=self._counts.compute_layer_base_count(batch, layer.base),
+                    count=self._counts.compute_layer_base_count(batch, base1),
                     shape=layer.shape,
                     compilable=layer.compilable,
                 )

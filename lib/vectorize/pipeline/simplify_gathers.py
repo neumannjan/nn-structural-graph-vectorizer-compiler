@@ -1,6 +1,6 @@
 from typing import Container, Generic, Sequence, Type, TypeVar, overload
 
-from lib.utils import detect_repeating_interleaved_sequence_in_list, detect_repeating_sequence_in_list
+from lib.utils import AnyWhitelist, detect_repeating_interleaved_sequence_in_list, detect_repeating_sequence_in_list
 from lib.vectorize.model import *
 from lib.vectorize.model.gather import OneGather
 from lib.vectorize.pipeline.compute_layer_counts import ComputeLayerCounts
@@ -9,12 +9,7 @@ from lib.vectorize.pipeline.layerwise import LayerwiseOperation
 _T = TypeVar("_T")
 
 
-class _AnyWhitelist(Container[_T], Generic[_T]):
-    def __contains__(self, x: object, /) -> bool:
-        return True
-
-
-_ANY_WHITELIST: Container[Type[Gather]] = _AnyWhitelist()
+_ANY_WHITELIST: Container[Type[Gather]] = AnyWhitelist()
 
 
 _TGather = TypeVar("_TGather", bound=Gather)
@@ -149,8 +144,14 @@ def build_optimal_gather(
 
 
 class SimplifyGathers(LayerwiseOperation):
-    def __init__(self, network: VectorizedLayerNetwork, whitelist: Container[Type[_TGather]] | None = None) -> None:
+    def __init__(
+        self,
+        network: VectorizedLayerNetwork,
+        max_nogather_simple_layer_refs_length: int,
+        whitelist: Container[Type[_TGather]] | None = None,
+    ) -> None:
         self.network = network
+        self.max_nogather_simple_layer_refs_length = max_nogather_simple_layer_refs_length
         self._compute_layer_counts = ComputeLayerCounts(network)
         assert whitelist is None or GenericGather in whitelist
         self._whitelist = whitelist
@@ -203,7 +204,10 @@ class SimplifyGathers(LayerwiseOperation):
                 # if the gather remained non-simple (generic), then if the total no. of ordinals
                 # is low and the references are trivial, we may just preorder the references themselves
                 # TODO parametrize the len() threshold
-                if isinstance(input.gather, GenericGather) and len(input.gather.ordinals) <= 20:
+                if (
+                    isinstance(input.gather, GenericGather)
+                    and len(input.gather.ordinals) <= self.max_nogather_simple_layer_refs_length
+                ):
                     refs_len1 = all((v == 1 for v in self._compute_layer_counts.iter_layer_refs_counts(batch, refs)))
                     if refs_len1:
                         self._reorder_refs(refs, input.gather.ordinals)
@@ -242,6 +246,14 @@ class SimplifyGathers(LayerwiseOperation):
                 layer.base = self._for_layer_base(bid, layer.base)
 
 
-def simplify_gathers(network: VectorizedLayerNetwork):
-    SimplifyGathers(network).simplify_gathers()
-    return network
+def build_simplify_gathers_factory(
+    max_nogather_simple_layer_refs_length: int, whitelist: Container[Type[Gather]] | None
+):
+    def build_simplify_gathers(network: VectorizedLayerNetwork):
+        return SimplifyGathers(
+            network,
+            max_nogather_simple_layer_refs_length=max_nogather_simple_layer_refs_length,
+            whitelist=whitelist,
+        )
+
+    return build_simplify_gathers

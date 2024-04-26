@@ -4,6 +4,7 @@ import re
 from collections.abc import Collection
 from typing import (
     Callable,
+    Container,
     Generic,
     Iterable,
     Iterator,
@@ -585,3 +586,16 @@ def camel_to_snake(name: str, upper=False):
     name = _CAMEL_TO_SNAKE_REGEX2.sub(r"\1_\2", name)
     out = name.upper() if upper else name.lower()
     return out
+
+
+class AnyWhitelist(Container[_T], Generic[_T]):
+    def __contains__(self, x: object, /) -> bool:
+        return True
+
+
+class Blacklist(Container[_T], Generic[_T]):
+    def __init__(self, values: Container[_T]) -> None:
+        self.values = values
+
+    def __contains__(self, x: object, /) -> bool:
+        return x not in self.values

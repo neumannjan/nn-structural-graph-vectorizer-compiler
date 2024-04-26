@@ -17,6 +17,10 @@ from lib.vectorize.pipeline.layerwise import LayerwiseOperation
 _TSeq = TypeVar("_TSeq", list, Refs)
 
 
+_TInput = TypeVar("_TInput", bound=Input)
+_SInput = TypeVar("_SInput", bound=Input)
+
+
 class LiftSymmetricalLinears(LayerwiseOperation):
     def __init__(self, network: VectorizedLayerNetwork) -> None:
         self.network = network
@@ -25,7 +29,7 @@ class LiftSymmetricalLinears(LayerwiseOperation):
     def _get_refs_as_numpy(self, input: Refs) -> np.ndarray:
         return np.stack([input.types, input.layer_ids, input.ordinals], axis=1)
 
-    def _detect_dim_lift(self, refs: GatheredLayers | Refs, preferred_period: int | None) -> DimensionLift | None:
+    def detect_dim_lift_single(self, refs: GatheredLayers | Refs, preferred_period: int | None) -> DimensionLift | None:
         match refs:
             case Refs():
                 arr = self._get_refs_as_numpy(refs)
@@ -52,44 +56,14 @@ class LiftSymmetricalLinears(LayerwiseOperation):
 
         return None
 
-    def _get_dim_lifted_refs(self, refs: _TSeq, dim_lift: DimensionLift) -> _TSeq:
-        match dim_lift:
-            case (period, -1):
-                refs = refs[:: len(refs) // period]
-            case (-1, period):
-                refs = refs[:period]
-            case _:
-                assert False, f"{dim_lift}"
-
-        return refs
-
-    def _get_dim_lifted_input(self, input: Input, dim_lift: DimensionLift) -> Input:
-        match input:
-            case Refs():
-                return self._get_dim_lifted_refs(input, dim_lift)
-            case GatheredLayers(refs=refs, gather=GenericGather(ordinals)):
-                return GatheredLayers(refs=refs, gather=GenericGather(self._get_dim_lifted_refs(ordinals, dim_lift)))
-            case _:
-                raise ValueError(input)
-
-    def _input_to_refs(self, input: Input) -> Sequence:
-        match input:
-            case Refs():
-                return input
-            case GatheredLayers(gather=GenericGather(ordinals)):
-                return ordinals
-            case _:
-                raise ValueError(input)
-
-    def _simplify(
+    def detect_dim_lift(
         self,
         batch_id: int,
-        base: LinearLayerBase | LinearGatherLayerBase,
-        input: Input,
-        weight: Input,
-        preferred_period: int | None,
+        input: _TInput,
+        weight: _SInput,
         existing_lifts: DimensionLifts,
-    ):
+        preferred_period: int | None,
+    ) -> tuple[DimensionLifts, tuple[_TInput, _SInput]]:
         input_count = self._counts.compute_input_count(batch_id, input)
         weight_count = self._counts.compute_input_count(batch_id, weight)
 
@@ -103,13 +77,13 @@ class LiftSymmetricalLinears(LayerwiseOperation):
                     i_dim_lift = None
                 else:
                     warnings.warn("Possibly unoptimal lifts. Will likely use unnecessary View modules.")
-                    return
+                    return existing_lifts, (input, weight)
 
         else:
             i_dim_lift, w_dim_lift = None, None
 
-        i_dim_lift = i_dim_lift or self._detect_dim_lift(input, preferred_period=preferred_period)
-        w_dim_lift = w_dim_lift or self._detect_dim_lift(weight, preferred_period=preferred_period)
+        i_dim_lift = i_dim_lift or self.detect_dim_lift_single(input, preferred_period=preferred_period)
+        w_dim_lift = w_dim_lift or self.detect_dim_lift_single(weight, preferred_period=preferred_period)
 
         expected_count = self._counts.compute_linear_count(batch_id, input, weight, existing_lifts)
 
@@ -122,11 +96,7 @@ class LiftSymmetricalLinears(LayerwiseOperation):
                 batch_id, input_lifted, weight_lifted, (i_dim_lift, w_dim_lift)
             )
             if both_lifted_count == expected_count:
-                # can do both
-                base.input = input_lifted
-                base.weight = weight_lifted
-                base.lifts = (i_dim_lift, w_dim_lift)
-                return
+                return (i_dim_lift, w_dim_lift), (input_lifted, weight_lifted)
 
         input_lifted_count = (
             self._counts.compute_linear_count(batch_id, input_lifted, weight, (i_dim_lift, i_dim_lift))
@@ -166,13 +136,54 @@ class LiftSymmetricalLinears(LayerwiseOperation):
                 i_dim_lift, w_dim_lift = None, None
 
         if i_dim_lift is not None and input_lifted_count == expected_count:
-            # input
-            base.input = input_lifted
-            base.lifts = (i_dim_lift, i_dim_lift)
+            return (i_dim_lift, i_dim_lift), (input_lifted, weight)
         elif w_dim_lift is not None and weight_lifted_count == expected_count:
-            # weight
-            base.weight = weight_lifted
-            base.lifts = (w_dim_lift, w_dim_lift)
+            return (w_dim_lift, w_dim_lift), (input, weight_lifted)
+
+        return None, (input, weight)
+
+    def _get_dim_lifted_refs(self, refs: _TSeq, dim_lift: DimensionLift) -> _TSeq:
+        match dim_lift:
+            case (period, -1):
+                refs = refs[:: len(refs) // period]
+            case (-1, period):
+                refs = refs[:period]
+            case _:
+                assert False, f"{dim_lift}"
+
+        return refs
+
+    def _get_dim_lifted_input(self, input: Input, dim_lift: DimensionLift) -> Input:
+        match input:
+            case Refs():
+                return self._get_dim_lifted_refs(input, dim_lift)
+            case GatheredLayers(refs=refs, gather=GenericGather(ordinals)):
+                return GatheredLayers(refs=refs, gather=GenericGather(self._get_dim_lifted_refs(ordinals, dim_lift)))
+            case _:
+                raise ValueError(input)
+
+    def _input_to_refs(self, input: Input) -> Sequence:
+        match input:
+            case Refs():
+                return input
+            case GatheredLayers(gather=GenericGather(ordinals)):
+                return ordinals
+            case _:
+                raise ValueError(input)
+
+    def _simplify(
+        self,
+        batch_id: int,
+        base: LinearLayerBase | LinearGatherLayerBase,
+        input: Input,
+        weight: Input,
+        preferred_period: int | None,
+        existing_lifts: DimensionLifts,
+    ):
+        lifts, (input, weight) = self.detect_dim_lift(batch_id, input, weight, existing_lifts, preferred_period)
+        base.input = input
+        base.weight = weight
+        base.lifts = lifts
 
     def __call__(self, batch: int, layer_id: str, layer: Layer) -> Layer:
         match layer:
@@ -181,9 +192,7 @@ class LiftSymmetricalLinears(LayerwiseOperation):
             case Layer(
                 base=(
                     LinearLayerBase(input=input, weight=weight, lifts=lifts)
-                    | LinearGatherLayerBase(
-                        input=input, weight=weight, lifts=lifts
-                    )
+                    | LinearGatherLayerBase(input=input, weight=weight, lifts=lifts)
                 ) as base,
                 aggregate=FixedCountReduce(period=period),
             ):
@@ -191,9 +200,7 @@ class LiftSymmetricalLinears(LayerwiseOperation):
             case Layer(
                 base=(
                     LinearLayerBase(input=input, weight=weight, lifts=lifts)
-                    | LinearGatherLayerBase(
-                        input=input, weight=weight, lifts=lifts
-                    )
+                    | LinearGatherLayerBase(input=input, weight=weight, lifts=lifts)
                 ) as base
             ):
                 self._simplify(batch, base, input, weight, preferred_period=None, existing_lifts=lifts)
