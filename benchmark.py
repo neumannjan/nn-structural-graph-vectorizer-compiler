@@ -12,7 +12,7 @@ from lib.datasets.datasets import add_parser_args_for_dataset, build_dataset, ge
 from lib.datasets.mutagenesis import MutagenesisSource, MutagenesisTemplate
 from lib.engines.torch.settings import Compilation, TorchModuleSettings
 from lib.sources.neuralogic_settings import NeuralogicSettings
-from lib.vectorize.model.settings import VectorizeSettings
+from lib.vectorize.settings import VectorizeSettings
 from tqdm.auto import tqdm
 
 Device = Literal["mps", "cuda", "cpu"]

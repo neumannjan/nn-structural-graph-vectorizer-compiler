@@ -3,7 +3,7 @@ from lib.benchmarks.runnables.neuralogic_vectorized import NeuralogicVectorizedT
 from lib.datasets.tu_molecular import MyTUDataset
 from lib.engines.torch.settings import TorchModuleSettings
 from lib.sources.neuralogic_settings import NeuralogicSettings
-from lib.vectorize.model.settings import (
+from lib.vectorize.settings import (
     LinearsSymmetriesSettings,
     OptimizeSingleUseGathersSettings,
     OptimizeTailRefsSettings,
@@ -11,7 +11,7 @@ from lib.vectorize.model.settings import (
 )
 
 if __name__ == "__main__":
-    debug = True
+    debug = False
     device = "cpu"
 
     n_settings = NeuralogicSettings()
@@ -25,20 +25,17 @@ if __name__ == "__main__":
         iso_compression=True,
         linears_optimize_unique_ref_pairs=True,
         linears_symmetries=LinearsSymmetriesSettings(
-            enabled=True,
             pad="any",
         ),
         optimize_tail_refs=OptimizeTailRefsSettings(
-            enabled=True,
             unique_margin_rate=0.05,
         ),
         optimize_single_use_gathers=OptimizeSingleUseGathersSettings(
-            enabled=True,
             run_before_symmetries=False,
             margin=30,
             margin_rate=0.05,
             aggressive_max_chain_depth="unlimited",
-            aggressive_through_symmetries=True,
+            propagate_through_symmetries=True,
         ),
         allow_repeat_gathers=True,
         merge_trivial_layer_concats=True,

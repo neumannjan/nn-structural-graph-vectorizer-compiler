@@ -367,7 +367,7 @@ class OptimizeSingleUseGathers:
                                         i += 1
                                     old_ref_to_layer = None
                                 case "ignore" | "inapplicable":
-                                    if reorder_result == "ignore":
+                                    if self.debug and reorder_result == "ignore":
                                         print(f"IGNORING (chain_i={i}, max_chain_length={self.max_chain_length})")
                                     i = 0
                                     old_ref_to_layer = None

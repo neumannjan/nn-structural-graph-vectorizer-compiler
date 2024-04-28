@@ -6,7 +6,6 @@ from lib.utils import Blacklist
 from lib.vectorize.model import VectorizedOpSeqNetwork
 from lib.vectorize.model.gather import Repeat, RepeatInterleave
 from lib.vectorize.model.network import VectorizedLayerNetwork
-from lib.vectorize.model.settings import VectorizeSettings
 from lib.vectorize.pipeline.build_initial_network import build_initial_network
 from lib.vectorize.pipeline.compute_layer_counts import ComputeLayerCounts, compute_layer_counts
 from lib.vectorize.pipeline.compute_layer_shapes import compute_layer_shapes
@@ -46,6 +45,7 @@ from lib.vectorize.pipeline.simplify_pure_unit_fact_linears import (
 from lib.vectorize.pipeline.to_seq_network import to_seq_network
 from lib.vectorize.pipeline.transpose_fixed_reduce_layers import TransposeFixedCountReduceLayers
 from lib.vectorize.pipeline.utils.pipe import PIPE
+from lib.vectorize.settings import VectorizeSettings
 
 _T = TypeVar("_T")
 
@@ -130,7 +130,7 @@ def create_vectorized_network_compiler(
         build_vectorized_network += (
             PIPE  #
             + Layerwise(
-                build_iso_compression_factory(_simple_tail, forward_pass_runner),
+                build_iso_compression_factory(_simple_tail, forward_pass_runner, debug_print=debug_prints),
             )
             + Layerwise(
                 RemapOrdinals,
@@ -153,12 +153,13 @@ def create_vectorized_network_compiler(
         if debug_prints:
             remaps += LayerwisePrint
 
-    if settings.linears_symmetries.enabled:
+    if settings.linears_symmetries:
         if settings.linears_symmetries.pad != "never":
             remaps += build_optimize_linears_pad_for_symmetries(
                 settings.linears_symmetries.pad,
                 transpose=settings.transpose_fixed_count_reduce,
                 max_refs_nogather_uniq=settings.max_nogather_simple_layer_refs_length,
+                debug_print=debug_prints,
             )
             if debug_prints:
                 remaps += LayerwisePrint
@@ -200,7 +201,7 @@ def create_vectorized_network_compiler(
                 margin=settings.optimize_single_use_gathers.margin,
                 margin_rate=settings.optimize_single_use_gathers.margin_rate,
                 max_chain_length=settings.optimize_single_use_gathers.aggressive_max_chain_depth,
-                propagate_through_symmetries=settings.optimize_single_use_gathers.aggressive_through_symmetries,
+                propagate_through_symmetries=settings.optimize_single_use_gathers.propagate_through_symmetries,
                 debug=debug_prints,
             )
             + compute_layer_counts
@@ -226,7 +227,7 @@ def create_vectorized_network_compiler(
                 margin=settings.optimize_single_use_gathers.margin,
                 margin_rate=settings.optimize_single_use_gathers.margin_rate,
                 max_chain_length=settings.optimize_single_use_gathers.aggressive_max_chain_depth,
-                propagate_through_symmetries=settings.optimize_single_use_gathers.aggressive_through_symmetries,
+                propagate_through_symmetries=settings.optimize_single_use_gathers.propagate_through_symmetries,
                 debug=debug_prints,
             )
             + compute_layer_counts

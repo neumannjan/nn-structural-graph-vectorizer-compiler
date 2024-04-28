@@ -22,11 +22,13 @@ class IsoCompression(LayerwiseOperation):
         network: VectorizedLayerNetwork,
         tail: Callable[[VectorizedLayerNetwork], VectorizedOpSeqNetwork],
         forward_pass_runner: ForwardPassRunner,
+        debug_print: bool,
         n_repeats: int = 4,
     ) -> None:
         self.network = network
         self.tail = tail
         self.forward_pass_runner = forward_pass_runner
+        self.debug_print = debug_print
         self._counts = ComputeLayerCounts(network)
         self._n_repeats = n_repeats
 
@@ -57,7 +59,8 @@ class IsoCompression(LayerwiseOperation):
 
     def _remap_input(self, batch_id: int, layer_id: str, transform: GatherRefsTransform, input: Input):
         refs = get_refs(self._counts, batch_id, input)
-        print(f"ISO COMPRESSION: {layer_id}: Remapping {len(refs)} to {len(transform.ordinals)}.")
+        if self.debug_print:
+            print(f"ISO COMPRESSION: {layer_id}: Remapping {len(refs)} to {len(transform.ordinals)}.")
         out = remap_refs(self._counts, batch_id, input, transform)
         assert out
 
@@ -133,8 +136,9 @@ class IsoCompression(LayerwiseOperation):
 def build_iso_compression_factory(
     tail: Callable[[VectorizedLayerNetwork], VectorizedOpSeqNetwork],
     forward_pass_runner: Callable[[VectorizedOpSeqNetwork], dict[int, dict[str, np.ndarray]]],
+    debug_print: bool,
 ):
     def _f(network: VectorizedLayerNetwork):
-        return IsoCompression(network, tail, forward_pass_runner)
+        return IsoCompression(network, tail, forward_pass_runner, debug_print=debug_print)
 
     return _f

@@ -1,4 +1,4 @@
-from lib.vectorize.model.settings import VectorizeSettings
+from lib.vectorize.settings import VectorizeSettings
 
 D = VectorizeSettings()
 

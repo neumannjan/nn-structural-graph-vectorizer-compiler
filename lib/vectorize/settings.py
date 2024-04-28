@@ -1,16 +1,17 @@
-from dataclasses import dataclass, field
-from typing import Literal
+from dataclasses import asdict, dataclass, field, is_dataclass
+from typing import Callable, Literal, TypedDict
+
+from typing_extensions import Unpack
 
 LinearsPadForSymmetriesOption = Literal["never", "sided_only", "full_only", "any"]
 
 
-@dataclass
-class LinearsSymmetriesSettings:
-    enabled: bool = True
-    """
-    Switch that controls whether the optimization is used.
-    """
+class _LinearsSymmetriesSettingsPartial(TypedDict, total=False):
+    pad: LinearsPadForSymmetriesOption
 
+
+@dataclass(frozen=True)
+class LinearsSymmetriesSettings:
     pad: LinearsPadForSymmetriesOption = "any"
     """
     Enables the usage of various strategies of reordering + padding of linears' inputs (inputs and weights)
@@ -22,14 +23,17 @@ class LinearsSymmetriesSettings:
     multiplied due to the added padding.)
     """
 
+    def serialize(self) -> _LinearsSymmetriesSettingsPartial:
+        out = _LinearsSymmetriesSettingsPartial(asdict(self))  # pyright: ignore
+        return out
 
-@dataclass
+
+class _OptimizeTailRefsSettingsPartial(TypedDict, total=False):
+    unique_margin_rate: float
+
+
+@dataclass(frozen=True)
 class OptimizeTailRefsSettings:
-    enabled: bool = True
-    """
-    Switch that controls whether the optimization is used.
-    """
-
     unique_margin_rate: float = 0.05
     """
     To prevent the optimization from ruining some nice existing properties of the network (and producing some
@@ -51,14 +55,38 @@ class OptimizeTailRefsSettings:
     is done by the `optimize_single_use_gathers` optimization, not by this one.
     """
 
+    def serialize(self) -> _OptimizeTailRefsSettingsPartial:
+        out = _OptimizeTailRefsSettingsPartial(asdict(self))  # pyright: ignore
+        return out
 
-@dataclass
+
+OptimizeSingleUseGathersPreset = Literal[
+    "free_only",
+    "margin_S",
+    "margin_M_keepsym",
+    "margin_M",
+    "margin_L_keepsym",
+    "margin_L",
+    "agg1_keepsym",
+    "agg2_keepsym",
+    "agg1",
+    "agg2",
+    "agg_max_keepsym",
+    "agg_max_propsym",
+    "agg_true_unlimited",
+]
+
+
+class _OptimizeSingleUseGathersSettingsPartial(TypedDict, total=False):
+    run_before_symmetries: bool
+    margin: int
+    margin_rate: float
+    aggressive_max_chain_depth: int | Literal["unlimited"]
+    propagate_through_symmetries: bool
+
+
+@dataclass(frozen=True)
 class OptimizeSingleUseGathersSettings:
-    enabled: bool = True
-    """
-    Switch that controls whether the optimization is used.
-    """
-
     run_before_symmetries: bool = False
     """
     When True, runs this optimization before the `linears_symmetries` optimization. This will allow this optimization to
@@ -103,12 +131,14 @@ class OptimizeSingleUseGathersSettings:
     `margin_rate` lose effect.
     """
 
-    aggressive_through_symmetries: bool = True
+    propagate_through_symmetries: bool = True
     """
-    When aggressivity is enabled, value of `True` means full aggressivity, whereas value of `False` will
-    keep any gather immediately following a symmetry intact, so as not to break or modify the symmetry.
+    Value of `False` will keep any gather immediately following a symmetry intact,
+    so as not to break or modify the symmetry in any way. If true, propagates through symmetries that can be propagated
+    through without removing them entirely.
 
-    Only effective when `run_before_symmetries` is set to `False`.
+    Only effective when `run_before_symmetries` is set to `False` (i.e. when symmetries are already used when running
+    the optimization).
     """
 
     def __post_init__(self):
@@ -116,8 +146,75 @@ class OptimizeSingleUseGathersSettings:
         assert 0.0 <= self.margin_rate <= 1.0
         assert self.aggressive_max_chain_depth in ("unlimited",) or 0 <= self.aggressive_max_chain_depth
 
+    def updated(self, changes: _OptimizeSingleUseGathersSettingsPartial) -> "OptimizeSingleUseGathersSettings":
+        vals: _OptimizeSingleUseGathersSettingsPartial = asdict(self)  # pyright: ignore
+        vals.update(changes)
+        return OptimizeSingleUseGathersSettings(**vals)
 
-@dataclass
+    @staticmethod
+    def preset(
+        preset: OptimizeSingleUseGathersPreset,
+        **kwargs: Unpack[_OptimizeSingleUseGathersSettingsPartial],
+    ) -> "OptimizeSingleUseGathersSettings":
+        out = _OPTIMIZE_SINGLE_USE_GATHERS_PRESET_BUILDER_MAP[preset]()
+
+        if len(kwargs) == 0:
+            return out
+
+        return out.updated(kwargs)
+
+    def serialize(self) -> _OptimizeSingleUseGathersSettingsPartial:
+        out = _OptimizeSingleUseGathersSettingsPartial(asdict(self))  # pyright: ignore
+        return out
+
+
+_OPTIMIZE_SINGLE_USE_GATHERS_PRESET_BUILDER_MAP: dict[
+    OptimizeSingleUseGathersPreset, Callable[[], OptimizeSingleUseGathersSettings]
+] = {
+    "free_only": lambda: OptimizeSingleUseGathersSettings(margin=0, margin_rate=0.0),
+    "margin_S": lambda: OptimizeSingleUseGathersSettings(margin=10, margin_rate=0.05),
+    "margin_M_keepsym": lambda: OptimizeSingleUseGathersSettings(
+        margin=30, margin_rate=0.05, propagate_through_symmetries=False
+    ),
+    "margin_M": lambda: OptimizeSingleUseGathersSettings(margin=30, margin_rate=0.05),
+    "margin_L_keepsym": lambda: OptimizeSingleUseGathersSettings(
+        margin=50, margin_rate=0.05, propagate_through_symmetries=False
+    ),
+    "margin_L": lambda: OptimizeSingleUseGathersSettings(margin=50, margin_rate=0.05),
+    "agg1_keepsym": lambda: OptimizeSingleUseGathersSettings(
+        aggressive_max_chain_depth=1, propagate_through_symmetries=False
+    ),
+    "agg2_keepsym": lambda: OptimizeSingleUseGathersSettings(
+        aggressive_max_chain_depth=2, propagate_through_symmetries=False
+    ),
+    "agg1": lambda: OptimizeSingleUseGathersSettings(aggressive_max_chain_depth=1, propagate_through_symmetries=True),
+    "agg2": lambda: OptimizeSingleUseGathersSettings(aggressive_max_chain_depth=2, propagate_through_symmetries=True),
+    "agg_max_keepsym": lambda: OptimizeSingleUseGathersSettings(
+        aggressive_max_chain_depth="unlimited", propagate_through_symmetries=False
+    ),
+    "agg_max_propsym": lambda: OptimizeSingleUseGathersSettings(
+        aggressive_max_chain_depth="unlimited", propagate_through_symmetries=True
+    ),
+    "agg_true_unlimited": lambda: OptimizeSingleUseGathersSettings(
+        aggressive_max_chain_depth="unlimited", run_before_symmetries=True
+    ),
+}
+
+
+class VectorizeSettingsPartial(TypedDict, total=False):
+    transpose_fixed_count_reduce: bool
+    iso_compression: bool
+    linears_optimize_unique_ref_pairs: bool
+    linears_symmetries: LinearsSymmetriesSettings | Literal[False]
+    optimize_tail_refs: OptimizeTailRefsSettings | Literal[False]
+    optimize_single_use_gathers: OptimizeSingleUseGathersSettings | Literal[False]
+    allow_repeat_gathers: bool
+    merge_trivial_layer_concats: bool
+    max_nogather_simple_layer_refs_length: int
+    granularize_by_weight: bool
+
+
+@dataclass(frozen=True)
 class VectorizeSettings:
     transpose_fixed_count_reduce: bool = True
     """
@@ -171,7 +268,7 @@ class VectorizeSettings:
     may again remove such gathers, while keeping other, favorable results produced by this optimization.
     """
 
-    linears_symmetries: LinearsSymmetriesSettings = field(default_factory=LinearsSymmetriesSettings)
+    linears_symmetries: LinearsSymmetriesSettings | Literal[False] = field(default_factory=LinearsSymmetriesSettings)
     """
     Optimization that finds linear inputs/weights that repeat and removes memory copying when possible.
 
@@ -187,7 +284,7 @@ class VectorizeSettings:
     may again remove such gathers, while keeping other, favorable results produced by this optimization.
     """
 
-    optimize_tail_refs: OptimizeTailRefsSettings = field(default_factory=OptimizeTailRefsSettings)
+    optimize_tail_refs: OptimizeTailRefsSettings | Literal[False] = field(default_factory=OptimizeTailRefsSettings)
     """
     Optimization that propagates gathers downwards when possible, to simplify computations in layers.
 
@@ -207,7 +304,7 @@ class VectorizeSettings:
     optimizations that perform the opposite of this optimization (such as `optimize_single_use_gathers` optimization).
     """
 
-    optimize_single_use_gathers: OptimizeSingleUseGathersSettings = field(
+    optimize_single_use_gathers: OptimizeSingleUseGathersSettings | Literal[False] = field(
         default_factory=OptimizeSingleUseGathersSettings
     )
     """
@@ -272,3 +369,19 @@ class VectorizeSettings:
     that can only be optimized by performing additional layer splitting and/or reordering optimizations which currently
     aren't implemented. Your mileage thus may vary.
     """
+
+    def updated(self, **changes: Unpack[VectorizeSettingsPartial]) -> "VectorizeSettings":
+        vals: VectorizeSettingsPartial = asdict(self)  # pyright: ignore
+        vals.update(changes)
+        return VectorizeSettings(**vals)
+
+    def serialize(self) -> "VectorizeSettingsPartial":
+        out = VectorizeSettingsPartial()
+
+        for k, v in asdict(self).items():
+            if is_dataclass(v):
+                out[k] = v.serialize()
+            else:
+                out[k] = v
+
+        return out

@@ -4,12 +4,12 @@ from typing import Collection, Iterable, Iterator, Literal, Protocol, Sequence, 
 
 from lib.utils import head_and_rest
 from lib.vectorize.model import *
-from lib.vectorize.model.settings import LinearsPadForSymmetriesOption
 from lib.vectorize.pipeline.compute_layer_counts import ComputeLayerCounts
 from lib.vectorize.pipeline.layerwise import LayerwiseOperation
 from lib.vectorize.pipeline.lift_symmetrical_linears import LiftSymmetricalLinears
 from lib.vectorize.pipeline.utils.gather import combine_gathers_
 from lib.vectorize.pipeline.utils.ref_groups import apply_refs_to_target
+from lib.vectorize.settings import LinearsPadForSymmetriesOption
 
 _T = TypeVar("_T")
 
@@ -284,11 +284,13 @@ class OptimizeLinearsPadForSymmetries(LayerwiseOperation):
         how: LinearsPadForSymmetriesOption,
         transpose: bool,
         max_refs_nogather_uniq: int,
+        debug_print: bool,
     ) -> None:
         self.network = network
         self.how: LinearsPadForSymmetriesOption = how
         self.transpose = transpose
         self.max_refs_nogather_uniq = max_refs_nogather_uniq
+        self.debug_print = debug_print
         self._counts = ComputeLayerCounts(network)
         self._dim_lift = LiftSymmetricalLinears(network)
 
@@ -327,33 +329,42 @@ class OptimizeLinearsPadForSymmetries(LayerwiseOperation):
                     bucketing_refs_uniq=wrefs_uniq,
                     bucketing_refs_axis=_POS_WEIGHT_REFS,
                     transpose=self.transpose,
-                ) if self.how != "full_only" else None,
+                )
+                if self.how != "full_only"
+                else None,
                 _FullOneSidePadStrategy(
                     unique_pairs,
                     bucketing_refs_uniq=refs_uniq,
                     bucketing_refs_axis=_POS_REFS,
                     transpose=self.transpose,
-                ) if self.how != "full_only" else None,
+                )
+                if self.how != "full_only"
+                else None,
                 _BucketPadStrategy(
                     unique_pairs,
                     bucketing_refs_uniq=wrefs_uniq,
                     bucketing_refs_axis=_POS_WEIGHT_REFS,
                     max_refs_uniq=self.max_refs_nogather_uniq,
-                ) if self.how != "full_only" else None,
+                )
+                if self.how != "full_only"
+                else None,
                 _BucketPadStrategy(
                     unique_pairs,
                     bucketing_refs_uniq=refs_uniq,
                     bucketing_refs_axis=_POS_REFS,
                     max_refs_uniq=self.max_refs_nogather_uniq,
-                ) if self.how != "full_only" else None,
+                )
+                if self.how != "full_only"
+                else None,
             )
             if strategy is not None and strategy.is_applicable
         ]
 
         min_strategy_cost, min_strategy = min(strategies, key=lambda v: sum(v[0]))
 
-        print(f"PADDING {layer_id} strategies:", [(s.__class__.__name__, cost) for cost, s in strategies])
-        print("ORIGINAL cost:", original_cost)
+        if self.debug_print:
+            print(f"PADDING {layer_id} strategies:", [(s.__class__.__name__, cost) for cost, s in strategies])
+            print("ORIGINAL cost:", original_cost)
 
         _, (refs_exp_orig, wrefs_exp_orig) = self._dim_lift.detect_dim_lift(
             batch, refs, wrefs, existing_lifts=None, preferred_period=expected_period
@@ -364,10 +375,12 @@ class OptimizeLinearsPadForSymmetries(LayerwiseOperation):
         if sum(min_strategy_cost) > sum(expected_original_cost):
             return None
 
-        print(f"PADDING {layer_id} using {min_strategy.__class__.__name__}:")
+        if self.debug_print:
+            print(f"PADDING {layer_id} using {min_strategy.__class__.__name__}:")
         refs_out, wrefs_out = min_strategy.build_refs()
-        print(f"{len(refs)} -> {len(refs_out)}")
-        print(f"{len(wrefs)} -> {len(wrefs_out)}")
+        if self.debug_print:
+            print(f"{len(refs)} -> {len(refs_out)}")
+            print(f"{len(wrefs)} -> {len(wrefs_out)}")
         return refs_out, wrefs_out
 
     def _remap(
@@ -447,7 +460,10 @@ class OptimizeLinearsPadForSymmetries(LayerwiseOperation):
 
 
 def build_optimize_linears_pad_for_symmetries(
-    how: LinearsPadForSymmetriesOption, transpose: bool, max_refs_nogather_uniq: int
+    how: LinearsPadForSymmetriesOption,
+    transpose: bool,
+    max_refs_nogather_uniq: int,
+    debug_print: bool,
 ):
     def _init(network: VectorizedLayerNetwork):
         return OptimizeLinearsPadForSymmetries(
@@ -455,6 +471,7 @@ def build_optimize_linears_pad_for_symmetries(
             how=how,
             transpose=transpose,
             max_refs_nogather_uniq=max_refs_nogather_uniq,
+            debug_print=debug_print,
         )
 
     return _init
