@@ -4,12 +4,12 @@ from neuralogic.core.builder.builder import NeuralSample
 from lib.benchmarks.runnables.runnable import Runnable
 from lib.benchmarks.utils.timer import Timer
 from lib.datasets.dataset import BuiltDatasetInstance
-from lib.engines.torch.from_vectorized import build_torch_network
+from lib.engines.torch.from_vectorized import build_torch_network, simple_forward_pass_runner
 from lib.engines.torch.settings import TorchModuleSettings
 from lib.sources import from_java
 from lib.sources.neuralogic_settings import NeuralogicSettings
-from lib.vectorize.model.settings import VectorizeSettings
 from lib.vectorize.pipeline.pipeline import create_vectorized_network_compiler
+from lib.vectorize.settings import VectorizeSettings
 
 
 class NeuralogicVectorizedTorchRunnable(Runnable):
@@ -26,7 +26,11 @@ class NeuralogicVectorizedTorchRunnable(Runnable):
         self.t_settings = torch_settings
         self.v_settings = vectorize_settings
         self.debug = debug
-        self.build_vectorized_network = create_vectorized_network_compiler(vectorize_settings, debug_prints=debug)
+        self.build_vectorized_network = create_vectorized_network_compiler(
+            vectorize_settings,
+            forward_pass_runner=simple_forward_pass_runner,
+            debug_prints=debug,
+        )
 
     def _initialize(self, dataset: BuiltDatasetInstance, samples: list[NeuralSample] | None = None):
         if samples is None:
