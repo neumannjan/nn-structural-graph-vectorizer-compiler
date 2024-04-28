@@ -79,10 +79,10 @@ class OptimizeTailRefsToUniqueNoOrdRemap(LayerwiseOperation):
 
         assert remapped_refs2 is not None
 
-        if remapped_refs1 is not None and 1 - len(remapped_refs1) / len(remapped_refs2) > self.unique_margin_rate:
-            transform, remapped_refs = transform1, remapped_refs1
-        else:
+        if remapped_refs1 is None or 1 - len(remapped_refs1) / len(remapped_refs2) <= self.unique_margin_rate:
             transform, remapped_refs = transform2, remapped_refs2
+        else:
+            transform, remapped_refs = transform1, remapped_refs1
 
         apply_refs_to_target(remapped_refs, target)
         combine_ord_maps_(transform.ord_map, layer.ord_map)

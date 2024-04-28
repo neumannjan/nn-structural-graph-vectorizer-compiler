@@ -30,7 +30,6 @@ from lib.vectorize.pipeline.optimize_single_use_gathers import (
     build_optimize_single_use_gathers,
 )
 from lib.vectorize.pipeline.optimize_tail_refs_to_unique import (
-    OptimizeTailRefsToUniqueNoOrdRemap,
     RemapOrdinals,
     build_optimize_tail_refs_to_unique_no_ord_remap_factory,
 )
@@ -154,10 +153,10 @@ def create_vectorized_network_compiler(
         if debug_prints:
             remaps += LayerwisePrint
 
-    if settings.linears_symmetries:
-        if settings.linears_pad_for_symmetries != "never":
+    if settings.linears_symmetries.enabled:
+        if settings.linears_symmetries.pad != "never":
             remaps += build_optimize_linears_pad_for_symmetries(
-                settings.linears_pad_for_symmetries,
+                settings.linears_symmetries.pad,
                 transpose=settings.transpose_fixed_count_reduce,
                 max_refs_nogather_uniq=settings.max_nogather_simple_layer_refs_length,
             )
@@ -166,7 +165,7 @@ def create_vectorized_network_compiler(
 
     if settings.optimize_tail_refs:
         remaps += build_optimize_tail_refs_to_unique_no_ord_remap_factory(
-            unique_margin_rate=settings.optimize_tail_refs_unique_margin_rate
+            unique_margin_rate=settings.optimize_tail_refs.unique_margin_rate
         )
         if debug_prints:
             remaps += LayerwisePrint
@@ -194,14 +193,14 @@ def create_vectorized_network_compiler(
         # + _debug
     )
 
-    if settings.optimize_single_use_gathers and settings.optimize_single_use_gathers_before_symmetries:
+    if settings.optimize_single_use_gathers and settings.optimize_single_use_gathers.run_before_symmetries:
         build_vectorized_network += (
             PIPE  #
             + build_optimize_single_use_gathers(
-                margin=settings.optimize_single_use_gathers_margin,
-                margin_rate=settings.optimize_single_use_gathers_margin_rate,
-                max_chain_length=settings.optimize_single_use_gathers_aggressive_max_chain_length,
-                propagate_through_symmetries=settings.optimize_single_use_gathers_aggressive_through_symmetries,
+                margin=settings.optimize_single_use_gathers.margin,
+                margin_rate=settings.optimize_single_use_gathers.margin_rate,
+                max_chain_length=settings.optimize_single_use_gathers.aggressive_max_chain_depth,
+                propagate_through_symmetries=settings.optimize_single_use_gathers.aggressive_through_symmetries,
                 debug=debug_prints,
             )
             + compute_layer_counts
@@ -220,14 +219,14 @@ def create_vectorized_network_compiler(
             + _debug
         )
 
-    if settings.optimize_single_use_gathers and not settings.optimize_single_use_gathers_before_symmetries:
+    if settings.optimize_single_use_gathers and not settings.optimize_single_use_gathers.run_before_symmetries:
         build_vectorized_network += (
             PIPE  #
             + build_optimize_single_use_gathers(
-                margin=settings.optimize_single_use_gathers_margin,
-                margin_rate=settings.optimize_single_use_gathers_margin_rate,
-                max_chain_length=settings.optimize_single_use_gathers_aggressive_max_chain_length,
-                propagate_through_symmetries=settings.optimize_single_use_gathers_aggressive_through_symmetries,
+                margin=settings.optimize_single_use_gathers.margin,
+                margin_rate=settings.optimize_single_use_gathers.margin_rate,
+                max_chain_length=settings.optimize_single_use_gathers.aggressive_max_chain_depth,
+                propagate_through_symmetries=settings.optimize_single_use_gathers.aggressive_through_symmetries,
                 debug=debug_prints,
             )
             + compute_layer_counts

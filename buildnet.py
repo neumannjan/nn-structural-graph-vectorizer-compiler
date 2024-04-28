@@ -1,10 +1,14 @@
 import torch
 from lib.benchmarks.runnables.neuralogic_vectorized import NeuralogicVectorizedTorchRunnable
-from lib.datasets.mutagenesis import MyMutagenesis
 from lib.datasets.tu_molecular import MyTUDataset
 from lib.engines.torch.settings import TorchModuleSettings
 from lib.sources.neuralogic_settings import NeuralogicSettings
-from lib.vectorize.model.settings import VectorizeSettings
+from lib.vectorize.model.settings import (
+    LinearsSymmetriesSettings,
+    OptimizeSingleUseGathersSettings,
+    OptimizeTailRefsSettings,
+    VectorizeSettings,
+)
 
 if __name__ == "__main__":
     debug = True
@@ -16,29 +20,31 @@ if __name__ == "__main__":
 
     t_settings = TorchModuleSettings()
 
-    v_settings = VectorizeSettings()
-
-    v_settings.iso_compression = True
-    v_settings.linears_optimize_unique_ref_pairs = True
-    v_settings.linears_pad_for_symmetries = "any"
-    v_settings.linears_symmetries = True
-    v_settings.optimize_tail_refs = True
-
-    v_settings.allow_repeat_gathers = True
-
-    v_settings.transpose_fixed_count_reduce = True
-
-    v_settings.merge_trivial_layer_concats = True
-
-    v_settings.optimize_single_use_gathers = True
-
-    v_settings.optimize_single_use_gathers_before_symmetries = False
-    v_settings.optimize_single_use_gathers_margin = 30
-    v_settings.optimize_single_use_gathers_margin_rate = 0.05
-    v_settings.optimize_single_use_gathers_aggressive_max_chain_length = "unlimited"
-    v_settings.optimize_single_use_gathers_aggressive_through_symmetries = True
-
-    v_settings.granularize_by_weight = False
+    v_settings = VectorizeSettings(
+        transpose_fixed_count_reduce=True,
+        iso_compression=True,
+        linears_optimize_unique_ref_pairs=True,
+        linears_symmetries=LinearsSymmetriesSettings(
+            enabled=True,
+            pad="any",
+        ),
+        optimize_tail_refs=OptimizeTailRefsSettings(
+            enabled=True,
+            unique_margin_rate=0.05,
+        ),
+        optimize_single_use_gathers=OptimizeSingleUseGathersSettings(
+            enabled=True,
+            run_before_symmetries=False,
+            margin=30,
+            margin_rate=0.05,
+            aggressive_max_chain_depth="unlimited",
+            aggressive_through_symmetries=True,
+        ),
+        allow_repeat_gathers=True,
+        merge_trivial_layer_concats=True,
+        max_nogather_simple_layer_refs_length=24,
+        granularize_by_weight=False,
+    )
 
     # dataset = MyMutagenesis(n_settings, "simple", "original")
     dataset = MyTUDataset(n_settings, "mutag", "gsage")

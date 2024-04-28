@@ -203,15 +203,13 @@ class SimplifyGathers(LayerwiseOperation):
 
                 # if the gather remained non-simple (generic), then if the total no. of ordinals
                 # is low and the references are trivial, we may just preorder the references themselves
-                # TODO parametrize the len() threshold
                 if (
                     isinstance(input.gather, GenericGather)
                     and len(input.gather.ordinals) <= self.max_nogather_simple_layer_refs_length
+                    and all((v == 1 for v in self._compute_layer_counts.iter_layer_refs_counts(batch, refs)))
                 ):
-                    refs_len1 = all((v == 1 for v in self._compute_layer_counts.iter_layer_refs_counts(batch, refs)))
-                    if refs_len1:
-                        self._reorder_refs(refs, input.gather.ordinals)
-                        input.gather = NoopGather()
+                    self._reorder_refs(refs, input.gather.ordinals)
+                    input.gather = NoopGather()
             case _:
                 assert False, f"{input}"
 
