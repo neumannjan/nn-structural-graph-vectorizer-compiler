@@ -24,11 +24,11 @@ from lib.vectorize.model import *
 def _get_fact_value(fact: Fact, shape: ConcreteShape) -> torch.Tensor:
     match fact:
         case UnitFact():
-            return torch.ones(shape.dims).unsqueeze(0)
+            return torch.ones(shape.dims, dtype=torch.get_default_dtype()).unsqueeze(0)
         case EyeFact(dim=dim):
-            return torch.eye(dim).unsqueeze(0)
+            return torch.eye(dim, dtype=torch.get_default_dtype()).unsqueeze(0)
         case ValueFact(value=value):
-            return torch.tensor(value)
+            return torch.tensor(value, dtype=torch.get_default_dtype())
         case _:
             assert False, f"{fact}"
 
@@ -46,7 +46,7 @@ def _build_params_module(reference: VectorizedOpSeqNetwork) -> NetworkParams:
     for key, weight_def in reference.weights.items():
         assert key not in params
 
-        value = torch.tensor(weight_def.value)
+        value = torch.tensor(weight_def.value, dtype=torch.get_default_dtype())
         params[key] = torch.nn.Parameter(value, requires_grad=True)
 
     return NetworkParams(params)

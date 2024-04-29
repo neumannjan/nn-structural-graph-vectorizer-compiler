@@ -60,7 +60,7 @@ DTYPE_TORCH_TO_NUMPY = {
 }
 
 
-def java_value_to_numpy(java_value, dtype: torch.dtype | None = None) -> np.ndarray:
+def java_value_to_numpy(java_value, dtype: torch.dtype) -> np.ndarray:
     if dtype is None:
         dtype = torch.get_default_dtype()
 
@@ -74,8 +74,8 @@ def java_value_to_numpy(java_value, dtype: torch.dtype | None = None) -> np.ndar
     return arr
 
 
-def java_value_to_tensor(java_value, dtype: torch.dtype | None = None) -> torch.Tensor:
-    return torch.tensor(java_value_to_numpy(java_value, dtype))
+def java_value_to_tensor(java_value, dtype: torch.dtype) -> torch.Tensor:
+    return torch.tensor(java_value_to_numpy(java_value, dtype), dtype=dtype)
 
 
 CLASS_TO_LAYER_TYPE_MAP: dict[str, LayerType] = {

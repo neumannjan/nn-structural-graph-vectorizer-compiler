@@ -1,6 +1,3 @@
-import copy
-from typing import OrderedDict
-
 from tqdm.auto import tqdm
 
 from lib.benchmarks.runnables.runnable import Runnable
@@ -8,30 +5,27 @@ from lib.benchmarks.utils.timer import Timer, TimerResult
 from lib.datasets.dataset import BuiltDatasetInstance
 
 
-class Runner:
-    def __init__(self, n_repeats: int) -> None:
-        self.n_repeats = n_repeats
+def measure_forward(runnable: Runnable, dataset: BuiltDatasetInstance, times: int) -> TimerResult:
+    timer = Timer(runnable.device)
 
-    def measure(self, runnable: Runnable, dataset: BuiltDatasetInstance) -> TimerResult:
-        timer = Timer(runnable.device)
+    runnable.initialize(dataset)
 
-        runnable.initialize(dataset)
+    for _ in tqdm(range(times), desc="Runs"):
+        runnable.measure_forward_pass_epoch(timer)
 
-        for _ in tqdm(range(self.n_repeats), desc="Runs"):
-            with timer:
-                runnable.forward_pass()
-
-        return timer.get_result()
+    return timer.get_result()
 
 
-class MultiRunner:
-    def __init__(self, n_repeats: int) -> None:
-        self.n_repeats = n_repeats
-        self._result: OrderedDict[str, TimerResult] = OrderedDict()
+def measure_backward(
+    runnable: Runnable, dataset: BuiltDatasetInstance, times: int
+) -> tuple[TimerResult, TimerResult, TimerResult]:
+    fwd_timer = Timer(runnable.device)
+    bwd_timer = Timer(runnable.device)
+    all_timer = Timer(runnable.device)
 
-    def measure(self, name: str, runnable: Runnable, dataset: BuiltDatasetInstance):
-        runner = Runner(self.n_repeats)
-        self._result[name] = runner.measure(runnable, dataset)
+    runnable.initialize(dataset)
 
-    def get_result(self) -> dict[str, TimerResult]:
-        return copy.deepcopy(self._result)
+    for _ in tqdm(range(times), desc="Runs"):
+        runnable.measure_forward_and_backward_pass_epoch(fwd_timer, bwd_timer, all_timer)
+
+    return fwd_timer.get_result(), bwd_timer.get_result(), all_timer.get_result()

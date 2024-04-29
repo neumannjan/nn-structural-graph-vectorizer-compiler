@@ -124,17 +124,18 @@ def _iter_all_variants(
         yield from _iter_all_variants(tail, base_this)
 
 
-SettingsPresets = Literal["tuning", "test_optimizations_effect", "test_optimizations_effect_all_combinations"]
+VectorizeSettingsPresets = Literal["default_only", "tuning", "test_optimizations_effect", "test_optimizations_effect_all_combinations"]
 
 
-_VARIANTS_MAP: dict[SettingsPresets, list[list[VectorizeSettingsPartial | _Barrier]]] = {
+_VARIANTS_MAP: dict[VectorizeSettingsPresets, list[list[VectorizeSettingsPartial | _Barrier]]] = {
+    "default_only": [[VectorizeSettingsPartial()]],
     "tuning": _VARIANTS_PARTIALS,
     "test_optimizations_effect": _VARIANTS_TEST_OPTIMIZATION_EFFECT_PARTIALS,
     "test_optimizations_effect_all_combinations": _VARIANTS_TEST_OPTIMIZATION_EFFECT_PARTIALS_ALL_COMBINATIONS,
 }
 
 
-def iterate_vectorize_settings_presets(choose_presets: SettingsPresets) -> Iterator[VectorizeSettings]:
+def iterate_vectorize_settings_presets(choose_presets: VectorizeSettingsPresets) -> Iterator[VectorizeSettings]:
     return _iter_all_variants(_VARIANTS_MAP[choose_presets])
 
 

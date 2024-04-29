@@ -37,10 +37,10 @@ class _JavaWeightDefinition(BaseWeightDefinition):
         return int(self._java_weight.index)
 
     def get_value_numpy(self) -> np.ndarray:
-        return java_value_to_numpy(self._java_weight.value)
+        return java_value_to_numpy(self._java_weight.value, dtype=torch.get_default_dtype())
 
     def get_value_torch(self) -> torch.Tensor:
-        return java_value_to_tensor(self._java_weight.value)
+        return java_value_to_tensor(self._java_weight.value, dtype=torch.get_default_dtype())
 
     def __hash__(self) -> int:
         return hash((self.learnable, self.id))
@@ -98,10 +98,14 @@ class MinimalAPIJavaNetwork(MinimalAPINetwork[_JavaNeuronsPointer]):
         return MapSequence(lambda n: _JavaWeightDefinition(n.getOffset()), neurons._n)
 
     def get_values_numpy(self, neurons: _JavaNeuronsPointer) -> Collection[np.ndarray]:
-        return MapCollection(lambda n: java_value_to_numpy(n.getRawState().getValue()), neurons._n)
+        return MapCollection(
+            lambda n: java_value_to_numpy(n.getRawState().getValue(), dtype=torch.get_default_dtype()), neurons._n
+        )
 
     def get_values_torch(self, neurons: _JavaNeuronsPointer) -> Collection[torch.Tensor]:
-        return MapCollection(lambda n: java_value_to_tensor(n.getRawState().getValue()), neurons._n)
+        return MapCollection(
+            lambda n: java_value_to_tensor(n.getRawState().getValue(), dtype=torch.get_default_dtype()), neurons._n
+        )
 
     def get_transformations(self, neurons: _JavaNeuronsPointer) -> Sequence[TransformationDef | None]:
         return MapSequence(get_transformation, neurons._n)

@@ -3,6 +3,8 @@ from typing import Callable, Literal, TypedDict
 
 from typing_extensions import Unpack
 
+from lib.utils import serialize_dataclass
+
 LinearsPadForSymmetriesOption = Literal["never", "sided_only", "full_only", "any"]
 
 
@@ -376,12 +378,12 @@ class VectorizeSettings:
         return VectorizeSettings(**vals)
 
     def serialize(self) -> "VectorizeSettingsPartial":
-        out = VectorizeSettingsPartial()
+        return VectorizeSettingsPartial(serialize_dataclass(self, call_self=False))  # pyright: ignore
 
-        for k, v in asdict(self).items():
-            if is_dataclass(v):
-                out[k] = v.serialize()
-            else:
-                out[k] = v
+    @staticmethod
+    def deserialize(d: VectorizeSettingsPartial):
+        d["linears_symmetries"] = LinearsSymmetriesSettings(**d["linears_symmetries"])  # pyright: ignore
+        d["optimize_tail_refs"] = OptimizeTailRefsSettings(**d["optimize_tail_refs"])  # pyright: ignore
+        d["optimize_single_use_gathers"] = OptimizeSingleUseGathersSettings(**d["optimize_single_use_gathers"])  # pyright: ignore
 
-        return out
+        return VectorizeSettings(**d)

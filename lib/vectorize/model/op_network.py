@@ -83,7 +83,7 @@ def _match_op(op: Operation):
 class OperationSeq:
     __slots__ = ("layer_refs", "operations", "expected_count")
 
-    def __init__(self, layer_refs: LayerRefs | None, operations: list[Operation], count: int | None) -> None:
+    def __init__(self, layer_refs: LayerRefs, operations: list[Operation], count: int | None) -> None:
         self.layer_refs = layer_refs
         self.operations = operations
         self.expected_count = count

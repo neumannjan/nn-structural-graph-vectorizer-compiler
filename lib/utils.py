@@ -1,8 +1,10 @@
 import functools
 import heapq
 import re
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
+from dataclasses import fields, is_dataclass
 from typing import (
+    Any,
     Callable,
     Container,
     Generic,
@@ -53,6 +55,7 @@ def cache(func):
 
 _T = TypeVar("_T")
 _S = TypeVar("_S")
+_R = TypeVar("_R")
 
 
 class KeySortable(Generic[_T, _S]):
@@ -536,6 +539,23 @@ class MapSequence(Sequence[_T]):
         return len(self._orig)
 
 
+class MapMapping(Mapping[_T, _S]):
+    __slots__ = ("_mapping", "_orig")
+
+    def __init__(self, mapping: Callable[[_R], _S], orig: Mapping[_T, _R]) -> None:
+        self._orig = orig
+        self._mapping = mapping
+
+    def __getitem__(self, key: _T) -> _S:
+        return self._mapping(self._orig[key])
+
+    def __iter__(self) -> Iterator[_T]:
+        return iter(self._orig)
+
+    def __len__(self) -> int:
+        return len(self._orig)
+
+
 class LambdaIterable(Iterable[_T]):
     __slots__ = ("_func",)
 
@@ -599,3 +619,57 @@ class Blacklist(Container[_T], Generic[_T]):
 
     def __contains__(self, x: object, /) -> bool:
         return x not in self.values
+
+
+_KEY_TO_ABBR_REGEX = re.compile("(?:_|^)(\\w)")
+
+
+def key_to_abbr(key: str) -> str:
+    out = _KEY_TO_ABBR_REGEX.findall(key)
+    out = "".join(out)
+    return out
+
+
+def _dataclass_to_shorthand(o: object, prefix: str = ""):
+    assert is_dataclass(o) and isinstance(o, object)
+
+    for field in fields(o):
+        k = prefix + key_to_abbr(field.name)
+        v = getattr(o, field.name)
+
+        if is_dataclass(v) and isinstance(v, object):
+            yield f"{k}=[{dataclass_to_shorthand(v)}]"
+        else:
+            yield f"{k}={v}"
+
+
+def dataclass_to_shorthand(o: object, prefix: str = ""):
+    return ",".join(_dataclass_to_shorthand(o, prefix))
+
+
+def iter_empty(it: Iterator) -> bool:
+    try:
+        next(it)
+    except StopIteration:
+        return True
+    return False
+
+
+def serialize_dataclass(self: object, call_self=True) -> dict[str, Any]:
+    assert is_dataclass(self) and isinstance(self, object)
+
+    if call_self and "serialize" in self.__class__.__dict__:
+        return self.serialize()  # pyright: ignore
+
+    out = {}
+
+    for field in fields(self):
+        k = field.name
+        v = getattr(self, field.name)
+
+        if is_dataclass(v):
+            out[k] = serialize_dataclass(v)
+        else:
+            out[k] = v
+
+    return out

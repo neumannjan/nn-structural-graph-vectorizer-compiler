@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 from neuralogic.core.builder.builder import NeuralSample
 
 from lib.benchmarks.runnables.runnable import Runnable
@@ -36,6 +37,8 @@ class NeuralogicVectorizedTorchRunnable(Runnable):
         if samples is None:
             self.samples = dataset.samples
 
+        self.targets = torch.tensor([s.target for s in self.samples], dtype=torch.get_default_dtype()).to(self.device)
+
         yield "Retrieving input information..."
         self.network = from_java(self.samples, self.n_settings)
 
@@ -50,6 +53,8 @@ class NeuralogicVectorizedTorchRunnable(Runnable):
         elif self.t_settings.compilation == "script":
             self.model = torch.jit.script(self.model)
         self.model.to(self.device)  # pyright: ignore
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.001)  # pyright: ignore
+        self.model.train()  # pyright: ignore
 
         yield "Done."
 
@@ -70,6 +75,31 @@ class NeuralogicVectorizedTorchRunnable(Runnable):
 
     def forward_pass(self):
         return self.model()  # pyright: ignore
+
+    def measure_forward_pass_epoch(self, timer: Timer):
+        assert timer.device == self.device
+
+        with timer:
+            self.model()  # pyright: ignore
+
+    def measure_forward_and_backward_pass_epoch(
+        self,
+        forward_timer: Timer,
+        backward_timer: Timer,
+        combined_timer: Timer,
+    ):
+        assert forward_timer.device == self.device
+        assert backward_timer.device == self.device
+        assert combined_timer.device == self.device
+
+        self.optimizer.zero_grad()
+        with combined_timer:
+            with forward_timer:
+                out = self.model()  # pyright: ignore
+            loss = F.mse_loss(out.squeeze(), self.targets.squeeze())  # pyright: ignore
+            with backward_timer:
+                loss.backward()
+            self.optimizer.step()
 
     @property
     def device(self):

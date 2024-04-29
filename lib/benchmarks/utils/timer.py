@@ -11,7 +11,8 @@ class TimerResult:
 
     @property
     def result_mean_ns(self) -> float:
-        return self._times[self._agg_skip_first :].mean()
+        skip = self._agg_skip_first if len(self._times) > self._agg_skip_first else 0
+        return self._times[skip:].mean()
 
     @property
     def result_mean_s(self) -> float:
@@ -19,7 +20,8 @@ class TimerResult:
 
     @property
     def result_std_ns(self) -> float:
-        return self._times[self._agg_skip_first :].std()
+        skip = self._agg_skip_first if len(self._times) > self._agg_skip_first else 0
+        return self._times[skip:].std()
 
     @property
     def result_std_s(self) -> float:
@@ -43,7 +45,7 @@ class TimerResult:
 class Timer:
     def __init__(self, device, agg_skip_first=2) -> None:
         self._start_time: int | None = None
-        self._device = device
+        self.device = device
         self._times: list[int] = []
         self._agg_skip_first = agg_skip_first
 
@@ -51,7 +53,7 @@ class Timer:
         return time.perf_counter_ns()
 
     def _synchronize(self):
-        device = str(self._device).lower()
+        device = str(self.device).lower()
 
         if device.startswith("cuda"):
             torch.cuda.synchronize()

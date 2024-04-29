@@ -1,9 +1,11 @@
+import torch
+import torch.nn.functional as F
 from neuralogic.core.builder.builder import NeuralSample
 from torch_geometric.loader import DataLoader
 
 from lib.benchmarks.runnables.runnable import Runnable
+from lib.benchmarks.utils.timer import Timer
 from lib.datasets.dataset import BuiltDatasetInstance
-from lib.datasets.tu_molecular import MyTUDataset
 
 
 class PytorchGeometricRunnable(Runnable):
@@ -25,9 +27,38 @@ class PytorchGeometricRunnable(Runnable):
 
         self.model = module_provider()
         self.model.to(self.device)
+        self.model.train()
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.001)
 
     def forward_pass(self):
         return self.model(self.data.x, self.data.edge_index, self.data.batch)
+
+    def measure_forward_pass_epoch(self, timer: Timer):
+        assert timer.device == self.device
+
+        with timer:
+            self.model(self.data.x, self.data.edge_index, self.data.batch)
+
+    def measure_forward_and_backward_pass_epoch(
+        self,
+        forward_timer: Timer,
+        backward_timer: Timer,
+        combined_timer: Timer,
+    ):
+        assert forward_timer.device == self.device
+        assert backward_timer.device == self.device
+        assert combined_timer.device == self.device
+
+        y = self.data.y.to(torch.get_default_dtype()).squeeze()
+
+        self.optimizer.zero_grad()
+        with combined_timer:
+            with forward_timer:
+                out = self.model(self.data.x, self.data.edge_index, self.data.batch)
+            loss = F.mse_loss(out.squeeze(), y)
+            with backward_timer:
+                loss.backward()
+            self.optimizer.step()
 
     @property
     def device(self):
