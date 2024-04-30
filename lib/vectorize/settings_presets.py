@@ -65,6 +65,14 @@ _VARIANTS_TEST_OPTIMIZATION_EFFECT_PARTIALS: list[list[VectorizeSettingsPartial 
 
 _VARIANTS_TEST_OPTIMIZATION_EFFECT_PARTIALS_ALL_COMBINATIONS: list[list[VectorizeSettingsPartial | _Barrier]] = [
     [
+        VectorizeSettingsPartial(allow_repeat_gathers=False),
+        VectorizeSettingsPartial(allow_repeat_gathers=True),
+    ],
+    [
+        VectorizeSettingsPartial(granularize_by_weight=False),
+        VectorizeSettingsPartial(granularize_by_weight=True),
+    ],
+    [
         VectorizeSettingsPartial(transpose_fixed_count_reduce=False),
         VectorizeSettingsPartial(transpose_fixed_count_reduce=True),
     ],
@@ -124,7 +132,9 @@ def _iter_all_variants(
         yield from _iter_all_variants(tail, base_this)
 
 
-VectorizeSettingsPresets = Literal["default_only", "tuning", "test_optimizations_effect", "test_optimizations_effect_all_combinations"]
+VectorizeSettingsPresets = Literal[
+    "default_only", "tuning", "test_optimizations_effect", "test_optimizations_effect_all_combinations"
+]
 
 
 _VARIANTS_MAP: dict[VectorizeSettingsPresets, list[list[VectorizeSettingsPartial | _Barrier]]] = {
