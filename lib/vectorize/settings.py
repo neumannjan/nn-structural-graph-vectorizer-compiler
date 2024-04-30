@@ -1,5 +1,5 @@
 from dataclasses import asdict, dataclass, field, is_dataclass
-from typing import Callable, Literal, TypedDict
+from typing import Any, Callable, Literal, TypedDict
 
 from typing_extensions import Unpack
 
@@ -381,9 +381,15 @@ class VectorizeSettings:
         return VectorizeSettingsPartial(serialize_dataclass(self, call_self=False))  # pyright: ignore
 
     @staticmethod
-    def deserialize(d: VectorizeSettingsPartial):
-        d["linears_symmetries"] = LinearsSymmetriesSettings(**d["linears_symmetries"])  # pyright: ignore
-        d["optimize_tail_refs"] = OptimizeTailRefsSettings(**d["optimize_tail_refs"])  # pyright: ignore
-        d["optimize_single_use_gathers"] = OptimizeSingleUseGathersSettings(**d["optimize_single_use_gathers"])  # pyright: ignore
+    def deserialize(d: dict[str, Any]):
+        linears_symmetries = d.get("linears_symmetries", None)
+        optimize_tail_refs = d.get("optimize_tail_refs", None)
+        optimize_single_use_gathers = d.get("optimize_single_use_gathers", None)
+        if linears_symmetries:
+            d["linears_symmetries"] = LinearsSymmetriesSettings(**linears_symmetries)
+        if optimize_tail_refs:
+            d["optimize_tail_refs"] = OptimizeTailRefsSettings(**optimize_tail_refs)
+        if optimize_single_use_gathers:
+            d["optimize_single_use_gathers"] = OptimizeSingleUseGathersSettings(**optimize_single_use_gathers)
 
         return VectorizeSettings(**d)
