@@ -1,6 +1,7 @@
 import datetime
 import itertools
 import json
+import pickle
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Container, Literal
@@ -18,6 +19,7 @@ from lib.datasets.tu_molecular import MyTUDataset, TUDatasetSource, TUDatasetTem
 from lib.engines.torch.settings import Compilation, TorchModuleSettings, TorchReduceMethod
 from lib.sources.neuralogic_settings import NeuralogicSettings
 from lib.utils import dataclass_to_shorthand, iter_empty, serialize_dataclass
+from lib.vectorize.model.op_network import VectorizedOpSeqNetwork
 from lib.vectorize.settings import VectorizeSettings
 from lib.vectorize.settings_presets import VectorizeSettingsPresets, iterate_vectorize_settings_presets
 
@@ -245,12 +247,15 @@ def total(dir: Path):
         print(len(variants))
 
 
-@cli.command()
+@cli.command(context_settings={"show_default": True})
 @click.argument(
     "dir", type=click.Path(exists=True, file_okay=False, dir_okay=True, readable=True, writable=True, path_type=Path)
 )
 @click.argument("index", type=int)
-def run(dir: Path, index: int):
+@click.option("--measure/--no-measure", default=True)
+@click.option("--save-architecture/--no-save-architecture", default=True)
+@click.option("--force-cpu", default=False, is_flag=True)
+def run(dir: Path, index: int, measure: bool, save_architecture: bool, force_cpu: bool):
     torch.set_default_dtype(torch.float32)
 
     variants_file = dir / "variants.txt"
@@ -270,12 +275,15 @@ def run(dir: Path, index: int):
     del variants
 
     time = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
-    name = f"{dataclass_to_shorthand(variant)},{time}"
+    notimename = dataclass_to_shorthand(variant)
+    timename = f"{notimename},{time}"
 
     print(variant)
     print()
-    print(name)
+    print(timename)
     print()
+
+    device = "cpu" if force_cpu else variant.device
 
     match variant:
         case JavaVariant(engine="java"):
@@ -285,7 +293,7 @@ def run(dir: Path, index: int):
             )
         case VectorizedTorchVariant(engine="torch"):
             runnable = NeuralogicVectorizedTorchRunnable(
-                device=variant.device,
+                device=device,
                 neuralogic_settings=DEFAULT_NEURALOGIC_SETTINGS_VECTORIZE,
                 vectorize_settings=variant.settings,
                 torch_settings=TorchModuleSettings(
@@ -295,31 +303,81 @@ def run(dir: Path, index: int):
             )
             dataset = DATASET_OPTIONS[variant.dataset][0](DEFAULT_NEURALOGIC_SETTINGS_VECTORIZE)
         case TorchVariant(engine="pyg"):
-            runnable = PytorchGeometricRunnable(device=variant.device)
+            runnable = PytorchGeometricRunnable(device=device)
             dataset = DATASET_OPTIONS[variant.dataset][0](DEFAULT_NEURALOGIC_SETTINGS_VECTORIZE)
         case _:
             raise ValueError(variant)
 
     dataset = dataset.build()
 
-    out_file = dir / f"{name}.json"
-    out = variant.serialize()
+    if measure:
+        out_file = dir / f"{timename}.json"
+        out = variant.serialize()
 
-    if variant.backward:
-        fwd, bwd, cmb = measure_backward(runnable, dataset, times=variant.times)
-        out["fwd"] = fwd.times_ns.tolist()
-        out["bwd"] = bwd.times_ns.tolist()
-        out["cmb"] = cmb.times_ns.tolist()
-        print("Forward: ", fwd)
-        print("Backward:", bwd)
-        print("Combined:", cmb)
-    else:
-        cmb = measure_forward(runnable, dataset, times=variant.times)
-        out["cmb"] = out["fwd"] = cmb.times_ns.tolist()
-        print("Forward:", cmb)
+        if variant.backward:
+            fwd, bwd, cmb = measure_backward(runnable, dataset, times=variant.times)
+            out["fwd"] = fwd.times_ns.tolist()
+            out["bwd"] = bwd.times_ns.tolist()
+            out["cmb"] = cmb.times_ns.tolist()
+            print("Forward: ", fwd)
+            print("Backward:", bwd)
+            print("Combined:", cmb)
+        else:
+            cmb = measure_forward(runnable, dataset, times=variant.times)
+            out["cmb"] = out["fwd"] = cmb.times_ns.tolist()
+            print("Forward:", cmb)
 
-    with open(out_file, "w") as fp:
-        json.dump(out, fp)
+        with open(out_file, "w") as fp:
+            json.dump(out, fp)
+    elif save_architecture:
+        runnable.initialize(dataset)
+
+    if save_architecture and hasattr(runnable, "vectorized_network"):
+        out_pkl_file = dir / f"{notimename}.pkl"
+        print(out_pkl_file)
+        # TODO
+        with open(out_pkl_file, "wb") as fp:
+            pickle.dump(runnable.vectorized_network, fp)
+
+
+@cli.command(context_settings={"show_default": True})
+@click.argument(
+    "dir", type=click.Path(exists=True, file_okay=False, dir_okay=True, readable=True, writable=True, path_type=Path)
+)
+def build_architecture_map(dir: Path):
+    variants_file = dir / "variants.txt"
+
+    if not variants_file.exists():
+        raise click.ClickException(f"{variants_file.absolute()} does not exist.")
+
+    with open(variants_file, "r") as fp:
+        variants = json.load(fp)
+
+    architectures: list[VectorizedOpSeqNetwork] = []
+    architectures_dict: dict[VectorizedOpSeqNetwork, int] = {}
+    variants_dict: dict[str, int] = {}
+
+    for v in variants:
+        variant = Variant.deserialize(v)
+        notimename = dataclass_to_shorthand(variant)
+        pkl_file_path = dir / (notimename + ".pkl")
+        if pkl_file_path.exists():
+            with open(pkl_file_path, "rb") as fp:
+                vectorized_network = pickle.load(fp)
+
+            if vectorized_network in architectures_dict:
+                idx = architectures_dict[vectorized_network]
+            else:
+                idx = len(architectures)
+                architectures.append(vectorized_network)
+                architectures_dict[vectorized_network] = idx
+
+            variants_dict[notimename] = idx
+
+    with open(dir / "networks.pkl", "wb") as fp:
+        pickle.dump((architectures, variants_dict), fp)
+
+    print(len(architectures))
 
 
 if __name__ == "__main__":
