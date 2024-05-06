@@ -1,3 +1,4 @@
+import itertools
 from typing import Iterable, Mapping
 
 from lib.vectorize.model import *
@@ -155,6 +156,33 @@ class ComputeChainGraph:
                         ref_gathers[t, ref_layer_id] = None
                     else:
                         ref_gathers[t, ref_layer_id] = gl
+                case Layer(
+                    base=(
+                        InputLayerBase(input=GatheredLayers(refs=LayerRefs() as refs))
+                        | LinearLayerBase(input=GatheredLayers(refs=LayerRefs() as refs))
+                        | LinearLayerBase(weight=GatheredLayers(refs=LayerRefs() as refs))
+                        | LinearGatherLayerBase(input=GatheredLayers(refs=LayerRefs() as refs))
+                        | LinearGatherLayerBase(weight=GatheredLayers(refs=LayerRefs() as refs))
+                    )
+                ):
+                    for t, l in refs:
+                        if t in self.searched_types:
+                            ref_gathers[t, l] = None
+                case Layer(
+                    base=(
+                        LinearLayerBase(
+                            input=GatheredLayers(refs=LayerRefs() as refs_a),
+                            weight=GatheredLayers(refs=LayerRefs() as refs_b),
+                        )
+                        | LinearGatherLayerBase(
+                            input=GatheredLayers(refs=LayerRefs() as refs_a),
+                            weight=GatheredLayers(refs=LayerRefs() as refs_b),
+                        )
+                    )
+                ):
+                    for t, l in itertools.chain(refs_a, refs_b):
+                        if t in self.searched_types:
+                            ref_gathers[t, l] = None
 
         visited: set[_Node] = set()
 

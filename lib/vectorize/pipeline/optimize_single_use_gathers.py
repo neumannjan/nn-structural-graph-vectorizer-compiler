@@ -353,7 +353,7 @@ class OptimizeSingleUseGathers:
                                 # new_ref_to_layer that always has the reference to the fact layer.
                                 self._replace_references(new_ref_to_layer, ref_from=ref, id_to=new_layer_id)
                                 if self.debug:
-                                    print("CHANGED", self.network.fact_layers[l])
+                                    print("CHANGED", self.network.fact_layers[new_layer_id])
                                 if reorder_result != "found_free":
                                     i += 1
                                 old_ref_to_layer = None
