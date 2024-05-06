@@ -27,6 +27,10 @@ _VARIANTS_PARTIALS: list[list[VectorizeSettingsPartial | _Barrier]] = [
         VectorizeSettingsPartial(optimize_single_use_gathers=OptimizeSingleUseGathersSettings.preset(preset))
         for preset in get_args(OptimizeSingleUseGathersPreset)
     ],
+    [
+        VectorizeSettingsPartial(linears_symmetries=LinearsSymmetriesSettings(pad="never")),
+        VectorizeSettingsPartial(linears_symmetries=LinearsSymmetriesSettings(pad="any")),
+    ]
 ]
 
 

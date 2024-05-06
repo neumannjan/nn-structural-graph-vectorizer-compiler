@@ -64,15 +64,20 @@ class OptimizeTailRefsSettings:
 
 OptimizeSingleUseGathersPreset = Literal[
     "free_only",
+    "free_only_presym",
     "margin_S",
+    "margin_M_presym",
     "margin_M_keepsym",
     "margin_M",
+    "margin_L_presym",
     "margin_L_keepsym",
     "margin_L",
-    "agg1_keepsym",
-    "agg2_keepsym",
-    "agg1",
-    "agg2",
+    "margin_XL_presym",
+    "margin_XL_keepsym",
+    "margin_XL",
+    "margin_XXL_presym",
+    "margin_XXL_keepsym",
+    "margin_XXL",
     "agg_max_keepsym",
     "agg_max_propsym",
     "agg_true_unlimited",
@@ -174,23 +179,36 @@ _OPTIMIZE_SINGLE_USE_GATHERS_PRESET_BUILDER_MAP: dict[
     OptimizeSingleUseGathersPreset, Callable[[], OptimizeSingleUseGathersSettings]
 ] = {
     "free_only": lambda: OptimizeSingleUseGathersSettings(margin=0, margin_rate=0.0),
+    "free_only_presym": lambda: OptimizeSingleUseGathersSettings(margin=0, margin_rate=0.0, run_before_symmetries=True),
     "margin_S": lambda: OptimizeSingleUseGathersSettings(margin=10, margin_rate=0.05),
+    "margin_M_presym": lambda: OptimizeSingleUseGathersSettings(
+        margin=30, margin_rate=0.05, run_before_symmetries=True
+    ),
     "margin_M_keepsym": lambda: OptimizeSingleUseGathersSettings(
         margin=30, margin_rate=0.05, propagate_through_symmetries=False
     ),
     "margin_M": lambda: OptimizeSingleUseGathersSettings(margin=30, margin_rate=0.05),
+    "margin_L_presym": lambda: OptimizeSingleUseGathersSettings(
+        margin=50, margin_rate=0.05, run_before_symmetries=True
+    ),
     "margin_L_keepsym": lambda: OptimizeSingleUseGathersSettings(
         margin=50, margin_rate=0.05, propagate_through_symmetries=False
     ),
     "margin_L": lambda: OptimizeSingleUseGathersSettings(margin=50, margin_rate=0.05),
-    "agg1_keepsym": lambda: OptimizeSingleUseGathersSettings(
-        aggressive_max_chain_depth=1, propagate_through_symmetries=False
+    "margin_XL_presym": lambda: OptimizeSingleUseGathersSettings(
+        margin=50, margin_rate=0.2, run_before_symmetries=True
     ),
-    "agg2_keepsym": lambda: OptimizeSingleUseGathersSettings(
-        aggressive_max_chain_depth=2, propagate_through_symmetries=False
+    "margin_XL_keepsym": lambda: OptimizeSingleUseGathersSettings(
+        margin=50, margin_rate=0.2, propagate_through_symmetries=False
     ),
-    "agg1": lambda: OptimizeSingleUseGathersSettings(aggressive_max_chain_depth=1, propagate_through_symmetries=True),
-    "agg2": lambda: OptimizeSingleUseGathersSettings(aggressive_max_chain_depth=2, propagate_through_symmetries=True),
+    "margin_XL": lambda: OptimizeSingleUseGathersSettings(margin=50, margin_rate=0.2),
+    "margin_XXL_presym": lambda: OptimizeSingleUseGathersSettings(
+        margin=50, margin_rate=0.5, run_before_symmetries=True
+    ),
+    "margin_XXL_keepsym": lambda: OptimizeSingleUseGathersSettings(
+        margin=50, margin_rate=0.5, propagate_through_symmetries=False
+    ),
+    "margin_XXL": lambda: OptimizeSingleUseGathersSettings(margin=50, margin_rate=0.5),
     "agg_max_keepsym": lambda: OptimizeSingleUseGathersSettings(
         aggressive_max_chain_depth="unlimited", propagate_through_symmetries=False
     ),
