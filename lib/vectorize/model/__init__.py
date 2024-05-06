@@ -36,6 +36,7 @@ from lib.vectorize.model.op_network import (
     Operation,
     OperationSeq,
     OpSeqBatch,
+    SimpleOperation,
     VectorizedOpSeqNetwork,
     View,
 )

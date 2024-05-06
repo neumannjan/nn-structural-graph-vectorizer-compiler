@@ -10,9 +10,8 @@ class LearnableWeight:
     def __init__(self, value: np.ndarray) -> None:
         self.value = value
 
+    def __hash__(self) -> int:
+        return hash(tuple(self.value.flatten().tolist()))
+
     def __eq__(self, value: object, /) -> bool:
-        return (
-            isinstance(value, LearnableWeight)
-            and self.value.shape == value.value.shape
-            and bool(np.all(self.value == value.value))
-        )
+        return isinstance(value, LearnableWeight) and np.array_equal(self.value, value.value, equal_nan=True)

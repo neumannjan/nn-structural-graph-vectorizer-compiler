@@ -10,5 +10,8 @@ class Transform:
     def __init__(self, transform: TransformationDef) -> None:
         self.transform: TransformationDef = transform
 
+    def __hash__(self) -> int:
+        return hash(self.transform)
+
     def __eq__(self, value: object, /) -> bool:
         return isinstance(value, Transform) and self.transform == value.transform

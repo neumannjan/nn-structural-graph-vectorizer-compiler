@@ -86,6 +86,9 @@ class Refs(Sequence[tuple[int, str, int]]):
 
         return f"{self.__class__.__name__}({out})"
 
+    def __hash__(self) -> int:
+        return hash((self.types, self.layer_ids, self.ordinals))
+
     def __eq__(self, value: object, /) -> bool:
         return (
             isinstance(value, Refs)
@@ -107,6 +110,12 @@ class LayerRefs(Sequence[tuple[int, str]]):
     def __init__(self, types: list[int], layer_ids: list[str]) -> None:
         self.types = types
         self.layer_ids = layer_ids
+
+    @staticmethod
+    def from_iter(it: Iterable[tuple[int, str]]):
+        types = [t for t, _ in it]
+        layer_ids = [l for _, l in it]
+        return LayerRefs(types, layer_ids)
 
     def __contains__(self, x: object, /) -> bool:
         if not isinstance(x, tuple):
@@ -142,6 +151,9 @@ class LayerRefs(Sequence[tuple[int, str]]):
             out += f", ... (size: {len(self)})"
 
         return f"{self.__class__.__name__}({out})"
+
+    def __hash__(self) -> int:
+        return hash((tuple(self.types), tuple(self.layer_ids)))
 
     def __eq__(self, value: object, /) -> bool:
         return (

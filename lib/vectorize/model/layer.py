@@ -18,6 +18,9 @@ class GatheredLayers:
         self.refs = refs
         self.gather = gather
 
+    def __hash__(self) -> int:
+        return hash((self.refs, self.gather))
+
     def __eq__(self, value: object, /) -> bool:
         return isinstance(value, GatheredLayers) and self.refs == value.refs and self.gather == value.gather
 
@@ -41,6 +44,9 @@ class InputLayerBase:
 
     def __init__(self, input: Input) -> None:
         self.input = input
+
+    def __hash__(self) -> int:
+        return hash(self.input)
 
     def __eq__(self, value: object, /) -> bool:
         return isinstance(value, InputLayerBase) and self.input == value.input
@@ -94,6 +100,9 @@ class LinearLayerBase:
         self.weight = weight
         self.lifts = lifts
 
+    def __hash__(self) -> int:
+        return hash((self.input, self.weight, self.lifts))
+
     def __eq__(self, value: object, /) -> bool:
         return (
             isinstance(value, LinearLayerBase)
@@ -122,6 +131,9 @@ class LinearGatherLayerBase:
         self.weight = weight
         self.gather = gather
         self.lifts = lifts
+
+    def __hash__(self) -> int:
+        return hash((self.input, self.weight, self.gather, self.lifts))
 
     def __eq__(self, value: object, /) -> bool:
         return (
@@ -186,12 +198,18 @@ class Layer:
         out += ")"
         return out
 
+    def __hash__(self) -> int:
+        return hash((self.base, self.aggregate, self.transform, self.compilable))
+
     def __eq__(self, value: object, /) -> bool:
         return (
             isinstance(value, Layer)
             and value.base == self.base
             and value.aggregate == self.aggregate
             and value.transform == self.transform
+            and value.count == self.count
+            and value.shape == self.shape
+            and value.compilable == self.compilable
         )
 
 
@@ -209,6 +227,9 @@ class FactLayer:
         if len(self.facts) > n:
             items_repr += f", ... (size: {len(self.facts)})"
         return f"{self.__class__.__name__}({items_repr}, count={self.count}, shape={my_repr(self.shape)})"
+
+    def __hash__(self) -> int:
+        return hash((tuple(self.facts), self.count, self.shape))
 
     def __eq__(self, value: object, /) -> bool:
         return (

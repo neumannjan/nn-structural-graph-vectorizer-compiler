@@ -6,6 +6,7 @@ from lib.vectorize.model.gather import (
     GatherPair,
     GenericGather,
     NoopGather,
+    OneGather,
     Repeat,
     RepeatInterleave,
     SliceValues,
@@ -27,6 +28,12 @@ class Linear:
     def __init__(self, weight_ops: "OperationSeq") -> None:
         self.weight_ops = weight_ops
 
+    def __hash__(self) -> int:
+        return hash(self.weight_ops)
+
+    def __eq__(self, value: object, /) -> bool:
+        return isinstance(value, Linear) and self.weight_ops == value.weight_ops
+
 
 class View:
     __slots__ = ("shape",)
@@ -37,6 +44,12 @@ class View:
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({repr(self.shape)})"
 
+    def __hash__(self) -> int:
+        return hash(self.shape)
+
+    def __eq__(self, value: object, /) -> bool:
+        return isinstance(value, View) and self.shape == value.shape
+
 
 class DimReduce:
     __slots__ = ("dim", "reduce")
@@ -46,8 +59,41 @@ class DimReduce:
         self.dim = dim
         self.reduce: ReductionDef = reduce
 
+    def __hash__(self) -> int:
+        return hash((self.dim, self.reduce))
 
+    def __eq__(self, value: object, /) -> bool:
+        return isinstance(value, DimReduce) and self.dim == value.dim and self.reduce == value.reduce
+
+
+SimpleOperation = OneGather | Transform | DimReduce | UnevenReduce | View
 Operation = Linear | Gather | Transform | DimReduce | UnevenReduce | View
+
+
+def _match_simple_op(op: SimpleOperation):
+    match op:
+        case GenericGather(ordinals=ordinals):
+            ...
+        case TakeSingleValue(ordinal=ordinal):
+            ...
+        case NoopGather():
+            ...
+        case SliceValues(start=start, end=end, step=step):
+            ...
+        case Repeat(times=_, total_length=total_length):
+            ...
+        case RepeatInterleave(times=_, total_length=total_length):
+            ...
+        case Transform(transform=transform):
+            ...
+        case DimReduce(dim=dim, reduce=reduce):
+            ...
+        case UnevenReduce(counts=counts, reduce=reduce):
+            ...
+        case View(shape=shape):
+            ...
+        case _:
+            assert False, f"{op}"
 
 
 def _match_op(op: Operation):
@@ -115,6 +161,21 @@ class OperationSeq:
     def __iter__(self) -> Iterator[Operation]:
         return iter(self.operations)
 
+    def __hash__(self) -> int:
+        return hash((self.layer_refs, tuple(self.operations)))
+
+    def __eq__(self, value: object, /) -> bool:
+        return (
+            isinstance(value, OperationSeq)
+            and self.layer_refs == value.layer_refs
+            and all((o1 == o2) for o1, o2 in zip(self.operations, value.operations))
+            and (
+                self.expected_count == value.expected_count
+                or self.expected_count is None
+                or value.expected_count is None
+            )
+        )
+
 
 class OpSeqBatch:
     __slots__ = ("layers",)
@@ -132,6 +193,12 @@ class OpSeqBatch:
             )
         else:
             return repr_slots(self)
+
+    def __hash__(self) -> int:
+        return hash(tuple(((k, v) for k, v in self.layers.items())))
+
+    def __eq__(self, value: object, /) -> bool:
+        return isinstance(value, OpSeqBatch) and self.layers == value.layers
 
 
 class VectorizedOpSeqNetwork:
@@ -158,3 +225,23 @@ class VectorizedOpSeqNetwork:
             )
         else:
             return repr_slots(self)
+
+    def __hash__(self) -> int:
+        fl_keys = sorted(self.fact_layers)
+        w_keys = sorted(self.weights)
+
+        return hash(
+            (
+                tuple(((k, self.fact_layers[k]) for k in fl_keys)),
+                tuple(((k, self.weights[k]) for k in w_keys)),
+                tuple(((k, v) for k, v in self.batches.items())),
+            )
+        )
+
+    def __eq__(self, value: object, /) -> bool:
+        return (
+            isinstance(value, VectorizedOpSeqNetwork)
+            and self.fact_layers == value.fact_layers
+            and self.weights == value.weights
+            and self.batches == value.batches
+        )

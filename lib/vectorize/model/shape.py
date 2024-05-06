@@ -7,6 +7,9 @@ class VariousShape:
     __slots__ = ()
     __repr__ = repr_slots
 
+    def __hash__(self) -> int:
+        return hash(())
+
     def __eq__(self, value: object, /) -> bool:
         return isinstance(value, VariousShape)
 
@@ -14,6 +17,9 @@ class VariousShape:
 class AnyShape:
     __slots__ = ()
     __repr__ = repr_slots
+
+    def __hash__(self) -> int:
+        return hash(())
 
     def __eq__(self, value: object, /) -> bool:
         return isinstance(value, VariousShape)

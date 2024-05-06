@@ -9,6 +9,9 @@ class GenericGather:
     def __init__(self, ordinals: list[int]) -> None:
         self.ordinals = ordinals
 
+    def __hash__(self) -> int:
+        return hash(tuple(self.ordinals))
+
     def __eq__(self, value: object, /) -> bool:
         return (
             isinstance(value, GenericGather)
@@ -24,6 +27,9 @@ class TakeSingleValue:
 
     def __init__(self, ordinal: int) -> None:
         self.ordinal = ordinal
+
+    def __hash__(self) -> int:
+        return hash(self.ordinal)
 
     def __eq__(self, value: object, /) -> bool:
         return isinstance(value, TakeSingleValue) and self.ordinal == value.ordinal
@@ -43,6 +49,9 @@ class SliceValues:
         self.end = end
         self.step = step
 
+    def __hash__(self) -> int:
+        return hash((self.start, self.end, self.step))
+
     def __eq__(self, value: object, /) -> bool:
         return (
             isinstance(value, SliceValues)
@@ -60,6 +69,9 @@ class Repeat:
         self.times = times
         self.total_length = total_length
 
+    def __hash__(self) -> int:
+        return hash((self.times, self.total_length))
+
     def __eq__(self, value: object, /) -> bool:
         return isinstance(value, Repeat) and self.times == value.times and self.total_length == value.total_length
 
@@ -71,6 +83,9 @@ class RepeatInterleave:
     def __init__(self, times: int, total_length: int) -> None:
         self.times = times
         self.total_length = total_length
+
+    def __hash__(self) -> int:
+        return hash((self.times, self.total_length))
 
     def __eq__(self, value: object, /) -> bool:
         return (
@@ -91,6 +106,9 @@ class GatherPair:
     def __init__(self, a: "Gather", b: "OneGather") -> None:
         self.a = a
         self.b = b
+
+    def __hash__(self) -> int:
+        return hash((self.a, self.b))
 
     def __eq__(self, value: object, /) -> bool:
         return isinstance(value, GatherPair) and self.a == value.a and self.b == value.b

@@ -4,7 +4,7 @@ import json
 import pickle
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Container, Literal
+from typing import Any, Callable, Container, Hashable, Literal
 from typing import get_args as t_get_args
 
 import click
@@ -20,8 +20,15 @@ from lib.engines.torch.settings import Compilation, TorchModuleSettings, TorchRe
 from lib.sources.neuralogic_settings import NeuralogicSettings
 from lib.utils import dataclass_to_shorthand, iter_empty, serialize_dataclass
 from lib.vectorize.model.op_network import VectorizedOpSeqNetwork
+from lib.vectorize.pipeline.other.reduce_op_network_value import (
+    count_gather_items,
+    count_gathers,
+    sum_op_network_values,
+)
+from lib.vectorize.pipeline.other.replace_tensors_with_shapes import replace_tensors_with_shapes
 from lib.vectorize.settings import VectorizeSettings
 from lib.vectorize.settings_presets import VectorizeSettingsPresets, iterate_vectorize_settings_presets
+from tqdm.std import tqdm
 
 Device = Literal["mps", "cuda", "cpu"]
 Engine = Literal["java", "torch", "pyg"]
@@ -340,11 +347,33 @@ def run(dir: Path, index: int, measure: bool, save_architecture: bool, force_cpu
             pickle.dump(runnable.vectorized_network, fp)
 
 
+ArchMapMethod = Literal['exact', 'inexact', 'gather_total', 'gather_counts', 'gather']
+
+
+def _get_network_key(vectorized_network: VectorizedOpSeqNetwork, method: ArchMapMethod):
+    match method:
+        case 'exact':
+            return vectorized_network
+        case 'inexact':
+            return replace_tensors_with_shapes(vectorized_network)
+        case 'gather_total':
+            return sum_op_network_values(vectorized_network, count_gathers)
+        case 'gather_counts':
+            return sum_op_network_values(vectorized_network, count_gather_items)
+        case 'gather':
+            a = sum_op_network_values(vectorized_network, count_gathers)
+            b = sum_op_network_values(vectorized_network, count_gather_items)
+            return (a, b)
+        case _:
+            raise ValueError(method)
+
+
 @cli.command(context_settings={"show_default": True})
 @click.argument(
     "dir", type=click.Path(exists=True, file_okay=False, dir_okay=True, readable=True, writable=True, path_type=Path)
 )
-def build_architecture_map(dir: Path):
+@click.option("--method", type=click.Choice(choices=t_get_args(ArchMapMethod)), default='exact')
+def build_architecture_map(dir: Path, method: ArchMapMethod):
     variants_file = dir / "variants.txt"
 
     if not variants_file.exists():
@@ -353,11 +382,11 @@ def build_architecture_map(dir: Path):
     with open(variants_file, "r") as fp:
         variants = json.load(fp)
 
-    architectures: list[VectorizedOpSeqNetwork] = []
-    architectures_dict: dict[VectorizedOpSeqNetwork, int] = {}
+    architectures: list[Hashable] = []
+    architectures_dict: dict[Hashable, int] = {}
     variants_dict: dict[str, int] = {}
 
-    for v in variants:
+    for v in tqdm(variants):
         variant = Variant.deserialize(v)
         notimename = dataclass_to_shorthand(variant)
         pkl_file_path = dir / (notimename + ".pkl")
@@ -365,12 +394,15 @@ def build_architecture_map(dir: Path):
             with open(pkl_file_path, "rb") as fp:
                 vectorized_network = pickle.load(fp)
 
-            if vectorized_network in architectures_dict:
-                idx = architectures_dict[vectorized_network]
+            key = _get_network_key(vectorized_network, method)
+
+            if key in architectures_dict:
+                idx = architectures_dict[key]
             else:
                 idx = len(architectures)
-                architectures.append(vectorized_network)
-                architectures_dict[vectorized_network] = idx
+                # architectures.append(vectorized_network)
+                architectures.append(key)
+                architectures_dict[key] = idx
 
             variants_dict[notimename] = idx
 
@@ -378,6 +410,38 @@ def build_architecture_map(dir: Path):
         pickle.dump((architectures, variants_dict), fp)
 
     print(len(architectures))
+
+
+@cli.command(context_settings={"show_default": True})
+@click.argument(
+    "dir", type=click.Path(exists=True, file_okay=False, dir_okay=True, readable=True, writable=True, path_type=Path)
+)
+@click.argument("file", type=str)
+def find_idx(dir: Path, file: str):
+    variants_file = dir / "variants.txt"
+    the_file = dir / file
+
+    if not variants_file.exists():
+        raise click.ClickException(f"{variants_file.absolute()} does not exist.")
+
+    if not the_file.exists():
+        raise click.ClickException(f"{the_file.absolute()} does not exist.")
+
+    with open(variants_file, "r") as fp:
+        variants = json.load(fp)
+
+    with open(the_file, "r") as fp:
+        result_data = json.load(fp)
+
+    variant = Variant.deserialize(result_data)
+
+    for i, vrt_d in enumerate(variants):
+        vrt = Variant.deserialize(vrt_d)
+        if vrt == variant:
+            print(i)
+            return
+
+    print("Not found.")
 
 
 if __name__ == "__main__":
