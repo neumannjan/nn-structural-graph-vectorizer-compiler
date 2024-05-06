@@ -3,7 +3,13 @@ from typing import Iterable, Iterator, Literal, TypeVar
 
 from lib.vectorize.model import *
 from lib.vectorize.model.layer import get_lifts_period
-from lib.vectorize.pipeline.compute_layer_counts import ComputeLayerCounts
+from lib.vectorize.pipeline.compute_layer_counts import (
+    compute_facts_count,
+    compute_gather_count,
+    compute_input_count,
+    compute_layer_refs_count,
+    compute_linear_count,
+)
 from lib.vectorize.pipeline.utils.chain_graph import ComputeChainGraph
 from lib.vectorize.pipeline.utils.ref_groups import build_grouper_for_aggregate
 
@@ -69,7 +75,6 @@ class OptimizeSingleUseGathers:
         self.debug = debug
 
         self._compute_chain_graph = ComputeChainGraph(network, types=(LayerRefs.TYPE_LAYER, LayerRefs.TYPE_FACT))
-        self._counts = ComputeLayerCounts(network)
 
         self._fact_reorders: dict[tuple[str, tuple[int, ...]], str] = {}
 
@@ -83,14 +88,14 @@ class OptimizeSingleUseGathers:
         # We must create this version of the layer first.
         if new_layer_id is None:
             facts_new = [fact_layer.facts[o] for o in ordinals2]
-            count_new = self._counts.compute_facts_count(facts_new)
+            count_new = compute_facts_count(facts_new)
             new_layer = FactLayer(facts=facts_new, count=count_new, shape=fact_layer.shape)
         else:
             new_layer = self.network.fact_layers[new_layer_id]
             count_new = new_layer.count
             assert count_new is not None
 
-        count_old = self._counts.compute_facts_count(fact_layer.facts) if fact_layer.count is None else fact_layer.count
+        count_old = compute_facts_count(fact_layer.facts) if fact_layer.count is None else fact_layer.count
 
         is_free = count_new <= count_old + self.margin
 
@@ -118,9 +123,9 @@ class OptimizeSingleUseGathers:
             case NoopGather():
                 match refs:
                     case LayerRefs():
-                        in_count = self._counts.compute_layer_refs_count(batch, refs)
+                        in_count = compute_layer_refs_count(self.network, batch, None, refs)
                     case (input, weight):
-                        in_count = self._counts.compute_linear_count(batch, input, weight, None)
+                        in_count = compute_linear_count(self.network, batch, None, input, weight, None)
                     case _:
                         assert False, f"{refs}"
 
@@ -131,9 +136,9 @@ class OptimizeSingleUseGathers:
     def _compute_refs_count(self, batch: int, refs: LayerRefs | tuple[Input, Input]):
         match refs:
             case LayerRefs():
-                return self._counts.compute_layer_refs_count(batch, refs)
+                return compute_layer_refs_count(self.network, batch, None, refs)
             case (input, weight):
-                return self._counts.compute_linear_count(batch, input, weight, None)
+                return compute_linear_count(self.network, batch, None, input, weight, None)
             case _:
                 raise ValueError(refs)
 
@@ -160,8 +165,8 @@ class OptimizeSingleUseGathers:
         gather_new = GenericGather(list(grouper.ungroup(gather_new_groups)))
 
         refs_cnt = self._compute_refs_count(batch, refs)
-        gather_cnt = self._counts.compute_gather_count(refs_cnt, gather)
-        gather_new_cnt = self._counts.compute_gather_count(refs_cnt, gather_new)
+        gather_cnt = compute_gather_count(refs_cnt, gather)
+        gather_new_cnt = compute_gather_count(refs_cnt, gather_new)
 
         is_free = gather_new_cnt <= gather_cnt + self.margin
 
@@ -211,10 +216,10 @@ class OptimizeSingleUseGathers:
                 assert isinstance(gather_a, (GenericGather, NoopGather))
                 assert isinstance(gather_b, (GenericGather, NoopGather))
 
-                input_count = self._counts.compute_input_count(batch, input)
-                weight_count = self._counts.compute_input_count(batch, weight)
+                input_count = compute_input_count(self.network, batch, None, input)
+                weight_count = compute_input_count(self.network, batch, None, weight)
 
-                layer_count = self._counts.compute_linear_count(batch, input, weight, lifts)
+                layer_count = compute_linear_count(self.network, batch, None, input, weight, lifts)
 
                 variants: list[
                     tuple[
@@ -261,8 +266,8 @@ class OptimizeSingleUseGathers:
                 assert isinstance(gather_a, (GenericGather, NoopGather))
                 assert isinstance(gather_b, (GenericGather, NoopGather))
 
-                input_count = self._counts.compute_input_count(batch, input)
-                weight_count = self._counts.compute_input_count(batch, weight)
+                input_count = compute_input_count(self.network, batch, None, input)
+                weight_count = compute_input_count(self.network, batch, None, weight)
 
                 assert input_count == weight_count
 
