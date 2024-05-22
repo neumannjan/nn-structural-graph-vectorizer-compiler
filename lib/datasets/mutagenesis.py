@@ -58,19 +58,19 @@ def simple_template_diff_dims():
     template += R.layer_1(V.X) <= (
         R.atom_embed(V.X)[3, 3],
         R.atom_embed(V.Y)[3, 3],
-        R._bond(V.X, V.Y, V.B),
+        R.bond(V.X, V.Y, V.B),
         R.bond_embed(V.B)[3, 1],
     )
     template += R.layer_2(V.X) <= (
         R.layer_1(V.X)[3, 3],
         R.layer_1(V.Y)[3, 3],
-        R._bond(V.X, V.Y, V.B),
+        R.bond(V.X, V.Y, V.B),
         R.bond_embed(V.B)[3, 1],
     )
     template += R.layer_3(V.X) <= (
         R.layer_2(V.X)[3, 3],
         R.layer_2(V.Y)[3, 3],
-        R._bond(V.X, V.Y, V.B),
+        R.bond(V.X, V.Y, V.B),
         R.bond_embed(V.B)[3, 1],
     )
     template += R.predict[1, 3] <= R.layer_3(V.X)
