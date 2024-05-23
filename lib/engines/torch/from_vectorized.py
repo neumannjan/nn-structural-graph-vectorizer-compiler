@@ -22,15 +22,14 @@ from lib.vectorize.model import *
 
 
 def _get_fact_value(fact: Fact, shape: ConcreteShape) -> torch.Tensor:
-    match fact:
-        case UnitFact():
-            return torch.ones(shape.dims, dtype=torch.get_default_dtype()).unsqueeze(0)
-        case EyeFact(dim=dim):
-            return torch.eye(dim, dtype=torch.get_default_dtype()).unsqueeze(0)
-        case ValueFact(value=value):
-            return torch.tensor(value, dtype=torch.get_default_dtype())
-        case _:
-            assert False, f"{fact}"
+    if isinstance(fact, UnitFact):
+        return torch.ones(shape.dims, dtype=torch.get_default_dtype()).unsqueeze(0)
+    if isinstance(fact, EyeFact):
+        return torch.eye(fact.dim, dtype=torch.get_default_dtype()).unsqueeze(0)
+    if isinstance(fact, ValueFact):
+        return torch.tensor(fact.value, dtype=torch.get_default_dtype())
+    else:
+        assert False, f"{fact}"
 
 
 def _build_params_module(reference: VectorizedOpSeqNetwork) -> NetworkParams:
@@ -53,61 +52,60 @@ def _build_params_module(reference: VectorizedOpSeqNetwork) -> NetworkParams:
 
 
 def _for_op(op: Operation | LayerRefs, settings: TorchModuleSettings) -> torch.nn.Module:
-    match op:
-        case LayerRefs():
-            refs = op.layer_ids
-            if len(refs) == 1:
-                return RetrieveRefModule(refs[0])
-            else:
-                return ConcatRefsModule(refs)
-        case GatherPair(a, b):
-            first_gathers = _for_op(a, settings)
-            last_gather = _for_op(b, settings)
+    if isinstance(op, LayerRefs):
+        refs = op.layer_ids
+        if len(refs) == 1:
+            return RetrieveRefModule(refs[0])
+        else:
+            return ConcatRefsModule(refs)
+    elif isinstance(op, GatherPair):
+        first_gathers = _for_op(op.a, settings)
+        last_gather = _for_op(op.b, settings)
 
-            if isinstance(first_gathers, torch.nn.Sequential):
-                first_gathers.append(last_gather)
-                return first_gathers
-            else:
-                return torch.nn.Sequential(first_gathers, last_gather)
-        case Linear(weight_ops=weight_ops):
-            weight_module = torch.nn.Sequential()
+        if isinstance(first_gathers, torch.nn.Sequential):
+            first_gathers.append(last_gather)
+            return first_gathers
+        else:
+            return torch.nn.Sequential(first_gathers, last_gather)
+    elif isinstance(op, Linear):
+        weight_module = torch.nn.Sequential()
 
-            if weight_ops.layer_refs is not None:
-                retrieve_refs = _for_op(weight_ops.layer_refs, settings)
+        if op.weight_ops.layer_refs is not None:
+            retrieve_refs = _for_op(op.weight_ops.layer_refs, settings)
 
-                weight_module.append(retrieve_refs)
+            weight_module.append(retrieve_refs)
 
-            for op in weight_ops.operations:
-                op_module = _for_op(op, settings)
-                weight_module.append(op_module)
+        for op in op.weight_ops.operations:
+            op_module = _for_op(op, settings)
+            weight_module.append(op_module)
 
-            return LinearModule(weight_module)
-        case GenericGather(ordinals=ordinals):
-            return GenericGatherModule(ordinals)
-        case TakeSingleValue(ordinal=ordinal):
-            return TakeValueModule(ordinal)
-        case SliceValues(start=start, end=end, step=step):
-            return SliceValuesModule(start, end, step)
-        case Repeat(times=times, total_length=total_length):
-            return RepeatModule(repeats=times, total_length=total_length)
-        case RepeatInterleave(times=times, total_length=total_length):
-            return RepeatInterleaveModule(repeats=times, total_length=total_length)
-        case Transform(transform=transform):
-            return build_transformation(transform)
-        case DimReduce(dim=dim, reduce=reduce):
-            return build_dim_reduce_module(dim, reduce)
-        case UnevenReduce(counts=counts, reduce=reduce):
-            index = counts_to_index(counts)
-            return build_scatter_module(
-                index=index,
-                counts=counts,
-                reduce=reduce,
-                reduce_method=settings.reduce_method,
-            )
-        case View(shape=shape):
-            return ViewModule(shape.dims)
-        case _:
-            assert False, f"{op}"
+        return LinearModule(weight_module)
+    elif isinstance(op, GenericGather):
+        return GenericGatherModule(op.ordinals)
+    elif isinstance(op, TakeSingleValue):
+        return TakeValueModule(op.ordinal)
+    elif isinstance(op, SliceValues):
+        return SliceValuesModule(op.start, op.end, op.step)
+    elif isinstance(op, Repeat):
+        return RepeatModule(repeats=op.times, total_length=op.total_length)
+    elif isinstance(op, RepeatInterleave):
+        return RepeatInterleaveModule(repeats=op.times, total_length=op.total_length)
+    elif isinstance(op, Transform):
+        return build_transformation(op.transform)
+    elif isinstance(op, DimReduce):
+        return build_dim_reduce_module(op.dim, op.reduce)
+    elif isinstance(op, UnevenReduce):
+        index = counts_to_index(op.counts)
+        return build_scatter_module(
+            index=index,
+            counts=op.counts,
+            reduce=op.reduce,
+            reduce_method=settings.reduce_method,
+        )
+    elif isinstance(op, View):
+        return ViewModule(op.shape.dims)
+    else:
+        assert False, f"{op}"
 
 
 def _for_batch(

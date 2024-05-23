@@ -28,16 +28,6 @@ class GatheredLayers:
 Input = GatheredLayers | Refs
 
 
-def _match_input(input: Input):
-    match input:
-        case Refs():
-            ...
-        case GatheredLayers(refs=refs, gather=gather):
-            ...
-        case _:
-            assert False, f"{input}"
-
-
 class InputLayerBase:
     __slots__ = ("input",)
     __repr__ = repr_slots
@@ -57,16 +47,14 @@ DimensionLifts = tuple[DimensionLift, DimensionLift] | None
 
 
 def _get_lift_dimension(lift: DimensionLift) -> Literal[0, 1]:
-    match lift:
-        case (-1, -1):
-            raise ValueError(lift)
-        case (_, -1):
-            return 0
-        case (-1, _):
-            return 1
-        case _:
-            raise ValueError(lift)
-
+    if lift[0] == -1 and lift[1] == -1:
+        raise ValueError(lift)
+    elif lift[1] == -1:
+        return 0
+    elif lift[0] == -1:
+        return 1
+    else:
+        raise ValueError(lift)
 
 def lifts_dimension_match(lifts: DimensionLifts) -> bool:
     if lifts is None:
@@ -77,11 +65,16 @@ def lifts_dimension_match(lifts: DimensionLifts) -> bool:
 
 
 def get_lifts_period(lifts: DimensionLifts) -> int | None:
-    match lifts:
-        case ((-1, a), (-1, b)) if a == b:
-            return a
-        case ((a, -1), (b, -1)) if a == b:
-            return a
+    if lifts is None:
+        return None
+
+    la, lb = lifts
+
+    if la[0] == lb[0] == -1 and la[1] == lb[1]:
+        return la[1]
+
+    if la[1] == lb[1] == -1 and la[0] == lb[0]:
+        return la[0]
 
     return None
 
@@ -150,18 +143,6 @@ class LinearGatherLayerBase:
 
 
 LayerBase = InputLayerBase | LinearLayerBase | LinearGatherLayerBase
-
-
-def _match_layer_base(base: LayerBase):
-    match base:
-        case InputLayerBase(input=input):
-            ...
-        case LinearLayerBase(input=input, weight=weight):
-            ...
-        case LinearGatherLayerBase(input=input, weight=weight, gather=gather):
-            ...
-        case _:
-            assert False
 
 
 _LAYER_MODULE_LIKES = ("base", "aggregate", "transform")

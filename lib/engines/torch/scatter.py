@@ -8,10 +8,6 @@ from torch_scatter import (
     scatter_mean,
     scatter_min,
     scatter_sum,
-    segment_max_csr,
-    segment_mean_csr,
-    segment_min_csr,
-    segment_sum_csr,
 )
 
 from lib.engines.torch.settings import TorchReduceMethod
@@ -43,15 +39,6 @@ class _ScatterFunc(Protocol):
         dim: int = -1,
         out: torch.Tensor | None = None,
         dim_size: int | None = None,
-    ) -> Any: ...
-
-
-class _SegmentCSRFunc(Protocol):
-    def __call__(
-        self,
-        src: torch.Tensor,
-        indptr: torch.Tensor,
-        out: torch.Tensor | None = None,
     ) -> Any: ...
 
 
@@ -90,20 +77,13 @@ class Scatter(_ScatterBase):
         return self._len
 
 
-_SEGMENT_CSR_FUNC: dict[_StrictReductionRef, _SegmentCSRFunc] = {
-    "mean": segment_mean_csr,
-    "max": segment_max_csr,
-    "min": segment_min_csr,
-    "sum": segment_sum_csr,
-}
-
-
 class SegmentCSR(_ScatterBase):
     def __init__(self, counts: Sequence | torch.Tensor | np.ndarray, indptr: torch.Tensor, reduce: ReductionDef) -> None:
         super().__init__(reduce)
         self._len = len(counts)
         self.indptr = torch.nn.Parameter(indptr, requires_grad=False)
-        self.reduce_func = _SEGMENT_CSR_FUNC[self.reduce]
+        from lib.engines.torch.segment import SEGMENT_CSR_FUNC
+        self.reduce_func = SEGMENT_CSR_FUNC[self.reduce]
 
     def forward(self, x: torch.Tensor):
         return self.reduce_func(x, indptr=self.indptr)

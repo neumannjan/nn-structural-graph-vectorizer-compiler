@@ -45,25 +45,12 @@ class EyeFact:
 Fact = ValueFact | UnitFact | EyeFact
 
 
-def _match_all_facts(fact: Fact):
-    match fact:
-        case UnitFact():
-            ...
-        case ValueFact(value=value):
-            ...
-        case EyeFact(dim=dim):
-            ...
-        case _:
-            assert False, f"{fact}"
-
-
 def fact_repr(fact: Fact) -> str:
-    match fact:
-        case ValueFact(value=value):
-            return my_repr(list(value.shape))
-        case UnitFact():
-            return "unit"
-        case EyeFact():
-            return "eye"
-        case _:
-            assert False
+    if isinstance(fact, ValueFact):
+        return my_repr(list(fact.value.shape))
+    elif isinstance(fact, UnitFact):
+        return "unit"
+    elif isinstance(fact, EyeFact):
+        return "eye"
+    else:
+        assert False

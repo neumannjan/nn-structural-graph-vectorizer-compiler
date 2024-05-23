@@ -5,15 +5,14 @@ from lib.vectorize.model.repr import repr_slots
 
 
 def _type_to_str(type: int):
-    match type:
-        case Refs.TYPE_FACT:
-            return "f"
-        case Refs.TYPE_WEIGHT:
-            return "w"
-        case Refs.TYPE_LAYER:
-            return "l"
-        case _:
-            return str(type)
+    if type == Refs.TYPE_FACT:
+        return "f"
+    elif type == Refs.TYPE_WEIGHT:
+        return "w"
+    elif type == Refs.TYPE_LAYER:
+        return "l"
+    else:
+        return str(type)
 
 
 class Refs(Sequence[tuple[int, str, int]]):

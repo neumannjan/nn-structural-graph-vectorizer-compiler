@@ -10,7 +10,10 @@ from typing import get_args as t_get_args
 import click
 import torch
 from lib.benchmarks.runnables.neuralogic_cpu import NeuraLogicCPURunnable
-from lib.benchmarks.runnables.neuralogic_vectorized import NeuralogicVectorizedTorchRunnable
+from lib.benchmarks.runnables.neuralogic_vectorized import (
+    NeuralogicVectorizedTorchRunnable,
+    PrebuiltNeuralogicVectorizedTorchRunnable,
+)
 from lib.benchmarks.runnables.pyg import PytorchGeometricRunnable
 from lib.benchmarks.runner import measure_backward, measure_forward
 from lib.datasets.dataset import MyDataset
@@ -30,7 +33,7 @@ from lib.vectorize.settings import VectorizeSettings
 from lib.vectorize.settings_presets import VectorizeSettingsPresets, iterate_vectorize_settings_presets
 from tqdm.std import tqdm
 
-Device = Literal["mps", "cuda", "cpu"]
+Device = Literal["mps", "cuda", "cpu", "ipu"]
 Engine = Literal["java", "torch", "pyg"]
 
 
@@ -97,15 +100,19 @@ class Variant:
         if engine not in allowed_engines:
             return None
 
-        match engine:
-            case "java":
-                return JavaVariant(device, engine, dataset, backward, times, iso, chain)
-            case "pyg":
-                return TorchVariant(device, engine, dataset, backward, times)
-            case "torch":
-                return VectorizedTorchVariant(
-                    device, engine, dataset, backward, times, compilation, reduce_method, settings
-                )
+        if engine == "java":
+            if device != "cpu":
+                return None
+
+            return JavaVariant(device, engine, dataset, backward, times, iso, chain)
+        elif engine == "pyg":
+            return TorchVariant(device, engine, dataset, backward, times)
+        elif engine == "torch":
+            return VectorizedTorchVariant(
+                device, engine, dataset, backward, times, compilation, reduce_method, settings
+            )
+        else:
+            raise ValueError(engine)
 
     def serialize(self):
         return serialize_dataclass(self, call_self=False)
@@ -149,6 +156,8 @@ DEVICE_SUPPORT_MTX: set[tuple[Device, Engine]] = {
     ("mps", "pyg"),
     ("cuda", "torch"),
     ("cuda", "pyg"),
+    ("ipu", "torch"),
+    ("ipu", "pyg"),
     ("cpu", "java"),
     ("cpu", "torch"),
     ("cpu", "pyg"),
@@ -292,28 +301,25 @@ def run(dir: Path, index: int, measure: bool, save_architecture: bool, force_cpu
 
     device = "cpu" if force_cpu else variant.device
 
-    match variant:
-        case JavaVariant(engine="java"):
-            runnable = NeuraLogicCPURunnable()
-            dataset = DATASET_OPTIONS[variant.dataset][0](
-                NeuralogicSettings(iso_value_compression=variant.iso, chain_pruning=variant.chain)
-            )
-        case VectorizedTorchVariant(engine="torch"):
-            runnable = NeuralogicVectorizedTorchRunnable(
-                device=device,
-                neuralogic_settings=DEFAULT_NEURALOGIC_SETTINGS_VECTORIZE,
-                vectorize_settings=variant.settings,
-                torch_settings=TorchModuleSettings(
-                    reduce_method=variant.reduce_method, compilation=variant.compilation
-                ),
-                debug=False,
-            )
-            dataset = DATASET_OPTIONS[variant.dataset][0](DEFAULT_NEURALOGIC_SETTINGS_VECTORIZE)
-        case TorchVariant(engine="pyg"):
-            runnable = PytorchGeometricRunnable(device=device)
-            dataset = DATASET_OPTIONS[variant.dataset][0](DEFAULT_NEURALOGIC_SETTINGS_VECTORIZE)
-        case _:
-            raise ValueError(variant)
+    if isinstance(variant, JavaVariant) and variant.engine == "java":
+        runnable = NeuraLogicCPURunnable()
+        dataset = DATASET_OPTIONS[variant.dataset][0](
+            NeuralogicSettings(iso_value_compression=variant.iso, chain_pruning=variant.chain)
+        )
+    elif isinstance(variant, VectorizedTorchVariant) and variant.engine == "torch":
+        runnable = NeuralogicVectorizedTorchRunnable(
+            device=device,
+            neuralogic_settings=DEFAULT_NEURALOGIC_SETTINGS_VECTORIZE,
+            vectorize_settings=variant.settings,
+            torch_settings=TorchModuleSettings(reduce_method=variant.reduce_method, compilation=variant.compilation),
+            debug=False,
+        )
+        dataset = DATASET_OPTIONS[variant.dataset][0](DEFAULT_NEURALOGIC_SETTINGS_VECTORIZE)
+    elif isinstance(variant, TorchVariant) and variant.engine == "pyg":
+        runnable = PytorchGeometricRunnable(device=device)
+        dataset = DATASET_OPTIONS[variant.dataset][0](DEFAULT_NEURALOGIC_SETTINGS_VECTORIZE)
+    else:
+        raise ValueError(variant)
 
     dataset = dataset.build()
 
@@ -347,32 +353,102 @@ def run(dir: Path, index: int, measure: bool, save_architecture: bool, force_cpu
             pickle.dump(runnable.vectorized_network, fp)
 
 
-ArchMapMethod = Literal['exact', 'inexact', 'gather_total', 'gather_counts', 'gather']
+@cli.command(context_settings={"show_default": True})
+@click.argument(
+    "dir", type=click.Path(exists=True, file_okay=False, dir_okay=True, readable=True, writable=True, path_type=Path)
+)
+@click.argument("index", type=int)
+def run_prebuilt(dir: Path, index: int):
+    torch.set_default_dtype(torch.float32)
+
+    variants_file = dir / "variants.txt"
+
+    if not variants_file.exists():
+        raise click.ClickException(f"{variants_file.absolute()} does not exist.")
+
+    with open(variants_file, "r") as fp:
+        variants = json.load(fp)
+
+    if index < 0 or index >= len(variants):
+        raise click.ClickException(
+            f"Index for this directory must fit within the range from 0 (incl.) to {len(variants)} (excl.)"
+        )
+
+    variant = Variant.deserialize(variants[index])
+    del variants
+
+    time = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    notimename = dataclass_to_shorthand(variant)
+    timename = f"{notimename},{time}"
+
+    vectorized_network_file = dir / f"{notimename}.pkl"
+
+    with open(vectorized_network_file, "rb") as fp:
+        vectorized_network: VectorizedOpSeqNetwork = pickle.load(fp)
+
+    print(variant)
+    print()
+    print(timename)
+    print()
+
+    device = variant.device
+
+    assert isinstance(variant, VectorizedTorchVariant)
+
+    runnable = PrebuiltNeuralogicVectorizedTorchRunnable(
+        device=device,
+        vectorized_network=vectorized_network,
+        torch_settings=TorchModuleSettings(reduce_method=variant.reduce_method, compilation=variant.compilation),
+        debug=False,
+    )
+    dataset = DATASET_OPTIONS[variant.dataset][0](DEFAULT_NEURALOGIC_SETTINGS_VECTORIZE)
+    dataset = dataset.build()
+
+    out_file = dir / f"{timename}.json"
+    out = variant.serialize()
+
+    if variant.backward:
+        fwd, bwd, cmb = measure_backward(runnable, dataset, times=variant.times)
+        out["fwd"] = fwd.times_ns.tolist()
+        out["bwd"] = bwd.times_ns.tolist()
+        out["cmb"] = cmb.times_ns.tolist()
+        print("Forward: ", fwd)
+        print("Backward:", bwd)
+        print("Combined:", cmb)
+    else:
+        cmb = measure_forward(runnable, dataset, times=variant.times)
+        out["cmb"] = out["fwd"] = cmb.times_ns.tolist()
+        print("Forward:", cmb)
+
+    with open(out_file, "w") as fp:
+        json.dump(out, fp)
+
+
+ArchMapMethod = Literal["exact", "inexact", "gather_total", "gather_counts", "gather"]
 
 
 def _get_network_key(vectorized_network: VectorizedOpSeqNetwork, method: ArchMapMethod):
-    match method:
-        case 'exact':
-            return vectorized_network
-        case 'inexact':
-            return replace_tensors_with_shapes(vectorized_network)
-        case 'gather_total':
-            return sum_op_network_values(vectorized_network, count_gathers)
-        case 'gather_counts':
-            return sum_op_network_values(vectorized_network, count_gather_items)
-        case 'gather':
-            a = sum_op_network_values(vectorized_network, count_gathers)
-            b = sum_op_network_values(vectorized_network, count_gather_items)
-            return (a, b)
-        case _:
-            raise ValueError(method)
+    if method == "exact":
+        return vectorized_network
+    elif method == "inexact":
+        return replace_tensors_with_shapes(vectorized_network)
+    elif method == "gather_total":
+        return sum_op_network_values(vectorized_network, count_gathers)
+    elif method == "gather_counts":
+        return sum_op_network_values(vectorized_network, count_gather_items)
+    elif method == "gather":
+        a = sum_op_network_values(vectorized_network, count_gathers)
+        b = sum_op_network_values(vectorized_network, count_gather_items)
+        return (a, b)
+    else:
+        raise ValueError(method)
 
 
 @cli.command(context_settings={"show_default": True})
 @click.argument(
     "dir", type=click.Path(exists=True, file_okay=False, dir_okay=True, readable=True, writable=True, path_type=Path)
 )
-@click.option("--method", type=click.Choice(choices=t_get_args(ArchMapMethod)), default='exact')
+@click.option("--method", type=click.Choice(choices=t_get_args(ArchMapMethod)), default="exact")
 def build_architecture_map(dir: Path, method: ArchMapMethod):
     variants_file = dir / "variants.txt"
 

@@ -59,15 +59,3 @@ class ConcreteShape(Sequence[int]):
 
 
 Shape = VariousShape | AnyShape | ConcreteShape
-
-
-def _match_all(shape: Shape):
-    match shape:
-        case AnyShape():
-            ...
-        case VariousShape():
-            ...
-        case ConcreteShape(_) as shp:
-            ...
-        case _:
-            assert False, f"{shape}"

@@ -115,23 +115,3 @@ class GatherPair:
 
 
 Gather = GenericGather | TakeSingleValue | NoopGather | SliceValues | Repeat | RepeatInterleave | GatherPair
-
-
-def _match_all(gather: Gather):
-    match gather:
-        case GenericGather(ordinals=ordinals):
-            ...
-        case TakeSingleValue(ordinal=ordinal):
-            ...
-        case NoopGather():
-            ...
-        case SliceValues(start=start, end=end, step=step):
-            ...
-        case Repeat(times=_, total_length=total_length):
-            ...
-        case RepeatInterleave(times=_, total_length=total_length):
-            ...
-        case GatherPair(a, b):
-            ...
-        case _:
-            assert False, f"{gather}"

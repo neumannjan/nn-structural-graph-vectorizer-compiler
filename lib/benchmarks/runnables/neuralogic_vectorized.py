@@ -9,41 +9,29 @@ from lib.engines.torch.from_vectorized import build_torch_network, simple_forwar
 from lib.engines.torch.settings import TorchModuleSettings
 from lib.sources import from_java
 from lib.sources.neuralogic_settings import NeuralogicSettings
-from lib.vectorize.pipeline.pipeline import create_vectorized_network_compiler
+from lib.vectorize.model.op_network import VectorizedOpSeqNetwork
 from lib.vectorize.settings import VectorizeSettings
 
 
-class NeuralogicVectorizedTorchRunnable(Runnable):
+class PrebuiltNeuralogicVectorizedTorchRunnable(Runnable):
     def __init__(
         self,
         device: str,
-        neuralogic_settings: NeuralogicSettings,
-        vectorize_settings: VectorizeSettings,
+        vectorized_network: VectorizedOpSeqNetwork,
         torch_settings: TorchModuleSettings,
         debug: bool,
     ) -> None:
+        super().__init__()
         self._device = device
-        self.n_settings = neuralogic_settings
         self.t_settings = torch_settings
-        self.v_settings = vectorize_settings
+        self.vectorized_network = vectorized_network
         self.debug = debug
-        self.build_vectorized_network = create_vectorized_network_compiler(
-            vectorize_settings,
-            forward_pass_runner=simple_forward_pass_runner,
-            debug_prints=debug,
-        )
 
     def _initialize(self, dataset: BuiltDatasetInstance, samples: list[NeuralSample] | None = None):
         if samples is None:
             self.samples = dataset.samples
 
         self.targets = torch.tensor([s.target for s in self.samples], dtype=torch.get_default_dtype()).to(self.device)
-
-        yield "Retrieving input information..."
-        self.network = from_java(self.samples, self.n_settings)
-
-        yield "Vectorizing..."
-        self.vectorized_network = self.build_vectorized_network(self.network)
 
         yield "Building PyTorch modules..."
         self.model = build_torch_network(self.vectorized_network, debug=self.debug, settings=self.t_settings)
@@ -104,3 +92,39 @@ class NeuralogicVectorizedTorchRunnable(Runnable):
     @property
     def device(self):
         return self._device
+
+
+class NeuralogicVectorizedTorchRunnable(PrebuiltNeuralogicVectorizedTorchRunnable):
+    def __init__(
+        self,
+        device: str,
+        neuralogic_settings: NeuralogicSettings,
+        vectorize_settings: VectorizeSettings,
+        torch_settings: TorchModuleSettings,
+        debug: bool,
+    ) -> None:
+        self.n_settings = neuralogic_settings
+        from lib.vectorize.pipeline.pipeline import create_vectorized_network_compiler
+
+        self.build_vectorized_network = create_vectorized_network_compiler(
+            vectorize_settings,
+            forward_pass_runner=simple_forward_pass_runner,
+            debug_prints=debug,
+        )
+
+        super().__init__(device, torch_settings=torch_settings, vectorized_network=None, debug=debug)
+        self.t_settings = torch_settings
+        self.v_settings = vectorize_settings
+        self.debug = debug
+
+    def _initialize(self, dataset: BuiltDatasetInstance, samples: list[NeuralSample] | None = None):
+        if samples is None:
+            self.samples = dataset.samples
+
+        yield "Retrieving input information..."
+        self.network = from_java(self.samples, self.n_settings)
+
+        yield "Vectorizing..."
+        self.vectorized_network = self.build_vectorized_network(self.network)
+
+        yield from super()._initialize(dataset, samples)

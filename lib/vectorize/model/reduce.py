@@ -50,15 +50,3 @@ class UnevenReduce:
 
 
 Reduce = FixedCountReduce | UnevenReduce | Noop
-
-
-def _match_all(reduce: Reduce):
-    match reduce:
-        case FixedCountReduce(period=period, reduce=r, dim=dim):
-            ...
-        case UnevenReduce(counts=counts, reduce=r):
-            ...
-        case Noop():
-            ...
-        case _:
-            assert False, f"{reduce}"
