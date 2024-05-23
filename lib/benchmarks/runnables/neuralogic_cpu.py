@@ -30,6 +30,9 @@ class NeuraLogicCPURunnable(Runnable):
     ):
         assert combined_timer.device == self.device
 
+        with forward_timer:
+            self.neuralogic(self.samples, train=False)
+
         with combined_timer:
             self.neuralogic(self.samples, train=True)
 
