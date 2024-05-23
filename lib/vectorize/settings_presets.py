@@ -30,6 +30,21 @@ _VARIANTS_PARTIALS: list[list[VectorizeSettingsPartial | _Barrier]] = [
     [
         VectorizeSettingsPartial(linears_symmetries=LinearsSymmetriesSettings(pad="never")),
         VectorizeSettingsPartial(linears_symmetries=LinearsSymmetriesSettings(pad="any")),
+    ],
+]
+
+
+_VARIANTS_NO_OPT: list[list[VectorizeSettingsPartial | _Barrier]] = [
+    [
+        VectorizeSettingsPartial(
+            iso_compression=False,
+            linears_optimize_unique_ref_pairs=False,
+            linears_symmetries=False,
+            optimize_tail_refs=False,
+            optimize_single_use_gathers=False,
+            allow_repeat_gathers=False,
+            merge_trivial_layer_concats=False,
+        ),
     ]
 ]
 
@@ -137,13 +152,18 @@ def _iter_all_variants(
 
 
 VectorizeSettingsPresets = Literal[
-    "default_only", "tuning", "test_optimizations_effect", "test_optimizations_effect_all_combinations"
+    "default_only",
+    "tuning",
+    "no_opt",
+    "test_optimizations_effect",
+    "test_optimizations_effect_all_combinations",
 ]
 
 
 _VARIANTS_MAP: dict[VectorizeSettingsPresets, list[list[VectorizeSettingsPartial | _Barrier]]] = {
     "default_only": [[VectorizeSettingsPartial()]],
     "tuning": _VARIANTS_PARTIALS,
+    "no_opt": _VARIANTS_NO_OPT,
     "test_optimizations_effect": _VARIANTS_TEST_OPTIMIZATION_EFFECT_PARTIALS,
     "test_optimizations_effect_all_combinations": _VARIANTS_TEST_OPTIMIZATION_EFFECT_PARTIALS_ALL_COMBINATIONS,
 }
