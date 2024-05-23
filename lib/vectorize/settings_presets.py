@@ -37,6 +37,7 @@ _VARIANTS_PARTIALS: list[list[VectorizeSettingsPartial | _Barrier]] = [
 _VARIANTS_NO_OPT: list[list[VectorizeSettingsPartial | _Barrier]] = [
     [
         VectorizeSettingsPartial(
+            transpose_fixed_count_reduce=False,
             iso_compression=False,
             linears_optimize_unique_ref_pairs=False,
             linears_symmetries=False,
@@ -56,7 +57,6 @@ _VARIANTS_TEST_OPTIMIZATION_EFFECT_PARTIALS: list[list[VectorizeSettingsPartial 
     ],
     [
         VectorizeSettingsPartial(
-            transpose_fixed_count_reduce=False,
             iso_compression=False,
             linears_optimize_unique_ref_pairs=False,
             linears_symmetries=False,
