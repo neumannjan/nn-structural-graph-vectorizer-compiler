@@ -35,8 +35,6 @@ class MyDataset:
         self._n_settings = neuralogic_settings
 
     def build(self, sample_run=False) -> BuiltDatasetInstance:
-        # assert self._n_settings.compute_neuron_layer_indices
-
         neuralogic = self.template().build(self._n_settings)
         built_dataset = neuralogic.build_dataset(self.dataset)
 

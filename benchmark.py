@@ -30,7 +30,10 @@ from compute_graph_vectorize.vectorize.pipeline.other.reduce_op_network_value im
 )
 from compute_graph_vectorize.vectorize.pipeline.other.replace_tensors_with_shapes import replace_tensors_with_shapes
 from compute_graph_vectorize.vectorize.settings import VectorizeSettings
-from compute_graph_vectorize.vectorize.settings_presets import VectorizeSettingsPresets, iterate_vectorize_settings_presets
+from compute_graph_vectorize.vectorize.settings_presets import (
+    VectorizeSettingsPresets,
+    iterate_vectorize_settings_presets,
+)
 from tqdm.std import tqdm
 
 Device = Literal["mps", "cuda", "cpu", "ipu"]
@@ -39,7 +42,6 @@ Engine = Literal["java", "torch", "pyg"]
 
 DEFAULT_TORCH_SETTINGS = TorchModuleSettings()
 DEFAULT_NEURALOGIC_SETTINGS_VECTORIZE = NeuralogicSettings(
-    # compute_neuron_layer_indices=True,
     iso_value_compression=False,
     chain_pruning=False,
 )

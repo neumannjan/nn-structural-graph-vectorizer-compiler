@@ -66,8 +66,6 @@ class MinimalAPINeuralogicNetwork(MinimalAPINetwork[_JavaNeuronsPointer]):
     def __init__(self, samples: Sequence[NeuralSample | JavaNeuron], settings: NeuralogicSettings) -> None:
         self._samples = samples
         self._settings = settings
-        # if not settings.compute_neuron_layer_indices:
-        #     raise ValueError("`compute_neuron_layer_indices` must be True in NeuraLogic settings.")
         self._java_neurons_per_layer, self._layers = compute_neuralogic_neurons_per_layer(samples)
 
     def get_layers(self) -> Sequence[LayerDefinition]:
