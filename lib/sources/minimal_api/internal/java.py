@@ -1,4 +1,4 @@
-from collections import defaultdict, deque
+from collections import defaultdict
 from typing import Any, Protocol, Sequence
 from typing import get_args as t_get_args
 
@@ -164,58 +164,51 @@ def _iter_neurons(neuron: JavaNeuron) -> Iterable[JavaNeuron]:
         yield from _iter_neurons(n)
 
 
-_Key = tuple[int, str, LayerType]
-
-
-def _layer_order_key(key: _Key):
-    layer_ord, _, layer_type = key
-
-    a = 0 if layer_type == "FactLayer" else 1
-    b = -layer_ord
-
-    return a, b
+_Key = tuple[str, LayerType]
 
 
 def compute_java_neurons_per_layer(
     samples: Sequence[NeuralSample | JavaNeuron],
 ) -> tuple[dict[str, list[JavaNeuron]], list[LayerDefinition]]:
-    queue = deque(
-        (sample.java_sample.query.neuron if isinstance(sample, NeuralSample) else sample for sample in samples)
-    )
+    closed: set[int] = set()
 
-    visited = set()
+    layers_: dict[_Key, None] = {}
+    neurons_per_layer: dict[_Key, list[JavaNeuron]] = defaultdict(list)
 
-    neurons_per_layer: dict[_Key, list[JavaNeuron]] = defaultdict(lambda: [])
+    def visit(neuron: JavaNeuron):
+        neuron_index = int(neuron.getIndex())
 
-    names = set()
+        if neuron_index in closed:
+            return
 
-    try:
-        while len(queue) > 0:
-            neuron = queue.popleft()
-
-            neuron_index = int(neuron.getIndex())
-            if neuron_index in visited:
-                continue
-
-            visited.add(neuron_index)
+        try:
             neuron_rule_name = get_rule_or_fact_main_name(parse_rule_or_fact(str(neuron.name)))
-            names.add(neuron_rule_name)
-            neurons_per_layer[int(neuron.getLayer()), neuron_rule_name, _get_layer_type(neuron)].append(neuron)
+        except ParserError as e:
+            raise ValueError(f"Failed to parse rule name from '{str(neuron.name)}'") from e
 
-            for inp in neuron.getInputs():
-                inp_index = int(inp.getIndex())
-                if inp_index not in visited:
-                    queue.append(inp)
-    except ParserError as e:
-        raise ValueError(f"Failed to parse rule name from '{str(neuron.name)}'") from e
+        key = neuron_rule_name, _get_layer_type(neuron)
+        neurons_per_layer[key].append(neuron)
 
-    layers = sorted(neurons_per_layer.keys(), key=_layer_order_key)
+        for inp in neuron.getInputs():
+            visit(inp)
+
+        closed.add(neuron_index)
+
+        # ensure layer placed last in (ordered) dict, for topological layer ordering
+        layers_.pop(key, None)
+        layers_[key] = None
+
+    for sample in samples:
+        visit(sample.java_sample.query.neuron if isinstance(sample, NeuralSample) else sample)
+
+    layers = list(layers_.keys())
+    layers.reverse()
 
     out: dict[str, list] = {}
     layer_defs: list[LayerDefinition] = []
 
-    for k in layers:
-        _, n, t = k
+    for k in layers_:
+        n, t = k
 
         id: str = n + "__" + _LAYER_TYPE_TO_ABBREV[t]
 

@@ -39,7 +39,7 @@ Engine = Literal["java", "torch", "pyg"]
 
 DEFAULT_TORCH_SETTINGS = TorchModuleSettings()
 DEFAULT_NEURALOGIC_SETTINGS_VECTORIZE = NeuralogicSettings(
-    compute_neuron_layer_indices=True,
+    # compute_neuron_layer_indices=True,
     iso_value_compression=False,
     chain_pruning=False,
 )
