@@ -1,6 +1,6 @@
 from lib.datasets.dataset import BuiltDatasetInstance
 from lib.sources.base import LayerDefinition
-from lib.sources.minimal_api.internal.java import compute_java_neurons_per_layer
+from lib.sources.minimal_api.internal.neuralogic import compute_neuralogic_neurons_per_layer
 
 EXPECTED_GSAGE_LAYERS: list[LayerDefinition] = [
     LayerDefinition("node_feature__f", "FactLayer"),
@@ -92,13 +92,13 @@ EXPECTED_MUTAG_LAYERS_PRECEDENCE: list[tuple[LayerDefinition, LayerDefinition]] 
 
 
 def test_layers_topological_ordering1(tu_mutag_gsage: BuiltDatasetInstance):
-    _, layers = compute_java_neurons_per_layer(tu_mutag_gsage.samples)
+    _, layers = compute_neuralogic_neurons_per_layer(tu_mutag_gsage.samples)
 
     assert layers == EXPECTED_GSAGE_LAYERS
 
 
 def test_layers_topological_ordering2(mutag: BuiltDatasetInstance):
-    _, layers = compute_java_neurons_per_layer(mutag.samples)
+    _, layers = compute_neuralogic_neurons_per_layer(mutag.samples)
 
     for a, b in EXPECTED_MUTAG_LAYERS_PRECEDENCE:
         assert layers.index(a) < layers.index(b), f"{a} < {b} in layers"

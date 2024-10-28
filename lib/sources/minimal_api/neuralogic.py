@@ -9,10 +9,10 @@ from lib.model.ops import AggregationDef, TransformationDef
 from lib.sources.base import LayerDefinition, LayerType, WeightDefinition, is_weighted
 from lib.sources.base_impl import BaseWeightDefinition
 from lib.sources.minimal_api.base import MinimalAPINetwork
-from lib.sources.minimal_api.internal.java import (
+from lib.sources.minimal_api.internal.neuralogic import (
     JavaNeuron,
     JavaWeight,
-    compute_java_neurons_per_layer,
+    compute_neuralogic_neurons_per_layer,
     get_aggregation,
     get_transformation,
     java_value_to_numpy,
@@ -57,7 +57,7 @@ class _JavaNeuronsPointer:
         self._n = neurons
 
 
-class MinimalAPIJavaNetwork(MinimalAPINetwork[_JavaNeuronsPointer]):
+class MinimalAPINeuralogicNetwork(MinimalAPINetwork[_JavaNeuronsPointer]):
     """Minimal API for a neural network representation from NeuraLogic Java library.
 
     See documentation for `MinimalAPINetwork` for details.
@@ -68,7 +68,7 @@ class MinimalAPIJavaNetwork(MinimalAPINetwork[_JavaNeuronsPointer]):
         self._settings = settings
         # if not settings.compute_neuron_layer_indices:
         #     raise ValueError("`compute_neuron_layer_indices` must be True in NeuraLogic settings.")
-        self._java_neurons_per_layer, self._layers = compute_java_neurons_per_layer(samples)
+        self._java_neurons_per_layer, self._layers = compute_neuralogic_neurons_per_layer(samples)
 
     def get_layers(self) -> Sequence[LayerDefinition]:
         return self._layers

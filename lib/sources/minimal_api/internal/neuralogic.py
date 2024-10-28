@@ -167,7 +167,7 @@ def _iter_neurons(neuron: JavaNeuron) -> Iterable[JavaNeuron]:
 _Key = tuple[str, LayerType]
 
 
-def compute_java_neurons_per_layer(
+def compute_neuralogic_neurons_per_layer(
     samples: Sequence[NeuralSample | JavaNeuron],
 ) -> tuple[dict[str, list[JavaNeuron]], list[LayerDefinition]]:
     closed: set[int] = set()

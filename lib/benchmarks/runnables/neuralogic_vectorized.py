@@ -7,7 +7,7 @@ from lib.benchmarks.utils.timer import Timer
 from lib.datasets.dataset import BuiltDatasetInstance
 from lib.engines.torch.from_vectorized import build_torch_network, simple_forward_pass_runner
 from lib.engines.torch.settings import TorchModuleSettings
-from lib.sources import from_java
+from lib.sources import from_neuralogic
 from lib.sources.neuralogic_settings import NeuralogicSettings
 from lib.vectorize.model.op_network import VectorizedOpSeqNetwork
 from lib.vectorize.settings import VectorizeSettings
@@ -122,7 +122,7 @@ class NeuralogicVectorizedTorchRunnable(PrebuiltNeuralogicVectorizedTorchRunnabl
             self.samples = dataset.samples
 
         yield "Retrieving input information..."
-        self.network = from_java(self.samples, self.n_settings)
+        self.network = from_neuralogic(self.samples, self.n_settings)
 
         yield "Vectorizing..."
         self.vectorized_network = self.build_vectorized_network(self.network)
