@@ -15,6 +15,8 @@ class MergeSameValueFacts:
     ) -> list[Fact]:
         new_facts: list[Fact] = []
 
+        # TODO: also support across fact layers?
+
         value_to_key_map: dict[HashableArray, int] = {}
 
         for i, fact in enumerate(facts):

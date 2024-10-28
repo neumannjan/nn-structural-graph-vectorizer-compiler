@@ -30,7 +30,7 @@ from compute_graph_vectorize.vectorize.pipeline.other.reduce_op_network_value im
 )
 from compute_graph_vectorize.vectorize.pipeline.other.replace_tensors_with_shapes import replace_tensors_with_shapes
 from compute_graph_vectorize.vectorize.settings import VectorizeSettings
-from compute_graph_vectorize.vectorize.settings_presets import (
+from compute_graph_vectorize.vectorize.settings_testing_presets import (
     VectorizeSettingsPresets,
     iterate_vectorize_settings_presets,
 )

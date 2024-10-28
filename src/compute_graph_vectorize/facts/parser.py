@@ -4,8 +4,8 @@ from typing import Generic, Iterable, Iterator, Literal, TextIO, TypeVar
 
 from compute_graph_vectorize.facts.model import Fact, Rule
 
-_TOKENIZER_REGEX = re.compile(r"(\d+\.\d+|[,\(\)\.{}]|\w+|:-|<\[|\]>)", re.IGNORECASE | re.UNICODE)
-_RESERVED_TOKENS = {",", "(", ")", ".", "{", "}", ":-", "<[", "]>"}
+_TOKENIZER_REGEX = re.compile(r"(\d+\.\d+|[,\(\)\.{}]|\w+|:-|<?\[|\]>?)", re.IGNORECASE | re.UNICODE)
+_RESERVED_TOKENS = {",", "(", ")", ".", "{", "}", ":-", "<[", "]>", "[", "]"}
 
 
 def tokenize(sample: str):
@@ -111,7 +111,7 @@ def _parse_fact(tokens_iter: _MultiIter[str], is_rule_lhs=False, is_rule_rhs=Fal
             if state == 0:
                 if token == "{":
                     state = 3
-                elif token == "<[":
+                elif token == "<[" or token == "[":
                     state = 7
                 elif token in _RESERVED_TOKENS:
                     raise ParserError()
@@ -165,7 +165,7 @@ def _parse_fact(tokens_iter: _MultiIter[str], is_rule_lhs=False, is_rule_rhs=Fal
                 else:
                     raise ParserError()
             elif state == 7:
-                if token == "]>":
+                if token == "]>" or token == "]":
                     state = 1
     except StopIteration:
         if state == 2:

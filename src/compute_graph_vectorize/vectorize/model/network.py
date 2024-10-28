@@ -7,7 +7,6 @@ from compute_graph_vectorize.vectorize.model.weight import LearnableWeight
 
 class Batch:
     __slots__ = ("layers",)
-    __repr__ = repr_slots
 
     def __init__(self, layers: OrderedDict[str, Layer]) -> None:
         self.layers = layers
@@ -21,6 +20,9 @@ class Batch:
             )
         else:
             return repr_slots(self)
+
+    def __eq__(self, value: object, /) -> bool:
+        return isinstance(value, Batch) and value.layers == self.layers
 
 
 class VectorizedLayerNetwork:
@@ -47,3 +49,11 @@ class VectorizedLayerNetwork:
             )
         else:
             return repr_slots(self)
+
+    def __eq__(self, value: object, /) -> bool:
+        return (
+            isinstance(value, VectorizedLayerNetwork)
+            and value.fact_layers == self.fact_layers
+            and value.weights == self.weights
+            and value.batches == self.batches
+        )
