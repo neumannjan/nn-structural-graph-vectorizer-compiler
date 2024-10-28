@@ -160,7 +160,14 @@ def build_torch_model(
         )
         batch_modules.append(batch_module)
 
-    return NetworkModule(params_module=params_module, batch_modules=batch_modules)
+    out = NetworkModule(params_module=params_module, batch_modules=batch_modules)
+
+    if settings.compilation == "trace":
+        out = torch.jit.trace_module(out, {"forward": ()}, strict=False)
+    elif settings.compilation == "script":
+        out = torch.jit.script(out)
+
+    return out  # pyright: ignore
 
 
 def torch_simple_forward_pass_runner(network: VectorizedOpSeqNetwork):
