@@ -1,8 +1,8 @@
 import argparse
 
-from lib.facts.duplicator import DatasetDuplicator
-from lib.facts.parser import parse_file
-from lib.facts.printer import DatasetPrinter
+from compute_graph_vectorize.facts.duplicator import DatasetDuplicator
+from compute_graph_vectorize.facts.parser import parse_file
+from compute_graph_vectorize.facts.printer import DatasetPrinter
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

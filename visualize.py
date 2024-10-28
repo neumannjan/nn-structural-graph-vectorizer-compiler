@@ -6,8 +6,8 @@ import jpype
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import networkx as nx
-from lib.datasets import MyMutagenesis
-from lib.sources.neuralogic_settings import NeuralogicSettings
+from compute_graph_vectorize.datasets import MyMutagenesis
+from compute_graph_vectorize.sources.neuralogic_settings import NeuralogicSettings
 from neuralogic.core.builder.builder import NeuralSample
 
 

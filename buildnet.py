@@ -1,9 +1,10 @@
 import torch
-from lib.benchmarks.runnables.neuralogic_vectorized import NeuralogicVectorizedTorchRunnable
-from lib.datasets.tu_molecular import MyTUDataset
-from lib.engines.torch.settings import TorchModuleSettings
-from lib.sources.neuralogic_settings import NeuralogicSettings
-from lib.vectorize.settings import (
+from compute_graph_vectorize.benchmarks.runnables.neuralogic_vectorized import NeuralogicVectorizedTorchRunnable
+from compute_graph_vectorize.datasets.mutagenesis import MyMutagenesis
+from compute_graph_vectorize.datasets.tu_molecular import MyTUDataset
+from compute_graph_vectorize.engines.torch.settings import TorchModuleSettings
+from compute_graph_vectorize.sources.neuralogic_settings import NeuralogicSettings
+from compute_graph_vectorize.vectorize.settings import (
     LinearsSymmetriesSettings,
     OptimizeSingleUseGathersSettings,
     OptimizeTailRefsSettings,
@@ -11,7 +12,7 @@ from lib.vectorize.settings import (
 )
 
 if __name__ == "__main__":
-    debug = False
+    debug = True
     device = "cpu"
 
     n_settings = NeuralogicSettings()
@@ -43,8 +44,8 @@ if __name__ == "__main__":
         granularize_by_weight=False,
     )
 
-    # dataset = MyMutagenesis(n_settings, "simple", "original")
-    dataset = MyTUDataset(n_settings, "mutag", "gsage")
+    dataset = MyMutagenesis(n_settings, "original", "simple")
+    # dataset = MyTUDataset(n_settings, "mutag", "gsage")
 
     print("Dataset:", dataset)
     print("Device:", device)

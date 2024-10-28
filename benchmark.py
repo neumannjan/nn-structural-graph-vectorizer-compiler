@@ -9,28 +9,28 @@ from typing import get_args as t_get_args
 
 import click
 import torch
-from lib.benchmarks.runnables.neuralogic_cpu import NeuraLogicCPURunnable
-from lib.benchmarks.runnables.neuralogic_vectorized import (
+from compute_graph_vectorize.benchmarks.runnables.neuralogic_cpu import NeuraLogicCPURunnable
+from compute_graph_vectorize.benchmarks.runnables.neuralogic_vectorized import (
     NeuralogicVectorizedTorchRunnable,
     PrebuiltNeuralogicVectorizedTorchRunnable,
 )
-from lib.benchmarks.runnables.pyg import PytorchGeometricRunnable
-from lib.benchmarks.runner import measure_backward, measure_forward
-from lib.datasets.dataset import MyDataset
-from lib.datasets.mutagenesis import MutagenesisSource, MutagenesisTemplate, MyMutagenesis
-from lib.datasets.tu_molecular import MyTUDataset, TUDatasetSource, TUDatasetTemplate
-from lib.engines.torch.settings import Compilation, TorchModuleSettings, TorchReduceMethod
-from lib.sources.neuralogic_settings import NeuralogicSettings
-from lib.utils import dataclass_to_shorthand, iter_empty, serialize_dataclass
-from lib.vectorize.model.op_network import VectorizedOpSeqNetwork
-from lib.vectorize.pipeline.other.reduce_op_network_value import (
+from compute_graph_vectorize.benchmarks.runnables.pyg import PytorchGeometricRunnable
+from compute_graph_vectorize.benchmarks.runner import measure_backward, measure_forward
+from compute_graph_vectorize.datasets.dataset import MyDataset
+from compute_graph_vectorize.datasets.mutagenesis import MutagenesisSource, MutagenesisTemplate, MyMutagenesis
+from compute_graph_vectorize.datasets.tu_molecular import MyTUDataset, TUDatasetSource, TUDatasetTemplate
+from compute_graph_vectorize.engines.torch.settings import Compilation, TorchModuleSettings, TorchReduceMethod
+from compute_graph_vectorize.sources.neuralogic_settings import NeuralogicSettings
+from compute_graph_vectorize.utils import dataclass_to_shorthand, iter_empty, serialize_dataclass
+from compute_graph_vectorize.vectorize.model.op_network import VectorizedOpSeqNetwork
+from compute_graph_vectorize.vectorize.pipeline.other.reduce_op_network_value import (
     count_gather_items,
     count_gathers,
     sum_op_network_values,
 )
-from lib.vectorize.pipeline.other.replace_tensors_with_shapes import replace_tensors_with_shapes
-from lib.vectorize.settings import VectorizeSettings
-from lib.vectorize.settings_presets import VectorizeSettingsPresets, iterate_vectorize_settings_presets
+from compute_graph_vectorize.vectorize.pipeline.other.replace_tensors_with_shapes import replace_tensors_with_shapes
+from compute_graph_vectorize.vectorize.settings import VectorizeSettings
+from compute_graph_vectorize.vectorize.settings_presets import VectorizeSettingsPresets, iterate_vectorize_settings_presets
 from tqdm.std import tqdm
 
 Device = Literal["mps", "cuda", "cpu", "ipu"]
