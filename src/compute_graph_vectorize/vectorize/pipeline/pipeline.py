@@ -10,7 +10,10 @@ from compute_graph_vectorize.vectorize.pipeline.build_initial_network import bui
 from compute_graph_vectorize.vectorize.pipeline.compute_layer_counts import ComputeLayerCounts, compute_layer_counts
 from compute_graph_vectorize.vectorize.pipeline.compute_layer_shapes import compute_layer_shapes
 from compute_graph_vectorize.vectorize.pipeline.concat_inputs_layers import ConcatInputsLayers, concat_inputs_layers
-from compute_graph_vectorize.vectorize.pipeline.dissolve_identity_layers import dissolve_identity_layers, predissolve_identity_layers
+from compute_graph_vectorize.vectorize.pipeline.dissolve_identity_layers import (
+    dissolve_identity_layers,
+    predissolve_identity_layers,
+)
 from compute_graph_vectorize.vectorize.pipeline.drop_linear_gather_layer_base import drop_linear_gather_layer_base
 from compute_graph_vectorize.vectorize.pipeline.drop_redundant_views import drop_redundant_views
 from compute_graph_vectorize.vectorize.pipeline.drop_unused_layers import drop_unused_layers
@@ -23,7 +26,9 @@ from compute_graph_vectorize.vectorize.pipeline.materialize_unit_transforms impo
 from compute_graph_vectorize.vectorize.pipeline.merge_same_value_facts import merge_same_value_facts
 from compute_graph_vectorize.vectorize.pipeline.merge_trivial_layer_concats import merge_trivial_layer_concats
 from compute_graph_vectorize.vectorize.pipeline.merge_unit_facts import merge_unit_facts
-from compute_graph_vectorize.vectorize.pipeline.optimize_linears_pad_for_symmetries import build_optimize_linears_pad_for_symmetries
+from compute_graph_vectorize.vectorize.pipeline.optimize_linears_pad_for_symmetries import (
+    build_optimize_linears_pad_for_symmetries,
+)
 from compute_graph_vectorize.vectorize.pipeline.optimize_linears_to_unique_refs import OptimizeLinearsUniqueRefPairs
 from compute_graph_vectorize.vectorize.pipeline.optimize_single_use_gathers import (
     build_optimize_single_use_gathers,

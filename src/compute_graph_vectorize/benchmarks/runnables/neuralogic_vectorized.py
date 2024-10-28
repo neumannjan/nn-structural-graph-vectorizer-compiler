@@ -5,7 +5,7 @@ from neuralogic.core.builder.builder import NeuralSample
 from compute_graph_vectorize.benchmarks.runnables.runnable import Runnable
 from compute_graph_vectorize.benchmarks.utils.timer import Timer
 from compute_graph_vectorize.datasets.dataset import BuiltDatasetInstance
-from compute_graph_vectorize.engines.torch.from_vectorized import build_torch_network, simple_forward_pass_runner
+from compute_graph_vectorize.engines.torch.from_vectorized import build_torch_model, torch_simple_forward_pass_runner
 from compute_graph_vectorize.engines.torch.settings import TorchModuleSettings
 from compute_graph_vectorize.sources import from_neuralogic
 from compute_graph_vectorize.sources.neuralogic_settings import NeuralogicSettings
@@ -34,7 +34,7 @@ class PrebuiltNeuralogicVectorizedTorchRunnable(Runnable):
         self.targets = torch.tensor([s.target for s in self.samples], dtype=torch.get_default_dtype()).to(self.device)
 
         yield "Building PyTorch modules..."
-        self.model = build_torch_network(self.vectorized_network, debug=self.debug, settings=self.t_settings)
+        self.model = build_torch_model(self.vectorized_network, debug=self.debug, settings=self.t_settings)
 
         if self.t_settings.compilation == "trace":
             self.model = torch.jit.trace_module(self.model, {"forward": ()}, strict=False)
@@ -108,7 +108,7 @@ class NeuralogicVectorizedTorchRunnable(PrebuiltNeuralogicVectorizedTorchRunnabl
 
         self.build_vectorized_network = create_vectorized_network_compiler(
             vectorize_settings,
-            forward_pass_runner=simple_forward_pass_runner,
+            forward_pass_runner=torch_simple_forward_pass_runner,
             debug_prints=debug,
         )
 

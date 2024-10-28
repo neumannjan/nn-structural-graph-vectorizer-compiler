@@ -140,12 +140,12 @@ def _for_batch(
     return torch.nn.Sequential(*modules)
 
 
-def build_torch_network(
+def build_torch_model(
     reference: VectorizedOpSeqNetwork,
-    debug: bool,
     settings: TorchModuleSettings,
+    debug: bool,
     final_layer_only: bool = True,
-) -> torch.nn.Module:
+) -> NetworkModule:
     params_module = _build_params_module(reference)
 
     batch_modules = torch.nn.ModuleList()
@@ -163,8 +163,8 @@ def build_torch_network(
     return NetworkModule(params_module=params_module, batch_modules=batch_modules)
 
 
-def simple_forward_pass_runner(network: VectorizedOpSeqNetwork):
-    tnetwork = build_torch_network(network, debug=False, settings=TORCH_SETTINGS_DEFAULT, final_layer_only=False)
+def torch_simple_forward_pass_runner(network: VectorizedOpSeqNetwork):
+    tnetwork = build_torch_model(network, debug=False, settings=TORCH_SETTINGS_DEFAULT, final_layer_only=False)
 
     out: dict[int, dict[str, np.ndarray]] = {}
 
@@ -177,5 +177,15 @@ def simple_forward_pass_runner(network: VectorizedOpSeqNetwork):
         )
 
         out[batch_id] = batch_out_np
+
+    return out
+
+
+def extract_weights_from_torch_model(module: NetworkModule) -> dict[str, torch.Tensor]:
+    out: dict[str, torch.Tensor] = {}
+    params = module.params_module.params
+    for key in params:
+        if key.startswith("w_"):
+            out[key[2:]] = params[key].detach().cpu()
 
     return out
