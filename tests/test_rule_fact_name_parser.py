@@ -5,6 +5,7 @@ from compute_graph_vectorize.facts.parser import parse_rule_or_fact
 EXAMPLES: list[tuple[str, str]] = [
     ("<[1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]> node_feature(16)", "node_feature"),
     ("<[0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0]> node_feature(15)", "node_feature"),
+    ("[0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0] node_feature(15)", "node_feature"),
     ("l2_embed(23)", "l2_embed"),
     ("atom_embed(10)", "atom_embed"),
     ("{10, 10} l1_embed(X) :- atom_embed(Y), *edge(Y, X). [transformation=identity, aggregation=avg]", "l1_embed"),
