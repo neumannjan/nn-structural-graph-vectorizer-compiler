@@ -1,3 +1,4 @@
+import copy
 from typing import OrderedDict
 
 import numpy as np
@@ -126,5 +127,5 @@ NETWORK_EXPECTED = VectorizedLayerNetwork(
 
 
 def test_transpose_fixed_count_reduce():
-    actual = Layerwise(TransposeFixedCountReduceLayers)(NETWORK_INPUT)
+    actual = Layerwise(TransposeFixedCountReduceLayers)(copy.deepcopy(NETWORK_INPUT))
     assert actual == NETWORK_EXPECTED

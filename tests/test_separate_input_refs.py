@@ -1,3 +1,4 @@
+import copy
 from typing import OrderedDict
 
 import numpy as np
@@ -180,7 +181,7 @@ NETWORK_EXPECTED = VectorizedLayerNetwork(
 
 
 def test_separate_input_refs():
-    actual = build_separate_input_refs(ShapeLayerIndexer)(NETWORK_INPUT)
+    actual = build_separate_input_refs(ShapeLayerIndexer)(copy.deepcopy(NETWORK_INPUT))
     print(actual)
     print(NETWORK_EXPECTED)
     assert actual == NETWORK_EXPECTED

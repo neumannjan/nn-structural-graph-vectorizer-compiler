@@ -1,3 +1,4 @@
+import copy
 from typing import OrderedDict
 
 import numpy as np
@@ -154,7 +155,7 @@ NETWORK_EXPECTED = VectorizedLayerNetwork(
 
 
 def test_predissolve_identity_layers():
-    actual = predissolve_identity_layers(NETWORK_INPUT)
+    actual = predissolve_identity_layers(copy.deepcopy(NETWORK_INPUT))
     print(actual)
     print(NETWORK_EXPECTED)
     assert actual == NETWORK_EXPECTED

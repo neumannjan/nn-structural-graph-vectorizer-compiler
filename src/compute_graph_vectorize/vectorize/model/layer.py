@@ -228,4 +228,6 @@ class FactLayer:
             isinstance(value, FactLayer)
             and len(self.facts) == len(value.facts)
             and all(((a == b) for a, b in zip(self.facts, value.facts)))
+            and self.count == value.count
+            and self.shape == value.shape
         )

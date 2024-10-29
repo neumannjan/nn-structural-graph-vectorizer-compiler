@@ -1,3 +1,4 @@
+import copy
 from typing import OrderedDict
 
 import numpy as np
@@ -181,5 +182,5 @@ NETWORK_EXPECTED = VectorizedLayerNetwork(
 def test_merge_same_value_facts():
     # TODO: also support across fact layers?
 
-    actual = merge_same_value_facts(NETWORK_INPUT)
+    actual = merge_same_value_facts(copy.deepcopy(NETWORK_INPUT))
     assert actual == NETWORK_EXPECTED

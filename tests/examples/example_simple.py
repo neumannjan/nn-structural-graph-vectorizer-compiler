@@ -2,6 +2,7 @@ from compute_graph_vectorize.sources.builders import from_neuralogic
 from compute_graph_vectorize.sources.neuralogic_settings import NeuralogicSettings
 from compute_graph_vectorize.vectorize.model.repr_aspython import prepr
 from compute_graph_vectorize.vectorize.pipeline.build_initial_network import build_initial_network
+from compute_graph_vectorize.vectorize.pipeline.compute_layer_counts import compute_layer_counts
 from compute_graph_vectorize.vectorize.pipeline.compute_layer_shapes import compute_layer_shapes
 from compute_graph_vectorize.vectorize.pipeline.dissolve_identity_layers import predissolve_identity_layers
 from compute_graph_vectorize.vectorize.pipeline.merge_same_value_facts import merge_same_value_facts
@@ -18,15 +19,19 @@ def dataset():
         [
             R.edge(1, 2),
             R.edge(2, 1),
-            R.a(1)[[1, 0, 0]],
-            R.b(2)[[0, 1, 0]],
+            R.edge(1, 3),
+            R.edge(2, 3),
+            R.edge(3, 2),
+            R.a(1),
+            R.b(2),
+            R.c(3),
         ]
     )
     dataset.add_example(
         [
             R.edge(3, 4),
-            R.a(3)[[1, 0, 0]],
-            R.b(4)[[0, 1, 0]],
+            R.a(3),
+            R.b(4),
         ]
     )
 
@@ -38,8 +43,12 @@ def dataset():
 def template():
     template = Template()
 
-    template += R.l1_a(V.X)[10, 3] <= (R.a(V.X), R.b(V.Y))
-    template += R.l1_b(V.X)[5, 3] <= R.a(V.X)
+    template += R.emb(V.X)[10, 1] <= R.a(V.X)
+    template += R.emb(V.X)[10, 1] <= R.b(V.X)
+    template += R.emb(V.X)[10, 1] <= R.c(V.X)
+
+    template += R.l1_a(V.X)[10, 10] <= (R.emb(V.X), R.emb(V.Y), R.edge(V.X, V.Y))
+    template += R.l1_b(V.X)[5, 10] <= R.emb(V.X)
     template += R.predict(V.X)[1, 10] <= (R.l1_a(V.X)[10, 10], R.l1_b(V.X)[10, 5])
     return template
 
@@ -55,7 +64,8 @@ if __name__ == "__main__":
         + merge_unit_facts
         + merge_same_value_facts
         + predissolve_identity_layers
-        + compute_layer_shapes
+        # + compute_layer_shapes
+        # + compute_layer_counts
         # + build_separate_input_refs(ShapeLayerIndexer)
     )
 

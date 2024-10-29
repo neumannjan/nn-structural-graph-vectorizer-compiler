@@ -22,7 +22,7 @@ class AnyShape:
         return hash(())
 
     def __eq__(self, value: object, /) -> bool:
-        return isinstance(value, VariousShape)
+        return isinstance(value, AnyShape)
 
 
 class ConcreteShape(Sequence[int]):
