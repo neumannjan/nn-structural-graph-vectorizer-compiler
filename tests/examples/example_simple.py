@@ -23,15 +23,15 @@ def dataset():
             R.edge(2, 3),
             R.edge(3, 2),
             R.a(1),
-            R.b(2),
-            R.c(3),
+            R.a(2),
+            R.a(3),
         ]
     )
     dataset.add_example(
         [
             R.edge(3, 4),
             R.a(3),
-            R.b(4),
+            R.a(4),
         ]
     )
 
@@ -43,12 +43,8 @@ def dataset():
 def template():
     template = Template()
 
-    template += R.emb(V.X)[10, 1] <= R.a(V.X)
-    template += R.emb(V.X)[10, 1] <= R.b(V.X)
-    template += R.emb(V.X)[10, 1] <= R.c(V.X)
-
-    template += R.l1_a(V.X)[10, 10] <= (R.emb(V.X), R.emb(V.Y), R.edge(V.X, V.Y))
-    template += R.l1_b(V.X)[5, 10] <= R.emb(V.X)
+    template += R.l1_a(V.X)[10, 10] <= (R.a(V.X), R.a(V.Y), R.edge(V.X, V.Y))
+    template += R.l1_b(V.X)[5, 10] <= R.a(V.X)
     template += R.predict(V.X)[1, 10] <= (R.l1_a(V.X)[10, 10], R.l1_b(V.X)[10, 5])
     return template
 
