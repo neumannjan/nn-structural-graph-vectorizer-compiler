@@ -6,6 +6,7 @@ from compute_graph_vectorize.vectorize.model.gather import Gather
 from compute_graph_vectorize.vectorize.model.reduce import Reduce
 from compute_graph_vectorize.vectorize.model.refs import LayerRefs, Refs
 from compute_graph_vectorize.vectorize.model.repr import my_repr, repr_module_like, repr_slots
+from compute_graph_vectorize.vectorize.model.repr_aspython import prepr_module_like
 from compute_graph_vectorize.vectorize.model.shape import Shape, VariousShape
 from compute_graph_vectorize.vectorize.model.transform import Transform
 
@@ -175,6 +176,16 @@ class Layer:
             self,
             module_keys=_LAYER_MODULE_LIKES,
             extra_keys=[v for v in self.__class__.__slots__ if v not in _LAYER_MODULE_LIKES],
+        )
+        out += ")"
+        return out
+
+    def repr_as_python(self) -> str:
+        out = self.__class__.__name__ + "("
+        out += prepr_module_like(
+            self,
+            module_keys=_LAYER_MODULE_LIKES,
+            extra_keys=["count", "shape", "compilable"],
         )
         out += ")"
         return out

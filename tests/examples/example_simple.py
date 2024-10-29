@@ -2,7 +2,12 @@ from compute_graph_vectorize.sources.builders import from_neuralogic
 from compute_graph_vectorize.sources.neuralogic_settings import NeuralogicSettings
 from compute_graph_vectorize.vectorize.model.repr_aspython import prepr
 from compute_graph_vectorize.vectorize.pipeline.build_initial_network import build_initial_network
-from neuralogic.core import R, Transformation, V
+from compute_graph_vectorize.vectorize.pipeline.compute_layer_shapes import compute_layer_shapes
+from compute_graph_vectorize.vectorize.pipeline.dissolve_identity_layers import predissolve_identity_layers
+from compute_graph_vectorize.vectorize.pipeline.merge_same_value_facts import merge_same_value_facts
+from compute_graph_vectorize.vectorize.pipeline.merge_unit_facts import merge_unit_facts
+from compute_graph_vectorize.vectorize.pipeline.utils.pipe import PIPE
+from neuralogic.core import R, V
 from neuralogic.dataset import Dataset
 from neuralogic.nn.base import Template
 
@@ -33,9 +38,9 @@ def dataset():
 def template():
     template = Template()
 
-    template += R.l1(V.X)[2, 10] <= (R.a(V.X)[10, 3], R.b(V.Y)[10, 3])
-    template += R.l1(V.X)[1, 5] <= R.a(V.X)[5, 3]
-    template += (R.predict(V.X) <= R.l1(V.X)) | [Transformation.RELU]
+    template += R.l1_a(V.X)[10, 3] <= (R.a(V.X), R.b(V.Y))
+    template += R.l1_b(V.X)[5, 3] <= R.a(V.X)
+    template += R.predict(V.X)[1, 10] <= (R.l1_a(V.X)[10, 10], R.l1_b(V.X)[10, 5])
     return template
 
 
@@ -45,5 +50,14 @@ if __name__ == "__main__":
     built_dataset = template().build(nsettings).build_dataset(dataset())
 
     network = from_neuralogic(built_dataset.samples, nsettings)
-    vn = build_initial_network(network)
+    func = (PIPE
+        + build_initial_network
+        + merge_unit_facts
+        + merge_same_value_facts
+        + predissolve_identity_layers
+        + compute_layer_shapes
+        # + build_separate_input_refs(ShapeLayerIndexer)
+    )
+
+    vn = func(network)
     print(prepr(vn))

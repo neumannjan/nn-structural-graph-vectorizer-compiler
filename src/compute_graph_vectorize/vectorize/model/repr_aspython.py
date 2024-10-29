@@ -1,9 +1,14 @@
 from collections import OrderedDict
-from typing import Any, Callable, Iterable, Mapping, Sequence
+from typing import Any, Callable, Iterable, Mapping, Protocol, Sequence, runtime_checkable
 
 import numpy as np
 
 from compute_graph_vectorize.utils import addindent
+
+
+@runtime_checkable
+class PrintableAsPython(Protocol):
+    def repr_as_python(self) -> str: ...
 
 
 def _get_value(obj: object, key: str | int):
@@ -77,6 +82,8 @@ def prepr(self) -> str:
             return f"np.array({repr(list(self.flatten()))}).reshape({repr(list(self.shape))})"
     elif isinstance(self, str):
         return '"' + self.replace('"', '\\"') + '"'
+    elif isinstance(self, PrintableAsPython):
+        return self.repr_as_python()
     elif isinstance(self, object) and hasattr(self.__class__, "__slots__"):
         return prepr_slots(self)
     elif isinstance(self, Sequence):
