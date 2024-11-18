@@ -12,8 +12,8 @@ _T = TypeVar("_T", covariant=True)
 
 
 class LayerIndexer(Protocol, Generic[_T]):
-    def for_ref(self, batch_id: int, ref: _Ref) -> _T: ...
-    def for_linear(self, batch_id: int, iref: _Ref, wref: _Ref) -> _T: ...
+    def for_refs(self, batch_id: int, refs: Refs) -> Iterable[_T]: ...
+    def for_linear(self, batch_id: int, irefs: Refs, wrefs: Refs) -> Iterable[_T]: ...
 
 
 @overload
@@ -31,14 +31,12 @@ def _iter_indexer(
 ) -> Iterable[tuple[tuple[_Ref, _Ref] | _Ref, _T]]:
     match base:
         case InputLayerBase(input=Refs() as refs):
-            for ref in refs:
-                yield ref, indexer.for_ref(batch_id, ref)
+            yield from zip(refs, indexer.for_refs(batch_id, refs))
         case (
             LinearLayerBase(input=Refs() as irefs, weight=Refs() as wrefs)
             | LinearGatherLayerBase(input=Refs() as irefs, weight=Refs() as wrefs)
         ):
-            for iref, wref in zip(irefs, wrefs):
-                yield (iref, wref), indexer.for_linear(batch_id, iref, wref)
+            yield from zip(zip(irefs, wrefs), indexer.for_linear(batch_id, irefs, wrefs))
         case _:
             raise ValueError(base)
 
@@ -184,22 +182,28 @@ class _ShapeLayerIndexer(LayerIndexer[tuple[ConcreteShape | AnyShape, ...]]):
     def __init__(self, network: VectorizedLayerNetwork) -> None:
         self._shapes = ComputeLayerShapes(network)
 
-    def for_ref(self, batch_id: int, ref: _Ref) -> tuple[ConcreteShape | AnyShape, ...]:
+    def for_refs(self, batch_id: int, refs: Refs) -> Iterable[tuple[ConcreteShape | AnyShape, ...]]:
+        shapes_map = {ref: self._for_ref_shape(batch_id, ref) for ref in refs}
+        concrete_shapes = set([s for s in shapes_map.values() if not isinstance(s, AnyShape)])
+        if len(concrete_shapes) == 1:
+            shp = next(iter(concrete_shapes))
+            return [(shp,)] * len(refs)
+
+        return ((shapes_map[ref],) for ref in refs)
+
+    def for_linear(self, batch_id: int, irefs: Refs, wrefs: Refs) -> Iterable[tuple[ConcreteShape | AnyShape, ...]]:
+        ishapes = self.for_refs(batch_id, irefs)
+        wshapes = self.for_refs(batch_id, wrefs)
+
+        return ((wshp, ishp) for ((wshp,), (ishp,)) in zip(wshapes, ishapes))
+
+    def _for_ref_shape(self, batch_id: int, ref: _Ref) -> ConcreteShape | AnyShape:
         out_shape = self._shapes.compute_ref_shape(batch_id, *ref)
         match out_shape:
             case ConcreteShape() | AnyShape():
-                return (out_shape,)
+                return out_shape
             case _:
                 raise ValueError(out_shape)
-
-    def for_linear(self, batch_id: int, iref: _Ref, wref: _Ref) -> tuple[ConcreteShape | AnyShape, ...]:
-        shape1 = self._shapes.compute_ref_shape(batch_id, *iref)
-        shape2 = self._shapes.compute_ref_shape(batch_id, *wref)
-        match shape1, shape2:
-            case ((ConcreteShape() | AnyShape()), (ConcreteShape() | AnyShape())):
-                return shape2, shape1
-            case _:
-                raise ValueError(shape1, shape2)
 
 
 class ShapeLayerIndexer(LayerIndexer[str]):
@@ -218,16 +222,22 @@ class ShapeLayerIndexer(LayerIndexer[str]):
     def _get_shape_ids(self, shapes: Iterable[ConcreteShape | AnyShape]) -> str:
         return "__".join((self._get_shape_id(sh) for sh in shapes))
 
-    def for_ref(self, *kargs, **kwargs) -> str:
-        return self._get_shape_ids(self._delegate.for_ref(*kargs, **kwargs))
+    def for_refs(self, batch_id: int, refs: Refs) -> Iterable[str]:
+        return (self._get_shape_ids(shps) for shps in self._delegate.for_refs(batch_id, refs))
 
-    def for_linear(self, *kargs, **kwargs) -> str:
-        return self._get_shape_ids(self._delegate.for_linear(*kargs, **kwargs))
+    def for_linear(self, batch_id: int, irefs: Refs, wrefs: Refs) -> Iterable[str]:
+        return (self._get_shape_ids(shps) for shps in self._delegate.for_linear(batch_id, irefs, wrefs))
 
 
 class WeightLayerIndexer(LayerIndexer[str]):
     def __init__(self, network: VectorizedLayerNetwork) -> None:
         self._network = network
+
+    def for_refs(self, batch_id: int, refs: Refs) -> Iterable[str]:
+        return (self.for_ref(batch_id, ref) for ref in refs)
+
+    def for_linear(self, batch_id: int, irefs: Refs, wrefs: Refs) -> Iterable[str]:
+        return (self._for_linear(batch_id, iref, wref) for iref, wref in zip(irefs, wrefs))
 
     def for_ref(self, batch_id: int, ref: _Ref) -> str:
         t, l, _ = ref
@@ -236,7 +246,7 @@ class WeightLayerIndexer(LayerIndexer[str]):
         else:
             return ""
 
-    def for_linear(self, batch_id: int, iref: _Ref, wref: _Ref) -> str:
+    def _for_linear(self, batch_id: int, iref: _Ref, wref: _Ref) -> str:
         t1, l1, _ = iref
         t2, l2, _ = wref
         match t1, t2:
@@ -254,11 +264,11 @@ class CombinedLayerIndexer(LayerIndexer[str]):
     def __init__(self, *indexers: LayerIndexer[str]) -> None:
         self.indexers = indexers
 
-    def for_ref(self, *kargs, **kwargs) -> str:
-        return "__".join(filter(lambda v: v, (idx.for_ref(*kargs, **kwargs) for idx in self.indexers)))
+    def for_refs(self, batch_id: int, refs: Refs) -> Iterable[str]:
+        return ("__".join(strs) for strs in zip(*(idx.for_refs(batch_id, refs) for idx in self.indexers)))
 
-    def for_linear(self, *kargs, **kwargs) -> str:
-        return "__".join(filter(lambda v: v, (idx.for_linear(*kargs, **kwargs) for idx in self.indexers)))
+    def for_linear(self, batch_id: int, irefs: Refs, wrefs: Refs) -> Iterable[str]:
+        return ("__".join(strs) for strs in zip(*(idx.for_linear(batch_id, irefs, wrefs) for idx in self.indexers)))
 
 
 def build_combined_layer_indexer_factory(
