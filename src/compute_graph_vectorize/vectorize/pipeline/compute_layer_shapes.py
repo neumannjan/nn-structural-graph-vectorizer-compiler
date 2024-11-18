@@ -128,10 +128,12 @@ class ComputeLayerShapes:
                 return ConcreteShape([*begin_shape, weight_shape[-2], input_shape[-1]])
             case (VariousShape(), _) | (_, VariousShape()):
                 return VARIOUS_SHAPE
-            case (AnyShape(), _) | (_, AnyShape()):
-                return ANY_SHAPE
+            case (ConcreteShape(_), _):
+                return weight_shape
+            case (_, ConcreteShape(_)):
+                return input_shape
             case _:
-                assert False, f"{weight_shape} {input_shape}"
+                return ANY_SHAPE
 
     def compute_linear_shape(self, batch: int, input: Input, weight: Input) -> Shape:
         weight_shape = self.compute_input_shape(batch, weight)
