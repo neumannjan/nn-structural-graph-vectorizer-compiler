@@ -205,7 +205,7 @@ def parse_rule_or_fact(rule: str) -> Rule | Fact:
                 else:
                     raise ValueError()
             elif state == 2:
-                _fact = _parse_fact(tokens_iter)
+                _fact = _parse_fact(tokens_iter, is_rule_rhs=True)
                 rhs.append(_fact)
                 state = 3
             elif state == 3:

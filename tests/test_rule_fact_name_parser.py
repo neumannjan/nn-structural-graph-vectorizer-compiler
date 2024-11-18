@@ -15,6 +15,7 @@ EXAMPLES: list[tuple[str, str]] = [
     ("predict", "predict"),
     ("{10, 7} atom_embed(X) :- node_feature(X). [transformation=identity]", "atom_embed"),
     ("{10, 10} l2_embed(X) :- l1_embed(X). [transformation=identity]", "l2_embed"),
+    ("{1, 8} xor :- {8, 2} xy. [transformation=tanh]", "xor")
 ]
 
 
